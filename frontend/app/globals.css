@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #F8F9FE;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Плавное появление страниц при навигации ── */
+main, .page-transition {
+  animation: pageIn 0.3s ease both;
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Плавный скролл к якорям ── */
+:target {
+  scroll-margin-top: 72px; /* высота шапки */
+}
+
+:root {
+  /* Colors */
+  --ink:        #0F172A;
+  --ink-muted:  #64748B;
+  --ink-light:  #94A3B8;
+  --paper:      #F8F9FE;
+  --paper-2:    #F1F5F9;
+  --card:       #FFFFFF;
+  --accent:     #6366F1;
+  --accent-hover: #4F46E5;
+  --accent-light: #A78BFA;
+  --accent-2:   #EF4444;
+  --accent-3:   #22C55E;
+  --border:     #E2E8F0;
+
+  /* Typography */
+  --sans:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --serif:   'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --display: 'Playfair Display', Georgia, serif;
+
+  /* Radius */
+  --radius:    12px;
+  --radius-sm: 8px;
+  --radius-lg: 20px;
+}

@@ -1,0 +1,137 @@
+/* ══════════════════════════════════════════
+   ФУТЕР
+══════════════════════════════════════════ */
+.footer {
+  background: #0F172A;
+  color: #94A3B8;
+  padding: 56px 24px 32px;
+}
+
+.footerInner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.footerTop {
+  display: flex;
+  gap: 48px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+}
+
+.footerBrand {
+  flex: 0 0 260px;
+  min-width: 200px;
+}
+
+.footerLogo {
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+.footerLogoAccent { color: #818CF8; }
+
+.footerTagline {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: #64748B;
+  margin-bottom: 24px;
+}
+
+.footerSocials {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.socialBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #94A3B8;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 8px 14px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.socialBtn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.footerCols {
+  flex: 1;
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.footerCol { min-width: 140px; }
+
+.footerColTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  margin-bottom: 16px;
+}
+
+.footerLinks {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footerLinks a {
+  font-size: 0.88rem;
+  color: #64748B;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footerLinks a:hover { color: #C7D2FE; }
+
+.footerBottom {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.footerCopy {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.footerBadges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.footerBadge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #475569;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 4px 10px;
+}

@@ -1,0 +1,115 @@
+// Схема базы данных для Academic Service
+// SQLite — для старта, потом переедем на PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Пользователь ─────────────────────────────────────────────────
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Связи NextAuth
+  accounts  Account[]
+  sessions  Session[]
+
+  // Профиль для титульника
+  university  String?
+  faculty     String?
+  department  String?
+  speciality  String?
+  course      String?
+  groupNumber String?
+  fullName    String?
+  teacherName String?
+  city        String?
+
+  // Наши данные
+  generations Generation[]
+  payments    Payment[]
+}
+
+// ── OAuth аккаунты (Яндекс, VK) ─────────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String  // "yandex", "vk", "email"
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// ── Сессии ───────────────────────────────────────────────────────
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Токены для входа по email ────────────────────────────────────
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ── Генерации рефератов ──────────────────────────────────────────
+model Generation {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Данные реферата
+  topic     String   // Тема
+  pages     Int      // Объём
+  workType  String   @default("Реферат") // Тип работы
+  status    String   @default("completed") // completed, failed
+
+  // Сохранённый результат (JSON)
+  result    String   // JSON со всем содержимым
+
+  // Публичный предпросмотр
+  isPublic  Boolean  @default(true)
+  slug      String?  @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Платежи ──────────────────────────────────────────────────────
+model Payment {
+  id          String    @id @default(cuid())
+  userId      String
+  workType    String
+  amount      Int
+  status      String    @default("pending")
+  yokassaId   String?
+  createdAt   DateTime  @default(now())
+  usedAt      DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
