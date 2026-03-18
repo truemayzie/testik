@@ -256,14 +256,16 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
     blank(doc); blank(doc); blank(doc)
 
     # Тип работы и тема — по центру
-    if work_type == "ВКР":
-        title_label = "ВЫПУСКНАЯ КВАЛИФИКАЦИОННАЯ РАБОТА"
-    elif work_type == "Курсовая":
-        title_label = "КУРСОВАЯ РАБОТА"
-    else:
-        title_label = work_type.upper()
+    TITLE_NAMES = {
+        "Реферат":  ("РЕФЕРАТ",                          "на тему:"),
+        "Доклад":   ("ДОКЛАД",                           "на тему:"),
+        "Курсовая": ("КУРСОВАЯ РАБОТА",                  "Тема:"),
+        "ВКР":      ("ВЫПУСКНАЯ КВАЛИФИКАЦИОННАЯ РАБОТА", ""),
+    }
+    title_label, subtitle = TITLE_NAMES.get(work_type, ("РЕФЕРАТ", "на тему:"))
     center(doc, title_label, bold=True, size=16)
-    center(doc, "на тему:", size=14)
+    if subtitle:
+        center(doc, subtitle, size=14)
     center(doc, f"«{topic}»", bold=True, size=14)
 
     blank(doc); blank(doc); blank(doc)
@@ -279,29 +281,54 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
         r = p.add_run(text)
         set_run_font(r, size=12)
 
-    # Блок студента
-    course_group = ""
-    if course and group:
-        course_group = f"{course} курс, группа {group}"
-    elif course:
-        course_group = f"{course} курс"
-    elif group:
-        course_group = f"группа: {group}"
-    else:
-        course_group = "группа: _________________________"
+    # Блок автора — по типу работы
+    if work_type in ("Реферат", "Доклад"):
+        course_group = ""
+        if course and group:
+            course_group = f"{course} курс, группа {group}"
+        elif course:
+            course_group = f"{course} курс"
+        elif group:
+            course_group = f"группа: {group}"
+        else:
+            course_group = "группа: _________________________"
 
-    author_line(f"Выполнил(а): {full_name or '___________________________'}")
-    author_line(course_group)
+        author_line(f"Выполнил(а): {full_name or '___________________________'}")
+        author_line(course_group)
+        blank(doc)
+        author_line("Научный руководитель:")
+        author_line(teacher or "___________________________")
+        blank(doc)
+        author_line("Оценка: _________________________")
+        author_line("Дата сдачи: _____________________")
 
-    blank(doc)
+    elif work_type == "Курсовая":
+        author_line("Выполнил:")
+        author_line(f"студент группы {group or '______'}")
+        author_line(full_name or "Ф.И.О. студента ___________________________")
+        author_line("(подпись) ___________________________")
+        blank(doc)
+        author_line("Руководитель:")
+        author_line(teacher or "(учёная степень, должность, Ф.И.О.)")
+        author_line("(подпись) ___________________________")
+        blank(doc)
+        author_line("Работа защищена с оценкой: _________")
+        author_line("Дата: _______________")
 
-    # Блок преподавателя
-    author_line("Научный руководитель:")
-    author_line(teacher or "___________________________")
-
-    blank(doc)
-    author_line("Оценка: _________________________")
-    author_line("Дата сдачи: _____________________")
+    elif work_type == "ВКР":
+        author_line("Выполнил:")
+        if course:
+            author_line(f"студент {course}-го курса")
+        author_line(full_name or "___________________________________ (подпись)")
+        blank(doc)
+        author_line("Руководитель ВКР:")
+        author_line(teacher or "___________________________________ (подпись)")
+        blank(doc)
+        author_line("Нормоконтроль:")
+        author_line("___________________________________ (подпись)")
+        blank(doc)
+        author_line("Допущена к защите:")
+        author_line("«____» _____________ 20___ г.")
 
     blank(doc); blank(doc); blank(doc)
     center(doc, f"{city}, {year}", size=12)
@@ -504,14 +531,58 @@ def add_sources(doc, sources):
         blank(doc)  # пустая строка между источниками
 
 
+# ── Сочинение / Эссе — без титульника, оглавления, списка литературы ─────────
+
+def create_essay_docx(referat_data: dict) -> bytes:
+    """Создаёт DOCX для сочинения или эссе: только заголовок и текст."""
+    work_type = referat_data.get("meta", {}).get("Тип работы", "Сочинение")
+    raw_title = referat_data["title"]
+    topic = raw_title
+    for prefix in (f"{work_type} на тему: «", f"{work_type} на тему:"):
+        if raw_title.startswith(prefix):
+            topic = raw_title[len(prefix):]
+            break
+    topic = topic.strip("«» ")
+
+    doc = Document()
+    doc.styles["Normal"].paragraph_format.space_before = Pt(0)
+    doc.styles["Normal"].paragraph_format.space_after  = Pt(0)
+
+    sec = doc.sections[0]
+    setup_margins(sec)
+    sec.right_margin = Cm(1.5)
+
+    # Заголовок по центру
+    p = doc.add_paragraph()
+    fmt(p, WD_ALIGN_PARAGRAPH.CENTER, 0, 21, 0, 12)
+    run(p, f"{work_type} на тему «{topic}»", bold=True, size=14)
+
+    # Текст без заголовков разделов
+    table_counter = [0]
+    for section_name in referat_data["structure"]:
+        text = referat_data["content"].get(section_name, "")
+        if text:
+            add_body(doc, text, table_counter)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 # ── Главная функция ──────────────────────────────────────────────────────────
 
 def create_docx(referat_data: dict) -> bytes:
     from generator import WORK_RULES
 
+    work_type = referat_data.get("meta", {}).get("Тип работы", "Реферат")
+
+    # Сочинение и Эссе — особая логика без титульника/оглавления
+    if work_type in ("Сочинение", "Эссе"):
+        return create_essay_docx(referat_data)
+
     doc = Document()
 
-    work_type = referat_data.get("meta", {}).get("Тип работы", "Реферат")
     rules = WORK_RULES.get(work_type, WORK_RULES["Реферат"])
 
     TOC_TITLES = {"ВКР": "ОГЛАВЛЕНИЕ"}
