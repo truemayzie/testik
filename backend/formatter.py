@@ -438,6 +438,18 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
     r_cap = cp.add_run(caption)
     set_run_font(r_cap, bold=True, size=12)
 
+    # Убираем все рамки у ячейки подписи (чтобы не было лишней рамки сверху)
+    tc_pr = cap_cell._tc.get_or_add_tcPr()
+    tc_borders = _OE("w:tcBorders")
+    for side in ("top", "bottom", "left", "right", "insideH", "insideV"):
+        bdr = _OE(f"w:{side}")
+        bdr.set(_qn("w:val"), "none")
+        bdr.set(_qn("w:sz"), "0")
+        bdr.set(_qn("w:space"), "0")
+        bdr.set(_qn("w:color"), "auto")
+        tc_borders.append(bdr)
+    tc_pr.append(tc_borders)
+
     # ── Строка 1: заголовки столбцов ──
     hdr_row = table.rows[1]
     mark_tbl_header(hdr_row)

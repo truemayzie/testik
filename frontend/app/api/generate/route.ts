@@ -47,10 +47,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const { id: _id, ...profile } = user;
+    // Маппим camelCase workType → snake_case work_type для FastAPI/Pydantic
+    const backendBody = {
+      topic:     body.topic,
+      pages:     body.pages,
+      work_type: workType,
+      profile,
+    };
     const response = await fetch(`${BACKEND_URL}/api/generate/referat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, profile }),
+      body: JSON.stringify(backendBody),
     });
 
     if (!response.ok) {
