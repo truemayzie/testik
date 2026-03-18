@@ -138,6 +138,7 @@ export default function Home() {
   const [totalProgress, setTotalProgress] = useState(0);
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef      = useRef<Step[]>(getProgressSteps("Реферат"));
+  const autoStarted   = useRef(false); // защита от двойного запуска (React Strict Mode)
 
   function selectWorkType(type: string) {
     setWorkType(type);
@@ -362,6 +363,10 @@ export default function Home() {
 
   // При монтировании: восстанавливаем прерванную генерацию или запускаем после оплаты
   useEffect(() => {
+    // Защита от двойного запуска (React Strict Mode дважды вызывает useEffect в dev)
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+
     const params = new URLSearchParams(window.location.search);
 
     // 1. Вернулись после оплаты
@@ -576,7 +581,13 @@ export default function Home() {
       {/* ── Ошибка ── */}
       {error && (
         <div className={styles.errorWrap}>
-          <div className={styles.error}>⚠ {error}</div>
+          <div className={styles.error}>
+            <div className={styles.errorIcon}>⚠</div>
+            <div className={styles.errorBody}>
+              <p className={styles.errorTitle}>Генерация временно недоступна</p>
+              <p className={styles.errorText}>{error}. Попробуйте позже — обычно это занимает несколько минут.</p>
+            </div>
+          </div>
         </div>
       )}
 

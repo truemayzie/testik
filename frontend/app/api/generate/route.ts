@@ -24,17 +24,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
   }
 
-  // Check payment
   const body = await request.json();
   const workType = body.workType || "Реферат";
 
+  // Находим платёж и сразу атомарно помечаем использованным.
+  // updateMany(where usedAt=null) вернёт count=0 при гонке двух одновременных запросов —
+  // второй уже не найдёт незанятый платёж и получит 403 без траты генерации.
   const payment = await prisma.payment.findFirst({
-    where: {
-      userId: user.id,
-      workType,
-      status: "succeeded",
-      usedAt: null,
-    },
+    where: { userId: user.id, workType, status: "succeeded", usedAt: null },
     orderBy: { createdAt: "desc" },
   });
 
@@ -45,9 +42,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Атомарно claim: обновляем только если usedAt всё ещё null (оптимистичная блокировка)
+  const claimed = await prisma.payment.updateMany({
+    where: { id: payment.id, usedAt: null },
+    data:  { usedAt: new Date() },
+  });
+
+  if (claimed.count === 0) {
+    // Параллельный запрос уже занял этот платёж
+    return NextResponse.json(
+      { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id: _id, ...profile } = user;
-    // Маппим camelCase workType → snake_case work_type для FastAPI/Pydantic
     const backendBody = {
       topic:     body.topic,
       pages:     body.pages,
@@ -61,6 +71,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
+      // Генерация не удалась — возвращаем платёж чтобы пользователь мог повторить
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data:  { usedAt: null },
+      });
       return NextResponse.json(
         { error: "Ошибка на сервере генерации" },
         { status: response.status }
@@ -68,13 +83,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-
-    // Mark payment as used
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { usedAt: new Date() },
-    });
-
     return NextResponse.json(data);
   } catch {
     return NextResponse.json(
