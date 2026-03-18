@@ -69,48 +69,64 @@ type Step = { label: string; duration: number };
 function getProgressSteps(workType: string): Step[] {
   if (workType === "Сочинение" || workType === "Эссе") {
     return [
-      { label: "Анализируем тему",      duration: 2000  },
-      { label: "Формируем структуру",    duration: 3000  },
-      { label: "Пишем вступление",       duration: 6000  },
-      { label: "Пишем основную часть",   duration: 14000 },
-      { label: "Пишем заключение",       duration: 6000  },
-      { label: "Финальная проверка",     duration: 2000  },
+      { label: "Анализируем тему",   duration: 3000  },
+      { label: "Подбираем стиль",    duration: 4000  },
+      { label: "Пишем текст",        duration: 25000 },
+      { label: "Финальная проверка", duration: 3000  },
     ];
   }
   if (workType === "Доклад") {
     return [
-      { label: "Анализируем тему",       duration: 3000  },
-      { label: "Формируем структуру",    duration: 4000  },
-      { label: "Пишем введение",         duration: 7000  },
-      { label: "Пишем основной раздел",  duration: 16000 },
-      { label: "Пишем заключение",       duration: 7000  },
-      { label: "Финальная проверка",     duration: 3000  },
+      { label: "Анализируем тему",    duration: 3000  },
+      { label: "Формируем структуру", duration: 5000  },
+      { label: "Пишем введение",      duration: 8000  },
+      { label: "Пишем раздел 1",      duration: 18000 },
+      { label: "Пишем раздел 2",      duration: 18000 },
+      { label: "Пишем заключение",    duration: 8000  },
+      { label: "Финальная проверка",  duration: 3000  },
     ];
   }
   if (workType === "ВКР") {
     return [
-      { label: "Анализируем тему",            duration: 5000  },
-      { label: "Формируем структуру",          duration: 8000  },
-      { label: "Пишем введение",               duration: 14000 },
-      { label: "Пишем главу 1",                duration: 28000 },
-      { label: "Пишем главу 2",                duration: 28000 },
-      { label: "Пишем главу 3",                duration: 28000 },
-      { label: "Пишем заключение",             duration: 14000 },
-      { label: "Оформляем список литературы",  duration: 8000  },
-      { label: "Финальная проверка",           duration: 5000  },
+      { label: "Анализируем тему",    duration: 5000  },
+      { label: "Ищем источники",      duration: 10000 },
+      { label: "Формируем структуру", duration: 8000  },
+      { label: "Пишем введение",      duration: 14000 },
+      { label: "Пишем главу 1",       duration: 28000 },
+      { label: "Пишем главу 2",       duration: 28000 },
+      { label: "Пишем главу 3",       duration: 28000 },
+      { label: "Пишем заключение",    duration: 14000 },
+      { label: "Оформляем приложения",duration: 6000  },
+      { label: "Оформляем литературу",duration: 8000  },
+      { label: "Финальная проверка",  duration: 5000  },
     ];
   }
-  // Реферат и Курсовая
+  if (workType === "Курсовая") {
+    return [
+      { label: "Анализируем тему",    duration: 3000  },
+      { label: "Ищем источники",      duration: 8000  },
+      { label: "Формируем структуру", duration: 5000  },
+      { label: "Пишем введение",      duration: 10000 },
+      { label: "Пишем главу 1",       duration: 18000 },
+      { label: "Пишем главу 2",       duration: 18000 },
+      { label: "Пишем главу 3",       duration: 18000 },
+      { label: "Пишем заключение",    duration: 10000 },
+      { label: "Оформляем литературу",duration: 6000  },
+      { label: "Финальная проверка",  duration: 4000  },
+    ];
+  }
+  // Реферат
   return [
-    { label: "Анализируем тему",            duration: 4000  },
-    { label: "Формируем структуру",          duration: 6000  },
-    { label: "Пишем введение",               duration: 10000 },
-    { label: "Пишем главу 1",                duration: 18000 },
-    { label: "Пишем главу 2",                duration: 18000 },
-    { label: "Пишем главу 3",                duration: 18000 },
-    { label: "Пишем заключение",             duration: 10000 },
-    { label: "Оформляем список литературы",  duration: 6000  },
-    { label: "Финальная проверка",           duration: 4000  },
+    { label: "Анализируем тему",    duration: 3000  },
+    { label: "Ищем источники",      duration: 8000  },
+    { label: "Формируем структуру", duration: 5000  },
+    { label: "Пишем введение",      duration: 10000 },
+    { label: "Пишем главу 1",       duration: 18000 },
+    { label: "Пишем главу 2",       duration: 18000 },
+    { label: "Пишем главу 3",       duration: 18000 },
+    { label: "Пишем заключение",    duration: 10000 },
+    { label: "Оформляем литературу",duration: 6000  },
+    { label: "Финальная проверка",  duration: 4000  },
   ];
 }
 
@@ -134,8 +150,10 @@ export default function Home() {
 
   // Прогресс
   const [stepIndex, setStepIndex]       = useState(0);
-  const [stepProgress, setStepProgress] = useState(0);
+
   const [totalProgress, setTotalProgress] = useState(0);
+  const [dots, setDots] = useState(".");
+
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef      = useRef<Step[]>(getProgressSteps("Реферат"));
   const autoStarted   = useRef(false); // защита от двойного запуска (React Strict Mode)
@@ -162,15 +180,17 @@ export default function Home() {
       const step = steps[currentStep];
       if (!step) return;
 
-      const sp = Math.min(100, (stepElapsed / step.duration) * 100);
-      const tp = Math.min(95,  (elapsed / totalDuration) * 100);
+      const tp = Math.min(95, (elapsed / totalDuration) * 100);
 
-      setStepProgress(sp);
       setTotalProgress(tp);
       setStepIndex(currentStep);
 
       if (stepElapsed >= step.duration) {
-        currentStep = Math.min(currentStep + 1, steps.length - 1);
+        const next = Math.min(currentStep + 1, steps.length - 1);
+        if (next !== currentStep) {
+          console.log(`[Academic] Шаг:`, next, '-', steps[next]?.label, '|', Math.round(tp) + '%');
+        }
+        currentStep = next;
         stepElapsed = 0;
       }
     }, 100);
@@ -179,12 +199,12 @@ export default function Home() {
   function stopProgress() {
     if (timerRef.current) clearInterval(timerRef.current);
     setTotalProgress(100);
-    setStepProgress(100);
     setStepIndex(stepsRef.current.length - 1);
   }
 
   async function handleDownload() {
     if (!result) return;
+    console.log('[Academic] Скачивание DOCX...');
     setDownloading(true);
     try {
       const response = await fetch("http://localhost:8000/api/download/referat", {
@@ -202,6 +222,7 @@ export default function Home() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      console.log('[Academic] DOCX скачан успешно');
     } catch {
       alert("Не удалось скачать файл.");
     } finally {
@@ -210,6 +231,7 @@ export default function Home() {
   }
 
   async function runGeneration(t: string, p: number, wt: string) {
+    console.log('[Academic] Начало генерации:', { topic: t, workType: wt, pages: p });
     stepsRef.current = getProgressSteps(wt);
 
     // Сохраняем активную генерацию — чтобы восстановить при возврате на страницу
@@ -220,7 +242,6 @@ export default function Home() {
     setResult(null);
     setActiveSection("");
     setTotalProgress(0);
-    setStepProgress(0);
     setStepIndex(0);
     startProgress();
 
@@ -241,6 +262,7 @@ export default function Home() {
         }
         setError(data.error || "Произошла ошибка");
       } else {
+        console.log('[Academic] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
         setResult(data);
         if (data.structure?.length > 0) setActiveSection(data.structure[0]);
         if (session?.user) {
@@ -251,7 +273,8 @@ export default function Home() {
           }).catch(() => {});
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[Academic] Ошибка генерации:', err);
       stopProgress();
       setError("Не удалось подключиться к серверу");
     } finally {
@@ -334,6 +357,15 @@ export default function Home() {
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
+  // Анимация точек "..." пока идёт генерация
+  useEffect(() => {
+    if (!loading) { setDots("."); return; }
+    const id = setInterval(() => {
+      setDots(d => d.length >= 3 ? "." : d + ".");
+    }, 500);
+    return () => clearInterval(id);
+  }, [loading]);
 
   // Баннер профиля: показываем только авторизованным с незаполненным профилем
   // и только если пользователь ещё не закрыл его (localStorage)
@@ -537,42 +569,46 @@ export default function Home() {
       {loading && (
         <section className={styles.progressSection}>
           <div className={styles.progressCard}>
+
+            {/* Заголовок: текущий шаг + процент */}
             <div className={styles.progressHeader}>
               <span className={styles.progressLabel}>
                 {stepsRef.current[stepIndex]?.label}
+                <span className={styles.progressDots}>{dots}</span>
               </span>
-              <span className={styles.progressPercent}>
-                {Math.round(totalProgress)}%
-              </span>
+              <span className={styles.progressPercent}>{Math.round(totalProgress)}%</span>
             </div>
+
+            {/* Единый прогресс-бар */}
             <div className={styles.progressBar}>
               <div className={styles.progressFill} style={{ width: `${totalProgress}%` }}/>
             </div>
-            <div className={styles.steps}>
-              {stepsRef.current.map((step, i) => {
-                const done    = i < stepIndex;
-                const active  = i === stepIndex;
-                const pending = i > stepIndex;
-                return (
-                  <div
-                    key={i}
-                    className={`${styles.step} ${done ? styles.stepDone : ""} ${active ? styles.stepActive : ""} ${pending ? styles.stepPending : ""}`}
-                  >
-                    <div className={styles.stepDot}>
-                      {done ? "✓" : active ? <span className={styles.stepPulse}/> : ""}
-                    </div>
-                    <span className={styles.stepLabel}>{step.label}</span>
-                    {active && (
-                      <div className={styles.stepBar}>
-                        <div className={styles.stepBarFill} style={{ width: `${stepProgress}%` }}/>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+
+            {/* Хлебные крошки: предыдущий → текущий → следующий */}
+            <div className={styles.progressCrumb}>
+              {stepIndex > 0 && (
+                <>
+                  <span className={styles.crumbPrev}>
+                    {stepsRef.current[stepIndex - 1]?.label}
+                  </span>
+                  <span className={styles.crumbSep}>→</span>
+                </>
+              )}
+              <span className={styles.crumbCurrent}>
+                {stepsRef.current[stepIndex]?.label}
+              </span>
+              {stepIndex < stepsRef.current.length - 1 && (
+                <>
+                  <span className={styles.crumbSep}>→</span>
+                  <span className={styles.crumbNext}>
+                    {stepsRef.current[stepIndex + 1]?.label}
+                  </span>
+                </>
+              )}
             </div>
+
             <p className={styles.progressHint}>
-              Генерация занимает 2–4 минуты. Не закрывайте страницу.
+              Не закрывайте страницу — генерация продолжится в фоне
             </p>
           </div>
         </section>

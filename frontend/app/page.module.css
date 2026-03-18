@@ -554,89 +554,55 @@
   100% { left: 160%; }
 }
 
-/* Steps list */
-.steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 28px;
+/* Анимированные точки "..." */
+.progressDots {
+  display: inline-block;
+  width: 1.4em;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.05em;
 }
 
-.step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 0;
-}
-
-.stepDot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+/* Хлебные крошки шагов */
+.progressCrumb {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-  transition: all 0.3s;
-}
-
-.stepDone .stepDot {
-  background: linear-gradient(135deg, #6366F1, #A78BFA);
-  color: #fff;
-  font-size: 13px;
-  box-shadow: 0 0 14px rgba(99, 102, 241, 0.55);
-}
-
-.stepActive .stepDot {
-  background: linear-gradient(135deg, #6366F1, #A78BFA);
-  box-shadow: 0 0 18px rgba(167, 139, 250, 0.7);
-}
-
-.stepPending .stepDot {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-}
-
-.stepPulse {
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border-radius: 50%;
-  animation: pulse 1s ease-in-out infinite;
-  display: block;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.65); }
-}
-
-.stepLabel {
-  font-size: 0.88rem;
-  flex: 1;
-  transition: color 0.3s;
-}
-
-.stepDone .stepLabel    { color: rgba(255, 255, 255, 0.35); }
-.stepActive .stepLabel  { color: #fff; font-weight: 600; }
-.stepPending .stepLabel { color: rgba(255, 255, 255, 0.2); }
-
-.stepBar {
-  width: 80px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 99px;
+  gap: 8px;
+  margin-top: 16px;
+  margin-bottom: 24px;
+  flex-wrap: nowrap;
   overflow: hidden;
+}
+
+.crumbPrev {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.crumbSep {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.2);
   flex-shrink: 0;
 }
 
-.stepBarFill {
-  height: 100%;
-  background: linear-gradient(90deg, #6366F1, #A78BFA);
-  border-radius: 99px;
-  transition: width 0.2s ease;
+.crumbCurrent {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #A78BFA;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.crumbNext {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .progressHint {
@@ -652,18 +618,48 @@
 ══════════════════════════════════════════ */
 .errorWrap {
   max-width: 680px;
-  margin: 24px auto;
+  margin: 32px auto;
   padding: 0 24px;
 }
 
 .error {
-  padding: 14px 18px;
-  background: #FFF5F5;
-  border: 1px solid #FECACA;
-  border-left: 4px solid #EF4444;
-  border-radius: 10px;
-  color: #DC2626;
-  font-size: 0.93rem;
+  display:       flex;
+  gap:           16px;
+  align-items:   flex-start;
+  padding:       20px 24px;
+  background:    linear-gradient(135deg, #fff5f5 0%, #fff1f1 100%);
+  border:        1px solid #fecaca;
+  border-left:   4px solid #ef4444;
+  border-radius: 14px;
+  box-shadow:    0 4px 20px rgba(239, 68, 68, 0.08);
+}
+
+.errorIcon {
+  font-size:   1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top:  2px;
+}
+
+.errorBody {
+  display:        flex;
+  flex-direction: column;
+  gap:            4px;
+}
+
+.errorTitle {
+  margin:      0;
+  font-weight: 600;
+  font-size:   1rem;
+  color:       #b91c1c;
+}
+
+.errorText {
+  margin:    0;
+  font-size: 0.88rem;
+  color:     #dc2626;
+  opacity:   0.85;
+  line-height: 1.5;
 }
 
 /* ══════════════════════════════════════════
