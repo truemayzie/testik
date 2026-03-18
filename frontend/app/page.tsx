@@ -126,7 +126,8 @@ export default function Home() {
   const [error, setError]                     = useState("");
   const [activeSection, setActiveSection]     = useState("");
   const [downloading, setDownloading]         = useState(false);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(true); // true пока не проверили
+  const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
   const [recentWorks, setRecentWorks]         = useState(MOCK_RECENT);
   const [showAllWorks, setShowAllWorks]       = useState(false);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
@@ -333,6 +334,25 @@ export default function Home() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
+  // Баннер профиля: показываем только авторизованным с незаполненным профилем
+  // и только если пользователь ещё не закрыл его (localStorage)
+  useEffect(() => {
+    if (!session?.user) return; // не авторизован — баннер не нужен
+    if (localStorage.getItem("profileBannerDismissed") === "1") {
+      setBannerDismissed(true);
+      setProfileFilled(true); // не важно, скрыт навсегда
+      return;
+    }
+    fetch("/api/profile")
+      .then(r => r.json())
+      .then((data: { university?: string; fullName?: string; groupNumber?: string }) => {
+        const filled = !!(data.university || data.fullName || data.groupNumber);
+        setProfileFilled(filled);
+        setBannerDismissed(false); // разрешаем показ (если не заполнен)
+      })
+      .catch(() => { setBannerDismissed(true); }); // ошибка — не мешаем
+  }, [session]);
+
   useEffect(() => {
     fetch("/api/generations/recent")
       .then(r => r.json())
@@ -387,7 +407,7 @@ export default function Home() {
     <main className={styles.main}>
 
       {/* ── Баннер профиля ── */}
-      {!bannerDismissed && (
+      {session?.user && !profileFilled && !bannerDismissed && (
         <div className={styles.profileBanner}>
           <div className={styles.profileBannerContent}>
             <span className={styles.profileBannerIcon}>🎓</span>
@@ -406,7 +426,10 @@ export default function Home() {
             </Link>
             <button
               className={styles.profileBannerClose}
-              onClick={() => setBannerDismissed(true)}
+              onClick={() => {
+                localStorage.setItem("profileBannerDismissed", "1");
+                setBannerDismissed(true);
+              }}
             >✕</button>
           </div>
         </div>

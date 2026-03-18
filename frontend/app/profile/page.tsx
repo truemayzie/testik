@@ -124,7 +124,7 @@ export default function ProfilePage() {
             <div className={styles.bannerBody}>
               <p className={styles.bannerTitle}>Заполните данные для титульного листа</p>
               <p className={styles.bannerText}>
-                Укажите ВУЗ, факультет и ФИО — они будут автоматически вставлены в реферат. Больше не нужно вводить каждый раз вручную.
+                Укажите ВУЗ, факультет и ФИО — они будут автоматически вставлены в работу. Больше не нужно вводить каждый раз вручную.
               </p>
             </div>
             <button
@@ -147,7 +147,7 @@ export default function ProfilePage() {
               <div className={styles.bannerSuccessBody}>
                 <p className={styles.bannerSuccessTitle}>Данные сохранены!</p>
                 <p className={styles.bannerSuccessText}>
-                  Теперь титульный лист будет заполняться автоматически. Попробуйте сгенерировать реферат прямо сейчас.
+                  Теперь титульный лист будет заполняться автоматически. Попробуйте сгенерировать работу прямо сейчас.
                 </p>
               </div>
               <Link href="/" className={styles.bannerSuccessBtn}>
@@ -180,7 +180,7 @@ export default function ProfilePage() {
                 <label className={styles.label}>Факультет / Институт</label>
                 <input
                   className={styles.input}
-                  placeholder="Факультет экономики"
+                  placeholder="экономики"
                   value={form.faculty}
                   onChange={e => set("faculty", e.target.value)}
                 />
@@ -189,7 +189,7 @@ export default function ProfilePage() {
                 <label className={styles.label}>Кафедра</label>
                 <input
                   className={styles.input}
-                  placeholder="Кафедра менеджмента"
+                  placeholder="менеджмента"
                   value={form.department}
                   onChange={e => set("department", e.target.value)}
                 />
