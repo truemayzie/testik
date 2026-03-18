@@ -173,6 +173,8 @@ export default function Home() {
     let currentStep = 0;
     let stepElapsed = 0;
 
+    console.log(`[Academic] Шаг: 0 - ${steps[0]?.label} | 0%`);
+
     timerRef.current = setInterval(() => {
       elapsed     += 100;
       stepElapsed += 100;
@@ -180,7 +182,9 @@ export default function Home() {
       const step = steps[currentStep];
       if (!step) return;
 
-      const tp = Math.min(95, (elapsed / totalDuration) * 100);
+      // Эффект: √(elapsed/total) × 95 — быстро в начале, плавно к концу
+      const rawRatio = Math.min(1, elapsed / totalDuration);
+      const tp = Math.min(95, Math.sqrt(rawRatio) * 95);
 
       setTotalProgress(tp);
       setStepIndex(currentStep);
@@ -296,6 +300,7 @@ export default function Home() {
       }
       const checkData = await checkRes.json();
       if (!checkData.hasPaid) {
+        console.log("[Academic] Оплата не найдена, переход на страницу оплаты:", workType);
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
         router.push(`/payment?workType=${encodeURIComponent(workType)}`);
         return;
@@ -409,7 +414,11 @@ export default function Home() {
           const { topic: t, pages: p, workType: wt } = JSON.parse(raw);
           sessionStorage.removeItem("pendingGeneration");
           window.history.replaceState({}, "", "/");
-          setTopic(t); setPages(p); selectWorkType(wt);
+          // selectWorkType сбрасывает pages на дефолт → setPages(p) вызываем после
+          selectWorkType(wt);
+          setTopic(t);
+          setPages(p);
+          console.log("[Academic] Автозапуск после оплаты:", { topic: t, workType: wt, pages: p });
           runGeneration(t, p, wt);
         } catch {}
       }
@@ -417,22 +426,35 @@ export default function Home() {
     }
 
     // 2. Пользователь ушёл с вкладки/страницы во время генерации — возобновляем
+    // Сначала проверяем платёж: если платёж уже использован — оригинальная
+    // генерация завершилась (или всё ещё идёт в фоне), не запускаем новую.
     const active = sessionStorage.getItem("activeGeneration");
     if (active) {
-      try {
-        const { topic: t, pages: p, workType: wt, startedAt } = JSON.parse(active);
-        const elapsed = Date.now() - startedAt;
-        // Повторяем только если прошло не более 10 минут
-        if (elapsed < 10 * 60 * 1000) {
-          sessionStorage.removeItem("activeGeneration"); // runGeneration сохранит заново
-          setTopic(t); setPages(p); selectWorkType(wt);
+      (async () => {
+        try {
+          const { topic: t, pages: p, workType: wt, startedAt } = JSON.parse(active);
+          const elapsed = Date.now() - startedAt;
+          if (elapsed >= 10 * 60 * 1000) {
+            sessionStorage.removeItem("activeGeneration");
+            return;
+          }
+          const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(wt)}`);
+          const checkData = await checkRes.json();
+          sessionStorage.removeItem("activeGeneration");
+          if (!checkData.hasPaid) {
+            // Платёж занят — оригинальная генерация ещё идёт или уже завершилась
+            console.log("[Academic] Восстановление пропущено: платёж уже занят");
+            return;
+          }
+          selectWorkType(wt);
+          setTopic(t);
+          setPages(p);
+          console.log("[Academic] Восстановление прерванной генерации:", { topic: t, workType: wt, pages: p });
           runGeneration(t, p, wt);
-        } else {
+        } catch {
           sessionStorage.removeItem("activeGeneration");
         }
-      } catch {
-        sessionStorage.removeItem("activeGeneration");
-      }
+      })();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
