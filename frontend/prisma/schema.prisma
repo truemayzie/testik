@@ -29,6 +29,7 @@ model User {
   faculty     String?
   department  String?
   speciality  String?
+  discipline  String?
   course      String?
   groupNumber String?
   fullName    String?

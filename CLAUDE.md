@@ -15,7 +15,8 @@ Always respond in Russian. Всегда отвечай на русском яз�
 ```bash
 # Backend (порт 8000) — из папки backend/
 venv\Scripts\activate
-uvicorn main:app --reload
+uvicorn main:app --reload          # для разработки (авто-перезапуск при изменении файлов)
+uvicorn main:app                   # для тестирования генерации — БЕЗ --reload!
 
 # Frontend (порт 3000) — из папки frontend/
 npm run dev

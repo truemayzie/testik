@@ -613,6 +613,89 @@
   margin: 0;
 }
 
+/* Карточка с фактом под прогресс-баром */
+.factCard {
+  margin-top: 14px;
+  padding: 28px 36px 24px;
+  background: linear-gradient(135deg, #0C0A28 0%, #181250 55%, #261A6A 100%);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(99, 102, 241, 0.18);
+  transition: opacity 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Декоративная лампочка на фоне */
+.factCard::after {
+  content: '💡';
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 5.5rem;
+  opacity: 0.06;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.factBadge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #A78BFA;
+  margin-bottom: 14px;
+}
+
+.factText {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.65;
+  margin: 0 0 20px;
+  font-weight: 400;
+  max-width: 90%;
+}
+
+.factFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.factDots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  max-width: 200px;
+}
+
+.factDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(167, 139, 250, 0.2);
+  flex-shrink: 0;
+}
+
+.factDotActive {
+  width: 16px;
+  height: 5px;
+  border-radius: 3px;
+  background: #A78BFA;
+  flex-shrink: 0;
+  transition: width 0.3s ease;
+}
+
+.factCounter {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.25);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
 /* ══════════════════════════════════════════
    ERROR
 ══════════════════════════════════════════ */

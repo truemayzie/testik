@@ -14,6 +14,7 @@ type Profile = {
   faculty:     string | null;
   department:  string | null;
   speciality:  string | null;
+  discipline:  string | null;
   course:      string | null;
   groupNumber: string | null;
   fullName:    string | null;
@@ -22,7 +23,7 @@ type Profile = {
 };
 
 const EMPTY: Omit<Profile, "name" | "email" | "image"> = {
-  university: "", faculty: "", department: "", speciality: "",
+  university: "", faculty: "", department: "", speciality: "", discipline: "",
   course: "", groupNumber: "", fullName: "", teacherName: "", city: "",
 };
 
@@ -53,6 +54,7 @@ export default function ProfilePage() {
           faculty:     data.faculty     ?? "",
           department:  data.department  ?? "",
           speciality:  data.speciality  ?? "",
+          discipline:  data.discipline  ?? "",
           course:      data.course      ?? "",
           groupNumber: data.groupNumber ?? "",
           fullName:    data.fullName    ?? "",
@@ -202,6 +204,16 @@ export default function ProfilePage() {
                   value={form.speciality}
                   onChange={e => set("speciality", e.target.value)}
                 />
+              </div>
+              <div className={`${styles.field} ${styles.gridFull}`}>
+                <label className={styles.label}>Дисциплина</label>
+                <input
+                  className={styles.input}
+                  placeholder="Например: Общая психология"
+                  value={form.discipline}
+                  onChange={e => set("discipline", e.target.value)}
+                />
+                <p className={styles.fieldHint}>По какой дисциплине выполняется работа</p>
               </div>
             </div>
           </div>

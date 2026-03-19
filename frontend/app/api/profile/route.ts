@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const PROFILE_FIELDS = [
-  "university", "faculty", "department", "speciality",
+  "university", "faculty", "department", "speciality", "discipline",
   "course", "groupNumber", "fullName", "teacherName", "city",
 ] as const;
 
@@ -20,7 +20,7 @@ export async function GET() {
     where: { email: session.user.email },
     select: {
       id: true, name: true, email: true, image: true,
-      university: true, faculty: true, department: true, speciality: true,
+      university: true, faculty: true, department: true, speciality: true, discipline: true,
       course: true, groupNumber: true, fullName: true, teacherName: true, city: true,
     },
   });
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
     data,
     select: {
       id: true, name: true, email: true, image: true,
-      university: true, faculty: true, department: true, speciality: true,
+      university: true, faculty: true, department: true, speciality: true, discipline: true,
       course: true, groupNumber: true, fullName: true, teacherName: true, city: true,
     },
   });

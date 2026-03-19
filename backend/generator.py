@@ -5,7 +5,7 @@ generator.py — генерация учебных работ через Claude 
 
 import os
 import json
-import requests
+import re
 import time
 from dotenv import load_dotenv
 import anthropic
@@ -15,14 +15,23 @@ load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODEL  = "claude-sonnet-4-5"
 
+# Глобальный счётчик стоимости текущей генерации
+_session_cost: float = 0.0
+
 
 def ask(prompt: str, max_tokens: int = 8000) -> str:
-    """Запрос к Claude API."""
+    """Запрос к Claude API с логированием стоимости."""
+    global _session_cost
     message = client.messages.create(
         model=MODEL,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}]
     )
+    input_tokens  = message.usage.input_tokens
+    output_tokens = message.usage.output_tokens
+    cost = input_tokens * 0.000003 + output_tokens * 0.000015
+    _session_cost += cost
+    print(f"[COST] input={input_tokens} out={output_tokens} ${cost:.4f} | session=${_session_cost:.4f}")
     return message.content[0].text.strip()
 
 
@@ -44,7 +53,6 @@ def ask_text(prompt: str) -> str:
 
 def clean_text(text: str) -> str:
     """Убирает markdown-артефакты из текста."""
-    import re
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
     text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
     text = re.sub(r'```[^`]*```', '', text, flags=re.DOTALL)
@@ -167,221 +175,30 @@ WORK_RULES = {
 }
 
 
-# ── CrossRef — реальные источники ──────────────────────────────────────────
+# ── Генерация источников через Claude ───────────────────────────────────────
 
-CROSSREF_URL = "https://api.crossref.org/works"
+def generate_sources(topic: str, count: int = 10) -> list[str]:
+    """Генерирует реальные русскоязычные источники по теме через Claude."""
+    print(f"Генерирую {count} источников для темы: {topic}")
+    prompt = f"""Составь {count} реальных русскоязычных источников по теме «{topic}» для списка литературы.
 
+Требования:
+- ТОЛЬКО реально существующие российские источники
+- Годы публикации строго 2022-2026
+- НЕ включай отозванные статьи (WITHDRAWN, Retracted)
+- Минимум 4 книги/монографии и минимум 4 статьи из журналов
+- Журналы должны быть реальными российскими изданиями
 
-def translate_topic_to_english(topic: str) -> str:
-    """Переводит тему на английский через Claude для поиска в CrossRef."""
-    try:
-        result = ask(
-            f"Translate this Russian academic topic to English "
-            f"(just the translation, nothing else): {topic}",
-            max_tokens=200,
-        )
-        print(f"Тема переведена: {result[:60]}")
-        return result.strip()
-    except Exception:
-        return topic
+Формат строго по ГОСТ Р 7.0.5-2008:
+Книга: Фамилия И.О. Название. — Город: Издательство, Год. — XXX с.
+Статья: Фамилия И.О. Название статьи // Название журнала. — Год. — №N. — С. X–Y.
 
+Верни ТОЛЬКО нумерованный список без пояснений и без markdown."""
 
-def search_real_sources(topic: str, count: int = 10) -> list:
-    """Ищет реальные научные источники через CrossRef API."""
-    print(f"Ищу реальные источники по теме: {topic}")
-    english_topic = translate_topic_to_english(topic)
-
-    try:
-        params = {
-            "query":  english_topic,
-            "rows":   count * 3,
-            "select": "title,author,published,container-title,DOI",
-            "filter": "from-pub-date:2022",
-            "sort":   "relevance",
-        }
-        headers = {
-            "User-Agent": "AcademicService/1.0 (mailto:support@academic-service.ru)"
-        }
-        response = requests.get(CROSSREF_URL, params=params, timeout=15, headers=headers)
-        response.raise_for_status()
-        data      = response.json()
-        all_papers = data.get("message", {}).get("items", [])
-
-        papers = []
-        for p in all_papers:
-            titles = p.get("title", [])
-            if not titles or not titles[0]:
-                continue
-            title = titles[0]
-            # Фильтруем отозванные статьи и нерелевантные
-            title_lower = title.lower()
-            if "withdrawn" in title_lower or "retracted" in title_lower:
-                continue
-            if len(title) < 10:
-                continue
-            if not any(c.isascii() and c.isalpha() for c in title[:20]):
-                continue
-            pub        = p.get("published", {})
-            date_parts = pub.get("date-parts", [[0]])
-            year       = date_parts[0][0] if date_parts and date_parts[0] else 0
-            if year < 2022:
-                continue
-            papers.append(p)
-            if len(papers) >= count:
-                break
-
-        print(f"Найдено {len(papers)} источников через CrossRef")
-        return papers
-    except Exception as e:
-        print(f"Ошибка CrossRef: {e}")
-        return []
-
-
-def format_source_gost(paper: dict, number: int) -> str:
-    """Форматирует источник CrossRef по ГОСТ Р 7.0.5-2008."""
-    titles = paper.get("title", [])
-    title  = titles[0] if titles else ""
-    if not title:
-        return ""
-
-    authors     = paper.get("author", [])
-    author_list = []
-    for a in authors[:3]:
-        family = a.get("family", "")
-        given  = a.get("given", "")
-        if family:
-            initials = "".join(p[0] + "." for p in given.split()) if given else ""
-            author_list.append(f"{family} {initials}".strip())
-    if len(authors) > 3:
-        authors_str = ", ".join(author_list) + " и др."
-    else:
-        authors_str = ", ".join(author_list)
-
-    pub        = paper.get("published", {})
-    date_parts = pub.get("date-parts", [[""]])
-    year       = str(date_parts[0][0]) if date_parts and date_parts[0] else ""
-
-    container = paper.get("container-title", [])
-    venue     = container[0] if container else ""
-    doi       = paper.get("DOI", "")
-
-    prefix = f"{authors_str}. " if authors_str else ""
-    if venue:
-        source = f"{number}. {prefix}{title} // {venue}. — {year}."
-    else:
-        source = f"{number}. {prefix}{title}. — {year}."
-    if doi:
-        source += f" DOI: {doi}"
-
-    return source
-
-
-def generate_russian_sources(topic: str, count: int = 5) -> list:
-    """Генерирует русскоязычные источники через Claude API."""
-    print(f"Генерирую {count} русскоязычных источников...")
-    try:
-        result = ask(
-            f"""Составь {count} реальных русскоязычных источников по теме «{topic}» для списка литературы.
-Источники должны быть реальными — учебники, монографии, статьи из российских журналов.
-Годы: 2018-2024. Формат строго по ГОСТ Р 7.0.5-2008.
-Книги: Фамилия И.О. Название. — Город: Издательство, Год. — Страниц с.
-Статьи: Фамилия И.О. Название статьи // Название журнала. — Год. — №N. — С. X–Y.
-Верни только нумерованный список без пояснений.""",
-            max_tokens=1000,
-        )
-        lines   = [l.strip() for l in result.split("\n") if l.strip()]
-        sources = [l for l in lines if l and l[0].isdigit()]
-        print(f"Сгенерировано {len(sources)} русских источников")
-        return sources
-    except Exception as e:
-        print(f"Ошибка генерации русских источников: {e}")
-        return []
-
-
-def get_sources_for_topic(topic: str) -> tuple:
-    """Получает реальные источники (русские + CrossRef) и форматирует по ГОСТ."""
-    import re as _re
-
-    # 1. Русскоязычные источники через Claude
-    russian_sources = generate_russian_sources(topic, count=5)
-
-    # 2. CrossRef — иностранные источники
-    papers = search_real_sources(topic, count=10)
-
-    crossref_formatted = []
-    crossref_raw       = []
-
-    if papers:
-        formatted_temp = []
-        raw_temp       = []
-        for i, paper in enumerate(papers, 1):
-            source_str = format_source_gost(paper, i)
-            if source_str:
-                formatted_temp.append(source_str)
-                titles    = paper.get("title", [""])
-                authors   = paper.get("author", [])
-                pub       = paper.get("published", {})
-                year      = str(pub.get("date-parts", [[""]])[0][0])
-                container = paper.get("container-title", [""])
-                raw_temp.append({
-                    "title":   titles[0] if titles else "",
-                    "authors": [
-                        f"{a.get('family', '')} {a.get('given', '')[:1]}."
-                        for a in authors[:3] if a.get("family")
-                    ],
-                    "year":  year,
-                    "venue": container[0] if container else "",
-                })
-
-        if formatted_temp:
-            print("Перевожу иностранные источники на русский...")
-            sources_text = "\n".join(formatted_temp)
-            try:
-                translated = ask(
-                    f"""Переведи названия статей и журналов в этом списке литературы на русский язык.
-Авторов (фамилии и инициалы) оставь как есть — только транслитерируй латиницу в кириллицу.
-Формат ГОСТ сохрани полностью. DOI оставь без изменений.
-Верни ТОЛЬКО переведённый список, без пояснений:
-
-{sources_text}"""
-                )
-                translated_lines   = [l.strip() for l in translated.split("\n") if l.strip()]
-                crossref_formatted = [l for l in translated_lines if l and l[0].isdigit()]
-                print(f"Переведено {len(crossref_formatted)} иностранных источников")
-            except Exception as e:
-                print(f"Ошибка перевода источников: {e}")
-                crossref_formatted = formatted_temp
-            crossref_raw = raw_temp
-
-    # 3. Объединяем: сначала русские, потом иностранные — и перенумеровываем
-    all_combined = russian_sources + crossref_formatted
-    if not all_combined:
-        print("Источники не найдены — используем заглушки")
-        return [], []
-
-    renumbered = []
-    for i, src in enumerate(all_combined, 1):
-        src_clean = _re.sub(r'^\d+[\.\)]\s*', '', src)
-        renumbered.append(f"{i}. {src_clean}")
-
-    # raw_data для использования в промптах (номера уже правильные)
-    all_raw = []
-    for i, src in enumerate(russian_sources, 1):
-        src_clean = _re.sub(r'^\d+[\.\)]\s*', '', src)
-        all_raw.append({
-            "number":  i,
-            "title":   src_clean,
-            "authors": [],
-            "year":    "",
-            "venue":   "",
-        })
-    offset = len(russian_sources)
-    for j, raw in enumerate(crossref_raw):
-        raw["number"] = offset + j + 1
-        all_raw.append(raw)
-
-    print(f"Итого источников: {len(renumbered)} ({len(russian_sources)} рус. + {len(crossref_formatted)} ин.)")
-    return renumbered, all_raw
+    result = ask_text(prompt)
+    lines = [l.strip() for l in result.split("\n") if l.strip() and l.strip()[0].isdigit()]
+    print(f"Получено {len(lines)} источников")
+    return lines
 
 
 # ── Промпты структуры ───────────────────────────────────────────────────────
@@ -522,11 +339,12 @@ def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction
 - Иностранные имена — только в русской транслитерации
 - Академический стиль
 - Конкретные формулировки, не общие фразы
-- Максимум 1-2 ссылки на источники
+- В введении ссылки НЕ используются совсем — введение это авторский текст без цитирования источников. Не ставь [1], [2] и никакие другие ссылки во введении
 
 - НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков с точкой
+- Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
 - Все иностранные имена и названия — ТОЛЬКО в русской транслитерации
-- Никаких латинских букв кроме устоявшихся научных терминов (DOI, pH и т.п.)
+- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов (DOI, pH и т.п.)
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -608,7 +426,7 @@ def get_section_prompt(topic: str, section: str, parent: str,
         "Курсовая": f"научный стиль, {chapter_context}" if chapter_context else "научный стиль",
         "ВКР":      f"строгий научный стиль, {chapter_context}, собственный исследовательский вклад" if chapter_context else "строгий научный стиль",
     }
-    style      = STYLE_BY_TYPE.get(work_type, "академический стиль")
+    style       = STYLE_BY_TYPE.get(work_type, "академический стиль")
     parent_text = f"Этот раздел входит в главу «{parent}»." if parent else ""
 
     tables_instruction = ""
@@ -638,11 +456,12 @@ def get_section_prompt(topic: str, section: str, parent: str,
 - Никаких артефактов, пустых квадратов □, непечатных символов
 - Конкретные факты, цифры, примеры
 - Авторская позиция и собственные выводы
-- Максимум 1-2 ссылки на источники [1], [2]
+- Ссылки на источники — максимум 1 ссылка на весь подраздел, только если приводишь конкретную статистику или цитируешь конкретное исследование. Если таких фактов нет — не ставь ссылки вообще
 - В конце главы (не подглавы) — краткий вывод 2-3 предложения
 - НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков
+- Никаких мини-заголовков внутри текста подглавы — только связный текст без внутренних заголовков
 - Все иностранные имена и названия — ТОЛЬКО в русской транслитерации
-- Никаких латинских букв кроме устоявшихся научных терминов (DOI, pH и т.п.)
+- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов (DOI, pH и т.п.)
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -678,9 +497,11 @@ def get_conclusion_prompt(topic: str, work_type: str, words: int) -> str:
 - Не добавляй новую информацию — только обобщай результаты
 - Конкретные выводы, не общие фразы
 - Академический стиль
+- В заключении ссылки НЕ используются совсем — это только выводы автора. Не ставь [1], [2] и никакие другие ссылки в заключении
 - НИКАКОГО markdown: никаких #, ##, **, *, ---
+- Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
 - Все иностранные имена — ТОЛЬКО в русской транслитерации
-- Никаких латинских букв кроме устоявшихся научных терминов
+- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -815,6 +636,8 @@ def _check_volume(label: str, text: str, expected_words: int) -> None:
 def generate_work(topic: str, pages: int, work_type: str = "Реферат",
                   profile: dict | None = None) -> dict:
     """Генерирует работу нужного типа через Claude API."""
+    global _session_cost
+    _session_cost = 0.0
 
     print(f"\n{'='*60}")
     print(f"Начало генерации: {work_type}")
@@ -831,6 +654,10 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     if work_type in ("Сочинение", "Эссе"):
         result = generate_essay_or_composition(topic, pages, work_type)
         result["profile"] = profile or {}
+        print(f"{'='*50}")
+        print(f"[TOTAL] Тип: {work_type} | Тема: {topic[:40]}")
+        print(f"[TOTAL] Стоимость генерации: ${_session_cost:.4f}")
+        print(f"{'='*50}")
         return result
 
     # Расчёт объёма с учётом служебных страниц
@@ -845,23 +672,21 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     conclusion_words = rules["conclusion_words"]
     body_words       = total_words - intro_words - conclusion_words
 
-    # Шаг 0: Реальные источники
-    print("Шаг 0: Ищу реальные источники...")
-    real_sources, sources_data = get_sources_for_topic(topic)
-
     sources_min = rules.get("sources_min", 8)
 
-    if sources_data:
-        sources_for_prompt = "\n".join([
-            f"[{s['number']}] {s['title']}" + (f" / {', '.join(s['authors'])}" if s.get('authors') else "") + (f" ({s['year']})" if s.get('year') else "")
-            for s in sources_data
-        ])
-        sources_instruction = f"""РЕАЛЬНЫЕ ИСТОЧНИКИ (используй ссылки [1]-[{len(sources_data)}]):
-{sources_for_prompt}
+    # Шаг 0: Источники через Claude
+    print("Шаг 0: Генерирую источники...")
+    sources = generate_sources(topic, count=sources_min)
+
+    if sources:
+        sources_instruction = f"""ИСПОЛЬЗУЙ ЭТИ ИСТОЧНИКИ для ссылок [1]-[{len(sources)}]:
+{chr(10).join(sources[:5])}
+...
 Ссылки ставь в конце предложения в квадратных скобках: [1], [2].
-Номер ссылки должен соответствовать номеру источника в списке выше.
 Используй ссылки ЭКОНОМНО — 1-2 раза на подраздел, только для ключевых утверждений со статистикой или важными фактами."""
     else:
+        sources = [f"{i}. Автор И.О. Название работы. — М.: Издательство, 2023."
+                   for i in range(1, sources_min + 1)]
         sources_instruction = """Используй ссылки [1], [2] в тексте экономно — в конце предложения в квадратных скобках.
 Только для ключевых утверждений со статистикой или важными фактами, максимум 1-2 на подраздел."""
 
@@ -870,7 +695,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     data1     = ask_json(get_structure_prompt(topic, work_type, rules))
     structure = data1["structure"]
 
-    SKIP_KEYS    = {"Введение", "Заключение", "Список литературы", "Приложения"}
+    SKIP_KEYS     = {"Введение", "Заключение", "Список литературы", "Приложения"}
     section_names = [s for s in structure if s not in SKIP_KEYS]
 
     # Подглавы — только секции вида "X.Y. Название"
@@ -922,18 +747,14 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     )
     _check_volume("Заключение", content["Заключение"], conclusion_words)
 
-    # Источники
-    if real_sources:
-        sources = real_sources
-    else:
-        sources = [
-            f"{i}. Автор И.О. Название работы. — М.: Издательство, 2023."
-            for i in range(1, sources_min + 1)
-        ]
-
     total_chars     = sum(len(v) for v in content.values())
     estimated_pages = round(total_chars / 1800)
     print(f"Готово! Примерный объём: {estimated_pages} страниц")
+
+    print(f"{'='*50}")
+    print(f"[TOTAL] Тип: {work_type} | Тема: {topic[:40]}")
+    print(f"[TOTAL] Стоимость генерации: ${_session_cost:.4f}")
+    print(f"{'='*50}")
 
     meta = {
         "Тип работы":  work_type,

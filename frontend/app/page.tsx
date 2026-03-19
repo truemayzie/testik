@@ -72,7 +72,7 @@ const REVIEWS = [
 const FAQ = [
   { q: "Как работает генерация?",         a: "Введите тему работы в поле, выберите тип и объём, нажмите кнопку генерации. ИИ сформирует структуру, введение, основные главы, заключение и список литературы за 2–4 минуты." },
   { q: "Какие форматы поддерживаются?",   a: "Готовая работа скачивается в формате DOCX (Microsoft Word), оформленном по ГОСТ 7.32-2017: Times New Roman 14pt, интервал 1.5, поля 30/10/20/20 мм." },
-  { q: "Сколько стоит генерация?",        a: "Стоимость зависит от типа работы: сочинение от 99 ₽, эссе — 129 ₽, реферат — 199 ₽, курсовая — 499 ₽, ВКР — 999 ₽. Оплата разовая за каждую работу." },
+  { q: "Сколько стоит генерация?",        a: "Стоимость зависит от типа работы: сочинение — 99 ₽, эссе — 149 ₽, доклад — 199 ₽, реферат — 299 ₽, курсовая — 699 ₽, ВКР — 1199 ₽. Оплата разовая за каждую работу." },
   { q: "Гарантируется ли уникальность?",  a: "Да. Каждая работа генерируется индивидуально под вашу тему. Уникальность составляет 70–90% по системам антиплагиата." },
   { q: "Можно ли редактировать результат?", a: "Да, скачайте файл DOCX и редактируйте в любом текстовом редакторе: Microsoft Word, Google Docs, LibreOffice." },
 ];
@@ -99,67 +99,90 @@ type Step = { label: string; duration: number };
 
 function getProgressSteps(workType: string): Step[] {
   if (workType === "Сочинение" || workType === "Эссе") {
+    // ~60-70с реально
     return [
-      { label: "Анализируем тему",   duration: 3000  },
-      { label: "Подбираем стиль",    duration: 4000  },
-      { label: "Пишем текст",        duration: 25000 },
-      { label: "Финальная проверка", duration: 3000  },
+      { label: "Анализируем тему",   duration: 5000  },
+      { label: "Подбираем стиль",    duration: 8000  },
+      { label: "Пишем текст",        duration: 50000 },
+      { label: "Финальная проверка", duration: 7000  },
     ];
   }
   if (workType === "Доклад") {
-    return [
-      { label: "Анализируем тему",    duration: 3000  },
-      { label: "Формируем структуру", duration: 5000  },
-      { label: "Пишем введение",      duration: 8000  },
-      { label: "Пишем раздел 1",      duration: 18000 },
-      { label: "Пишем раздел 2",      duration: 18000 },
-      { label: "Пишем заключение",    duration: 8000  },
-      { label: "Финальная проверка",  duration: 3000  },
-    ];
-  }
-  if (workType === "ВКР") {
+    // ~100-120с реально: источники + 2 главы по 2 подглавы
     return [
       { label: "Анализируем тему",    duration: 5000  },
-      { label: "Ищем источники",      duration: 10000 },
+      { label: "Ищем источники",      duration: 22000 },
       { label: "Формируем структуру", duration: 8000  },
-      { label: "Пишем введение",      duration: 14000 },
-      { label: "Пишем главу 1",       duration: 28000 },
-      { label: "Пишем главу 2",       duration: 28000 },
-      { label: "Пишем главу 3",       duration: 28000 },
-      { label: "Пишем заключение",    duration: 14000 },
-      { label: "Оформляем приложения",duration: 6000  },
-      { label: "Оформляем литературу",duration: 8000  },
+      { label: "Пишем введение",      duration: 12000 },
+      { label: "Пишем раздел 1",      duration: 28000 },
+      { label: "Пишем раздел 2",      duration: 28000 },
+      { label: "Пишем заключение",    duration: 12000 },
       { label: "Финальная проверка",  duration: 5000  },
     ];
   }
-  if (workType === "Курсовая") {
+  if (workType === "ВКР") {
+    // ~350-420с реально: 3 главы по 3 подглавы = 9 больших секций
     return [
-      { label: "Анализируем тему",    duration: 3000  },
-      { label: "Ищем источники",      duration: 8000  },
-      { label: "Формируем структуру", duration: 5000  },
-      { label: "Пишем введение",      duration: 10000 },
-      { label: "Пишем главу 1",       duration: 18000 },
-      { label: "Пишем главу 2",       duration: 18000 },
-      { label: "Пишем главу 3",       duration: 18000 },
-      { label: "Пишем заключение",    duration: 10000 },
-      { label: "Оформляем литературу",duration: 6000  },
-      { label: "Финальная проверка",  duration: 4000  },
+      { label: "Анализируем тему",    duration: 8000  },
+      { label: "Ищем источники",      duration: 30000 },
+      { label: "Формируем структуру", duration: 10000 },
+      { label: "Пишем введение",      duration: 25000 },
+      { label: "Пишем главу 1",       duration: 85000 },
+      { label: "Пишем главу 2",       duration: 85000 },
+      { label: "Пишем главу 3",       duration: 85000 },
+      { label: "Пишем заключение",    duration: 25000 },
+      { label: "Оформляем приложения",duration: 8000  },
+      { label: "Оформляем литературу",duration: 12000 },
+      { label: "Финальная проверка",  duration: 7000  },
     ];
   }
-  // Реферат
+  if (workType === "Курсовая") {
+    // ~220-260с реально: 3 главы по 2 подглавы = 6 больших секций
+    return [
+      { label: "Анализируем тему",    duration: 5000  },
+      { label: "Ищем источники",      duration: 25000 },
+      { label: "Формируем структуру", duration: 8000  },
+      { label: "Пишем введение",      duration: 18000 },
+      { label: "Пишем главу 1",       duration: 55000 },
+      { label: "Пишем главу 2",       duration: 55000 },
+      { label: "Пишем главу 3",       duration: 55000 },
+      { label: "Пишем заключение",    duration: 18000 },
+      { label: "Оформляем литературу",duration: 10000 },
+      { label: "Финальная проверка",  duration: 6000  },
+    ];
+  }
+  // Реферат: ~160-180с реально: 3 главы по 2 подглавы
   return [
-    { label: "Анализируем тему",    duration: 3000  },
-    { label: "Ищем источники",      duration: 8000  },
-    { label: "Формируем структуру", duration: 5000  },
-    { label: "Пишем введение",      duration: 10000 },
-    { label: "Пишем главу 1",       duration: 18000 },
-    { label: "Пишем главу 2",       duration: 18000 },
-    { label: "Пишем главу 3",       duration: 18000 },
-    { label: "Пишем заключение",    duration: 10000 },
-    { label: "Оформляем литературу",duration: 6000  },
+    { label: "Анализируем тему",    duration: 5000  },
+    { label: "Ищем источники",      duration: 25000 },
+    { label: "Формируем структуру", duration: 8000  },
+    { label: "Пишем введение",      duration: 15000 },
+    { label: "Пишем главу 1",       duration: 35000 },
+    { label: "Пишем главу 2",       duration: 35000 },
+    { label: "Пишем главу 3",       duration: 35000 },
+    { label: "Пишем заключение",    duration: 15000 },
+    { label: "Оформляем литературу",duration: 8000  },
     { label: "Финальная проверка",  duration: 4000  },
   ];
 }
+
+const FUN_FACTS = [
+  "Средний студент тратит около 17 часов в неделю на подготовку к занятиям",
+  "Исследования показывают что написание конспектов от руки улучшает запоминание на 40%",
+  "Первый университет в мире — Болонский — был основан в 1088 году",
+  "Чтение вслух помогает запомнить материал лучше чем молчаливое чтение",
+  "В среднем человек может удерживать концентрацию внимания около 25 минут",
+  "Метод Помодоро — 25 минут работы и 5 минут отдыха — повышает продуктивность на 30%",
+  "Сон после изучения нового материала улучшает его запоминание на 20–30%",
+  "Первая печатная книга была создана Гутенбергом около 1450 года",
+  "Объяснение материала другому человеку — один из лучших способов его выучить",
+  "В России насчитывается более 700 высших учебных заведений",
+  "Средняя длина научной статьи составляет около 8000 слов",
+  "Библиотека Конгресса США содержит более 170 миллионов единиц хранения",
+  "Написание от руки активирует больше областей мозга чем печать на клавиатуре",
+  "Перерывы во время учёбы повышают эффективность усвоения материала",
+  "Первая электронная книга была создана в 1971 году в рамках проекта Гутенберг",
+];
 
 export default function Home() {
   const { data: session } = useSession();
@@ -184,6 +207,9 @@ export default function Home() {
 
   const [totalProgress, setTotalProgress] = useState(0);
   const [dots, setDots] = useState(".");
+
+  const [factIndex, setFactIndex]   = useState(0);
+  const [factVisible, setFactVisible] = useState(true);
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef      = useRef<Step[]>(getProgressSteps("Реферат"));
@@ -217,7 +243,7 @@ export default function Home() {
     }
 
     const rawInit = Math.min(1, elapsed / totalDuration);
-    const tpInit  = Math.min(95, Math.sqrt(rawInit) * 95);
+    const tpInit  = rawInit * 90;
     setTotalProgress(tpInit);
     setStepIndex(currentStep);
     console.log(`[Academic] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
@@ -230,7 +256,7 @@ export default function Home() {
       if (!step) return;
 
       const rawRatio = Math.min(1, elapsed / totalDuration);
-      const tp = Math.min(95, Math.sqrt(rawRatio) * 95);
+      const tp = rawRatio * 90;
 
       setTotalProgress(tp);
       setStepIndex(currentStep);
@@ -310,6 +336,13 @@ export default function Home() {
           sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
           sessionStorage.removeItem("activeGeneration");
           router.push(`/payment?workType=${encodeURIComponent(wt)}`);
+          return;
+        }
+        if (data.code === "SAVED") {
+          // Соединение прервалось, но работа сохранена — направляем в Мои работы
+          const errMsg = "Соединение прервалось, но работа сохранена. Найдите её в разделе «Мои работы».";
+          _gen.resolve(null, errMsg);
+          setError(errMsg);
           return;
         }
         const errMsg = data.error || "Произошла ошибка";
@@ -417,6 +450,22 @@ export default function Home() {
     }, 500);
     return () => clearInterval(id);
   }, [loading]);
+
+  // Смена фактов — равномерно на весь период генерации (каждый факт ровно 1 раз)
+  useEffect(() => {
+    if (!loading) { setFactVisible(true); return; }
+    const steps    = getProgressSteps(workType);
+    const totalMs  = steps.reduce((sum, s) => sum + s.duration, 0);
+    const interval = Math.max(6000, Math.floor(totalMs / FUN_FACTS.length));
+    const id = setInterval(() => {
+      setFactVisible(false);
+      setTimeout(() => {
+        setFactIndex(i => (i + 1) % FUN_FACTS.length);
+        setFactVisible(true);
+      }, 500);
+    }, interval);
+    return () => clearInterval(id);
+  }, [loading, workType]);
 
   // Баннер профиля: показываем только авторизованным с незаполненным профилем
   // и только если пользователь ещё не закрыл его (localStorage)
@@ -578,7 +627,7 @@ export default function Home() {
           <div className={styles.heroBadgeRow}>
             <span className={styles.heroBadge}>ГОСТ 7.32-2017</span>
             <span className={styles.heroBadge}>Антиплагиат 70-90%</span>
-            <span className={styles.heroBadgeFree}>+ от 199 Р</span>
+            <span className={styles.heroBadgeFree}>+ от 99 Р</span>
           </div>
 
           <h1 className={styles.heroTitle}>
@@ -651,7 +700,7 @@ export default function Home() {
               >
                 {loading
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
-                  : `⚡ Сгенерировать ${workType === "ВКР" ? "ВКР" : workType.toLowerCase()} — ${price} Р`}
+                  : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${price} Р`}
               </button>
             </div>
           </form>
@@ -709,6 +758,23 @@ export default function Home() {
             <p className={styles.progressHint}>
               Не закрывайте страницу — генерация продолжится в фоне
             </p>
+          </div>
+
+          {/* Карточка с фактом */}
+          <div className={styles.factCard} style={{ opacity: factVisible ? 1 : 0 }}>
+            <span className={styles.factBadge}>💡 Знаете ли вы?</span>
+            <p className={styles.factText}>{FUN_FACTS[factIndex]}</p>
+            <div className={styles.factFooter}>
+              <div className={styles.factDots}>
+                {FUN_FACTS.map((_, i) => (
+                  <span
+                    key={i}
+                    className={i === factIndex ? styles.factDotActive : styles.factDot}
+                  />
+                ))}
+              </div>
+              <span className={styles.factCounter}>{factIndex + 1} / {FUN_FACTS.length}</span>
+            </div>
           </div>
         </section>
       )}
