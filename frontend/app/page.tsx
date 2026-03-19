@@ -16,6 +16,37 @@ type ReferatResult = {
   meta: Record<string, string | number>;
 };
 
+// ── Состояние текущей генерации (живёт между client-side навигациями) ────────
+// Модульная переменная — не сбрасывается при router.push/Link, только при F5
+type PendingCb = (data: ReferatResult | null, error: string) => void;
+const _gen = (() => {
+  let _topic = ""; let _pages = 0; let _workType = ""; let _startedAt = 0;
+  let _done = false; let _data: ReferatResult | null = null; let _err = "";
+  const _cbs: PendingCb[] = [];
+  return {
+    get active()    { return _startedAt > 0 && !_done; },
+    get done()      { return _done; },
+    get startedAt() { return _startedAt; },
+    get topic()     { return _topic; },
+    get pages()     { return _pages; },
+    get workType()  { return _workType; },
+    start(t: string, p: number, wt: string) {
+      _topic = t; _pages = p; _workType = wt;
+      _startedAt = Date.now(); _done = false; _data = null; _err = "";
+    },
+    resolve(d: ReferatResult | null, e: string) {
+      _done = true; _data = d; _err = e;
+      _cbs.splice(0).forEach(cb => cb(d, e));
+      setTimeout(() => { if (_done) _startedAt = 0; }, 60_000); // сбрасываем через минуту
+    },
+    listen(cb: PendingCb) {
+      if (_done || !_startedAt) { cb(_data, _err); return; }
+      _cbs.push(cb);
+    },
+    cancel() { _cbs.splice(0); _startedAt = 0; _done = false; },
+  };
+})();
+
 // Сортировка по возрастанию страниц: Сочинение < Эссе < Доклад < Реферат < Курсовая < ВКР
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
 
@@ -166,14 +197,30 @@ export default function Home() {
     setError("");
   }
 
-  function startProgress() {
+  function startProgress(elapsedOffset = 0) {
     const steps = stepsRef.current;
     const totalDuration = steps.reduce((s: number, x: Step) => s + x.duration, 0);
-    let elapsed = 0;
+    let elapsed = elapsedOffset;
+
+    // Находим шаг, соответствующий уже прошедшему времени
     let currentStep = 0;
     let stepElapsed = 0;
+    let cumulative = 0;
+    for (let i = 0; i < steps.length; i++) {
+      const end = cumulative + steps[i].duration;
+      if (end > elapsedOffset || i === steps.length - 1) {
+        currentStep = i;
+        stepElapsed = elapsedOffset - cumulative;
+        break;
+      }
+      cumulative = end;
+    }
 
-    console.log(`[Academic] Шаг: 0 - ${steps[0]?.label} | 0%`);
+    const rawInit = Math.min(1, elapsed / totalDuration);
+    const tpInit  = Math.min(95, Math.sqrt(rawInit) * 95);
+    setTotalProgress(tpInit);
+    setStepIndex(currentStep);
+    console.log(`[Academic] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
 
     timerRef.current = setInterval(() => {
       elapsed     += 100;
@@ -182,7 +229,6 @@ export default function Home() {
       const step = steps[currentStep];
       if (!step) return;
 
-      // Эффект: √(elapsed/total) × 95 — быстро в начале, плавно к концу
       const rawRatio = Math.min(1, elapsed / totalDuration);
       const tp = Math.min(95, Math.sqrt(rawRatio) * 95);
 
@@ -238,8 +284,9 @@ export default function Home() {
     console.log('[Academic] Начало генерации:', { topic: t, workType: wt, pages: p });
     stepsRef.current = getProgressSteps(wt);
 
-    // Сохраняем активную генерацию — чтобы восстановить при возврате на страницу
-    sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: Date.now() }));
+    // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
+    _gen.start(t, p, wt);
+    sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: _gen.startedAt }));
 
     setLoading(true);
     setError("");
@@ -259,28 +306,27 @@ export default function Home() {
       stopProgress();
       if (!response.ok) {
         if (data.code === "PAYMENT_REQUIRED") {
+          _gen.cancel();
           sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
           sessionStorage.removeItem("activeGeneration");
           router.push(`/payment?workType=${encodeURIComponent(wt)}`);
           return;
         }
-        setError(data.error || "Произошла ошибка");
+        const errMsg = data.error || "Произошла ошибка";
+        _gen.resolve(null, errMsg);
+        setError(errMsg);
       } else {
         console.log('[Academic] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
+        _gen.resolve(data as ReferatResult, "");
         setResult(data);
         if (data.structure?.length > 0) setActiveSection(data.structure[0]);
-        if (session?.user) {
-          fetch("/api/generations", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ topic: t, pages: p, workType: wt, result: data }),
-          }).catch(() => {});
-        }
       }
     } catch (err) {
       console.error('[Academic] Ошибка генерации:', err);
       stopProgress();
-      setError("Не удалось подключиться к серверу");
+      const errMsg = "Не удалось подключиться к серверу";
+      _gen.resolve(null, errMsg);
+      setError(errMsg);
     } finally {
       sessionStorage.removeItem("activeGeneration");
       setLoading(false);
@@ -419,15 +465,15 @@ export default function Home() {
           setTopic(t);
           setPages(p);
           console.log("[Academic] Автозапуск после оплаты:", { topic: t, workType: wt, pages: p });
-          runGeneration(t, p, wt);
+          // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
+          // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
+          setTimeout(() => runGeneration(t, p, wt), 0);
         } catch {}
       }
       return;
     }
 
-    // 2. Пользователь ушёл с вкладки/страницы во время генерации — возобновляем
-    // Сначала проверяем платёж: если платёж уже использован — оригинальная
-    // генерация завершилась (или всё ещё идёт в фоне), не запускаем новую.
+    // 2. Пользователь ушёл на другую страницу и вернулся — восстанавливаем
     const active = sessionStorage.getItem("activeGeneration");
     if (active) {
       (async () => {
@@ -438,19 +484,50 @@ export default function Home() {
             sessionStorage.removeItem("activeGeneration");
             return;
           }
-          const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(wt)}`);
-          const checkData = await checkRes.json();
-          sessionStorage.removeItem("activeGeneration");
-          if (!checkData.hasPaid) {
-            // Платёж занят — оригинальная генерация ещё идёт или уже завершилась
-            console.log("[Academic] Восстановление пропущено: платёж уже занят");
-            return;
-          }
           selectWorkType(wt);
           setTopic(t);
           setPages(p);
-          console.log("[Academic] Восстановление прерванной генерации:", { topic: t, workType: wt, pages: p });
-          runGeneration(t, p, wt);
+
+          // Случай 1: клиентская навигация (router.push/Link) — модуль жив,
+          // _gen знает об активной генерации → просто подключаемся к ней.
+          if (_gen.active || (_gen.done && _gen.startedAt === startedAt)) {
+            stepsRef.current = getProgressSteps(wt);
+            if (!_gen.done) {
+              setLoading(true); setError(""); setResult(null);
+              setTotalProgress(0); setStepIndex(0);
+              // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
+              // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
+              const elapsedAtMount = elapsed;
+              setTimeout(() => { if (!_gen.done) startProgress(elapsedAtMount + 100); }, 0);
+            }
+            _gen.listen((data, err) => {
+              stopProgress();
+              if (data) {
+                setResult(data);
+                if (data.structure?.length > 0) setActiveSection(data.structure[0]);
+              } else {
+                setError(err || "Генерация не удалась");
+              }
+              sessionStorage.removeItem("activeGeneration");
+              setLoading(false);
+            });
+            console.log("[Academic] Восстановление UI (клиентская навигация):", { topic: t, workType: wt });
+            return;
+          }
+
+          // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен, проверяем платёж
+          const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(wt)}`);
+          const checkData = await checkRes.json();
+          if (!checkData.hasPaid) {
+            // Платёж занят — оригинальная генерация завершилась или всё ещё идёт (серверная)
+            console.log("[Academic] Восстановление (F5): платёж занят, ждём результата в Мои работы");
+            setError("Генерация была прервана перезагрузкой страницы. Проверьте результат в разделе «Мои работы».");
+            sessionStorage.removeItem("activeGeneration");
+            return;
+          }
+          sessionStorage.removeItem("activeGeneration");
+          console.log("[Academic] Восстановление (F5): перезапуск генерации:", { topic: t, workType: wt, pages: p });
+          setTimeout(() => runGeneration(t, p, wt), 0);
         } catch {
           sessionStorage.removeItem("activeGeneration");
         }

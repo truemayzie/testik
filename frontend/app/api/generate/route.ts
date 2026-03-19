@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { saveGeneration } from "@/lib/db";
+import type { ReferatResult } from "@/lib/db";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
@@ -82,9 +84,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as ReferatResult;
+
+    // Сохраняем на сервере сразу — не зависим от клиентского подключения
+    try {
+      await saveGeneration(user.id, body.topic, body.pages, workType, data);
+    } catch {
+      // Не блокируем ответ если сохранение упало — клиент получит результат
+    }
+
     return NextResponse.json(data);
   } catch {
+    // Возвращаем платёж — клиент сможет повторить попытку
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data:  { usedAt: null },
+    });
     return NextResponse.json(
       { error: "Сервер генерации недоступен. Запустите backend (uvicorn)." },
       { status: 503 }
