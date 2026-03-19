@@ -54,6 +54,18 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+# ── Служебные страницы (не содержат основного текста) ──────────────────────
+
+SERVICE_PAGES = {
+    "Реферат":   3,   # титульник + содержание + список литературы
+    "Доклад":    3,   # титульник + содержание + список литературы
+    "Курсовая":  4,   # титульник + содержание (1-2) + список литературы (2)
+    "ВКР":       8,   # титульник + содержание (2) + список литературы (3) + приложения (2)
+    "Эссе":      0,
+    "Сочинение": 0,
+}
+
+
 # ── Правила для каждого типа работы ────────────────────────────────────────
 
 WORK_RULES = {
@@ -201,6 +213,12 @@ def search_real_sources(topic: str, count: int = 10) -> list:
             if not titles or not titles[0]:
                 continue
             title = titles[0]
+            # Фильтруем отозванные статьи и нерелевантные
+            title_lower = title.lower()
+            if "withdrawn" in title_lower or "retracted" in title_lower:
+                continue
+            if len(title) < 10:
+                continue
             if not any(c.isascii() and c.isalpha() for c in title[:20]):
                 continue
             pub        = p.get("published", {})
@@ -258,60 +276,112 @@ def format_source_gost(paper: dict, number: int) -> str:
     return source
 
 
+def generate_russian_sources(topic: str, count: int = 5) -> list:
+    """Генерирует русскоязычные источники через Claude API."""
+    print(f"Генерирую {count} русскоязычных источников...")
+    try:
+        result = ask(
+            f"""Составь {count} реальных русскоязычных источников по теме «{topic}» для списка литературы.
+Источники должны быть реальными — учебники, монографии, статьи из российских журналов.
+Годы: 2018-2024. Формат строго по ГОСТ Р 7.0.5-2008.
+Книги: Фамилия И.О. Название. — Город: Издательство, Год. — Страниц с.
+Статьи: Фамилия И.О. Название статьи // Название журнала. — Год. — №N. — С. X–Y.
+Верни только нумерованный список без пояснений.""",
+            max_tokens=1000,
+        )
+        lines   = [l.strip() for l in result.split("\n") if l.strip()]
+        sources = [l for l in lines if l and l[0].isdigit()]
+        print(f"Сгенерировано {len(sources)} русских источников")
+        return sources
+    except Exception as e:
+        print(f"Ошибка генерации русских источников: {e}")
+        return []
+
+
 def get_sources_for_topic(topic: str) -> tuple:
-    """Получает реальные источники и форматирует по ГОСТ."""
+    """Получает реальные источники (русские + CrossRef) и форматирует по ГОСТ."""
+    import re as _re
+
+    # 1. Русскоязычные источники через Claude
+    russian_sources = generate_russian_sources(topic, count=5)
+
+    # 2. CrossRef — иностранные источники
     papers = search_real_sources(topic, count=10)
 
-    if not papers:
-        print("CrossRef не вернул результатов — используем заглушки")
-        return [], []
+    crossref_formatted = []
+    crossref_raw       = []
 
-    formatted = []
-    raw_data  = []
+    if papers:
+        formatted_temp = []
+        raw_temp       = []
+        for i, paper in enumerate(papers, 1):
+            source_str = format_source_gost(paper, i)
+            if source_str:
+                formatted_temp.append(source_str)
+                titles    = paper.get("title", [""])
+                authors   = paper.get("author", [])
+                pub       = paper.get("published", {})
+                year      = str(pub.get("date-parts", [[""]])[0][0])
+                container = paper.get("container-title", [""])
+                raw_temp.append({
+                    "title":   titles[0] if titles else "",
+                    "authors": [
+                        f"{a.get('family', '')} {a.get('given', '')[:1]}."
+                        for a in authors[:3] if a.get("family")
+                    ],
+                    "year":  year,
+                    "venue": container[0] if container else "",
+                })
 
-    for i, paper in enumerate(papers, 1):
-        source_str = format_source_gost(paper, i)
-        if source_str:
-            formatted.append(source_str)
-            titles   = paper.get("title", [""])
-            authors  = paper.get("author", [])
-            pub      = paper.get("published", {})
-            year     = str(pub.get("date-parts", [[""]])[0][0])
-            container = paper.get("container-title", [""])
-            raw_data.append({
-                "number":  i,
-                "title":   titles[0] if titles else "",
-                "authors": [
-                    f"{a.get('family', '')} {a.get('given', '')[:1]}."
-                    for a in authors[:3] if a.get("family")
-                ],
-                "year":  year,
-                "venue": container[0] if container else "",
-            })
-
-    if not formatted:
-        return [], []
-
-    # Переводим на русский через Claude
-    print("Перевожу источники на русский...")
-    sources_text = "\n".join(formatted)
-    try:
-        translated = ask(
-            f"""Переведи названия статей и журналов в этом списке литературы на русский язык.
+        if formatted_temp:
+            print("Перевожу иностранные источники на русский...")
+            sources_text = "\n".join(formatted_temp)
+            try:
+                translated = ask(
+                    f"""Переведи названия статей и журналов в этом списке литературы на русский язык.
 Авторов (фамилии и инициалы) оставь как есть — только транслитерируй латиницу в кириллицу.
 Формат ГОСТ сохрани полностью. DOI оставь без изменений.
 Верни ТОЛЬКО переведённый список, без пояснений:
 
 {sources_text}"""
-        )
-        translated_lines = [l.strip() for l in translated.split("\n") if l.strip()]
-        formatted = [l for l in translated_lines if l and l[0].isdigit()]
-        print(f"Переведено {len(formatted)} источников")
-    except Exception as e:
-        print(f"Ошибка перевода источников: {e}")
+                )
+                translated_lines   = [l.strip() for l in translated.split("\n") if l.strip()]
+                crossref_formatted = [l for l in translated_lines if l and l[0].isdigit()]
+                print(f"Переведено {len(crossref_formatted)} иностранных источников")
+            except Exception as e:
+                print(f"Ошибка перевода источников: {e}")
+                crossref_formatted = formatted_temp
+            crossref_raw = raw_temp
 
-    print(f"Отформатировано {len(formatted)} источников по ГОСТ")
-    return formatted, raw_data
+    # 3. Объединяем: сначала русские, потом иностранные — и перенумеровываем
+    all_combined = russian_sources + crossref_formatted
+    if not all_combined:
+        print("Источники не найдены — используем заглушки")
+        return [], []
+
+    renumbered = []
+    for i, src in enumerate(all_combined, 1):
+        src_clean = _re.sub(r'^\d+[\.\)]\s*', '', src)
+        renumbered.append(f"{i}. {src_clean}")
+
+    # raw_data для использования в промптах (номера уже правильные)
+    all_raw = []
+    for i, src in enumerate(russian_sources, 1):
+        src_clean = _re.sub(r'^\d+[\.\)]\s*', '', src)
+        all_raw.append({
+            "number":  i,
+            "title":   src_clean,
+            "authors": [],
+            "year":    "",
+            "venue":   "",
+        })
+    offset = len(russian_sources)
+    for j, raw in enumerate(crossref_raw):
+        raw["number"] = offset + j + 1
+        all_raw.append(raw)
+
+    print(f"Итого источников: {len(renumbered)} ({len(russian_sources)} рус. + {len(crossref_formatted)} ин.)")
+    return renumbered, all_raw
 
 
 # ── Промпты структуры ───────────────────────────────────────────────────────
@@ -763,8 +833,14 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         result["profile"] = profile or {}
         return result
 
-    # Расчёт объёма
-    total_words      = pages * rules["words_per_page"]
+    # Расчёт объёма с учётом служебных страниц
+    service_pages = SERVICE_PAGES.get(work_type, 0)
+    text_pages    = max(pages - service_pages, 1)
+    total_words   = text_pages * rules["words_per_page"]
+    print(f"Запрошено страниц: {pages}")
+    print(f"Служебных страниц: {service_pages}")
+    print(f"Страниц основного текста: {text_pages}")
+    print(f"Целевой объём слов: {total_words}")
     intro_words      = rules["intro_words"]
     conclusion_words = rules["conclusion_words"]
     body_words       = total_words - intro_words - conclusion_words
@@ -777,14 +853,17 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     if sources_data:
         sources_for_prompt = "\n".join([
-            f"[{s['number']}] {s['title']} / {', '.join(s['authors'])} ({s['year']})"
+            f"[{s['number']}] {s['title']}" + (f" / {', '.join(s['authors'])}" if s.get('authors') else "") + (f" ({s['year']})" if s.get('year') else "")
             for s in sources_data
         ])
         sources_instruction = f"""РЕАЛЬНЫЕ ИСТОЧНИКИ (используй ссылки [1]-[{len(sources_data)}]):
 {sources_for_prompt}
-Используй ссылки ЭКОНОМНО — максимум 1-2 на весь подраздел."""
+Ссылки ставь в конце предложения в квадратных скобках: [1], [2].
+Номер ссылки должен соответствовать номеру источника в списке выше.
+Используй ссылки ЭКОНОМНО — 1-2 раза на подраздел, только для ключевых утверждений со статистикой или важными фактами."""
     else:
-        sources_instruction = "Используй ссылки [1], [2] в тексте экономно."
+        sources_instruction = """Используй ссылки [1], [2] в тексте экономно — в конце предложения в квадратных скобках.
+Только для ключевых утверждений со статистикой или важными фактами, максимум 1-2 на подраздел."""
 
     # Шаг 1: Структура
     print("Шаг 1: Генерирую структуру...")
