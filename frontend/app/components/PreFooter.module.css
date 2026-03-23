@@ -29,7 +29,7 @@
 }
 
 .prefooterTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #0F172A;

@@ -1,7 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import styles from "./Footer.module.css";
 
 export default function Footer() {
+  const { status } = useSession();
+  const authed = status === "authenticated";
+
   return (
     <footer className={styles.footer}>
       <div className={styles.footerInner}>
@@ -16,7 +22,7 @@ export default function Footer() {
             </div>
             <p className={styles.footerTagline}>
               Генератор учебных работ по ГОСТ.<br />
-              Рефераты, курсовые, эссе — быстро и бесплатно.
+              Рефераты, курсовые, эссе — быстро и качественно.
             </p>
             <div className={styles.footerSocials}>
               <a href="https://vk.com" target="_blank" rel="noopener noreferrer"
@@ -50,7 +56,7 @@ export default function Footer() {
               <ul className={styles.footerLinks}>
                 <li><a href="/">Генератор рефератов</a></li>
                 <li><Link href="/dashboard">Мои работы</Link></li>
-                <li><Link href="/auth/signin">Войти</Link></li>
+                {!authed && <li><Link href="/auth/signin">Войти</Link></li>}
               </ul>
             </div>
             <div className={styles.footerCol}>
@@ -72,8 +78,8 @@ export default function Footer() {
           </div>
           <div className={styles.footerBadges}>
             <span className={styles.footerBadge}>ГОСТ 7.32-2017</span>
-            <span className={styles.footerBadge}>Бесплатно</span>
-            <span className={styles.footerBadge}>Без регистрации</span>
+            <span className={styles.footerBadge}>ИИ-генерация</span>
+            <span className={styles.footerBadge}>Быстро</span>
           </div>
         </div>
 

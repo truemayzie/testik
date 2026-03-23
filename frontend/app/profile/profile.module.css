@@ -39,7 +39,7 @@
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
 }
 
 .heroInfo {
@@ -47,7 +47,7 @@
 }
 
 .heroName {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.6rem;
   font-weight: 700;
   color: #fff;
@@ -88,7 +88,7 @@
 }
 
 .bannerTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
@@ -156,7 +156,7 @@
 }
 
 .bannerSuccessTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
@@ -228,7 +228,7 @@
 }
 
 .blockTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.05rem;
   font-weight: 700;
   color: #0F172A;

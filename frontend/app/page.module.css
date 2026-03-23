@@ -52,7 +52,7 @@
 
 /* Title */
 .heroTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(2.4rem, 6vw, 3.8rem);
   font-weight: 700;
   color: #fff;
@@ -394,7 +394,7 @@
 }
 
 .sectionTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.2rem);
   font-weight: 700;
   color: #0F172A;
@@ -431,7 +431,7 @@
 }
 
 .stepNum {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 2.8rem;
   font-weight: 700;
   color: #E0E7FF;
@@ -512,7 +512,7 @@
 .progressPercent {
   font-size: 2rem;
   font-weight: 800;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   background: linear-gradient(90deg, #A78BFA 0%, #60A5FA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -780,7 +780,7 @@
 }
 
 .docTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.45rem;
   font-weight: 700;
   color: #0F172A;
@@ -1087,7 +1087,7 @@
 }
 
 .profileBannerTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0 0 2px;
@@ -1207,7 +1207,7 @@
 }
 
 .whySectionTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.8rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #fff;
@@ -1275,7 +1275,7 @@
 }
 
 .recentHeading {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.2rem);
   font-weight: 700;
   color: #0F172A;
@@ -1365,7 +1365,7 @@
 }
 
 .reviewsHeading {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.2rem);
   font-weight: 700;
   color: #0F172A;
@@ -1461,7 +1461,7 @@
 }
 
 .faqHeading {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.2rem);
   font-weight: 700;
   color: #0F172A;

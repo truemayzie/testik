@@ -19,6 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
+      <head>
+        <meta name="format-detection" content="telephone=no, email=no, address=no" />
+      </head>
       <body>
         <Providers>
           <Header />

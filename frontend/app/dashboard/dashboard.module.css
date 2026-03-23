@@ -133,7 +133,7 @@
 }
 
 .heroBannerTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #fff;
@@ -161,7 +161,7 @@
   font-weight: 800;
   color: #fff;
   line-height: 1;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
 }
 
 .heroBannerStatLabel {
@@ -215,7 +215,7 @@
 
 /* ── Section ── */
 .sectionTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.2rem;
   font-weight: 700;
   color: #0F172A;
@@ -559,7 +559,7 @@
 .modalHeaderLeft { flex: 1; min-width: 0; }
 
 .modalTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.2rem;
   font-weight: 700;
   color: #0F172A;

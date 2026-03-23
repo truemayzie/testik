@@ -21,7 +21,7 @@
 .notFoundIcon { font-size: 4rem; display: block; margin-bottom: 20px; }
 
 .notFoundInner h1 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.8rem;
   color: #0F172A;
   margin: 0 0 12px;
@@ -64,7 +64,7 @@
 }
 
 .heroTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.6rem);
   font-weight: 700;
   color: #fff;
@@ -167,7 +167,7 @@
 .previewSections { margin-bottom: 32px; }
 
 .sectionHeading {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -184,7 +184,7 @@
 }
 
 .previewSectionTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1rem;
   font-weight: 700;
   color: #0F172A;
@@ -299,7 +299,7 @@
 .ctaLockIcon { font-size: 2.5rem; margin-bottom: 16px; display: block; }
 
 .ctaTitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 1.7rem;
   font-weight: 700;
   color: #fff;
