@@ -117,7 +117,7 @@ export const authOptions: NextAuthOptions = {
     YandexProvider,
     // VKProvider,  // Включить когда будет домен с https
     EmailProvider({
-      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+      from: process.env.EMAIL_FROM || "support@ref-ai.ru",
       async sendVerificationRequest({ identifier: email, url, provider }) {
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -128,12 +128,12 @@ export const authOptions: NextAuthOptions = {
           body: JSON.stringify({
             from: provider.from,
             to: [email],
-            subject: "Войти в Academic Service",
+            subject: "Войти в Refai",
             html: `
               <div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf9f7;border-radius:8px;">
                 <h2 style="color:#1a1a1a;margin:0 0 12px;">Ссылка для входа</h2>
                 <p style="color:#555;margin:0 0 28px;line-height:1.6;">
-                  Нажмите на кнопку ниже, чтобы войти в <strong>Academic Service</strong>:
+                  Нажмите на кнопку ниже, чтобы войти в <strong>Refai</strong>:
                 </p>
                 <a href="${url}" style="display:inline-block;background:#2d5a8e;color:#fff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:600;font-size:15px;">
                   Войти в аккаунт →
