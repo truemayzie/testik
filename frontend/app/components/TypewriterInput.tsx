@@ -102,12 +102,6 @@ export default function TypewriterInput({ value, onChange, disabled, className }
           }}/>
         </div>
       )}
-      <style>{`
-        @keyframes twBlink {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }

@@ -11,7 +11,8 @@ export default function Footer() {
           {/* Бренд */}
           <div className={styles.footerBrand}>
             <div className={styles.footerLogo}>
-              <span className={styles.footerLogoAccent}>A</span>cademic
+              <span className={styles.footerLogoIcon}>R</span>
+              <span className={styles.footerLogoText}>efai</span>
             </div>
             <p className={styles.footerTagline}>
               Генератор учебных работ по ГОСТ.<br />
@@ -65,7 +66,7 @@ export default function Footer() {
         </div>
 
         <div className={styles.footerBottom}>
-          <p className={styles.footerCopy}>© 2025–2026 Academic Service. Все права защищены.</p>
+          <p className={styles.footerCopy}>© 2025–2026 Refai. Все права защищены.</p>
           <div className={styles.footerBadges}>
             <span className={styles.footerBadge}>ГОСТ 7.32-2017</span>
             <span className={styles.footerBadge}>Бесплатно</span>

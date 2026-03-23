@@ -837,3 +837,94 @@
 }
 
 .para:last-child { margin-bottom: 0; }
+
+/* ══════════════════════════════════════════
+   MOBILE
+══════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Hero banner */
+  .heroBanner {
+    padding: 32px 16px 36px;
+  }
+
+  .heroBannerInner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .newBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 13px 20px;
+  }
+
+  /* Main content */
+  .main {
+    padding: 24px 16px 60px;
+  }
+
+  /* Cards */
+  .card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .cardLeft {
+    width: 100%;
+  }
+
+  .cardTitle {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    font-size: 0.93rem;
+  }
+
+  .cardActions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .openBtn,
+  .downloadBtn {
+    flex: 1;
+    justify-content: center;
+    min-width: 80px;
+  }
+
+  /* Modal */
+  .modalOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal {
+    border-radius: 20px 20px 0 0;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  .modalHeader {
+    padding: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .modalHeaderActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .modalDownloadBtn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .modalBody {
+    padding: 16px;
+  }
+}

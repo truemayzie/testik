@@ -275,7 +275,7 @@ export default function DashboardPage() {
                     <div className={styles.cardMeta}>
                       <span>~{gen.pages} страниц</span>
                       <span className={styles.dot}>·</span>
-                      <span>{formatDate(gen.createdAt)}</span>
+                      <span suppressHydrationWarning>{formatDate(gen.createdAt)}</span>
                     </div>
                   </div>
                   <div className={styles.cardActions}>

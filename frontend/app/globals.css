@@ -16,6 +16,11 @@ html {
 body {
   background: #F8F9FE;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
 }
 
 /* ── Плавное появление страниц при навигации ── */
@@ -37,6 +42,11 @@ main, .page-transition {
 /* ── Плавный скролл к якорям ── */
 :target {
   scroll-margin-top: 72px; /* высота шапки */
+}
+
+@keyframes twBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
 }
 
 :root {

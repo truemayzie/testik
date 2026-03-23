@@ -246,7 +246,7 @@ export default function Home() {
     const tpInit  = rawInit * 90;
     setTotalProgress(tpInit);
     setStepIndex(currentStep);
-    console.log(`[Academic] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
+    console.log(`[Refai] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
 
     timerRef.current = setInterval(() => {
       elapsed     += 100;
@@ -264,7 +264,7 @@ export default function Home() {
       if (stepElapsed >= step.duration) {
         const next = Math.min(currentStep + 1, steps.length - 1);
         if (next !== currentStep) {
-          console.log(`[Academic] Шаг:`, next, '-', steps[next]?.label, '|', Math.round(tp) + '%');
+          console.log(`[Refai] Шаг:`, next, '-', steps[next]?.label, '|', Math.round(tp) + '%');
         }
         currentStep = next;
         stepElapsed = 0;
@@ -280,7 +280,7 @@ export default function Home() {
 
   async function handleDownload() {
     if (!result) return;
-    console.log('[Academic] Скачивание DOCX...');
+    console.log('[Refai] Скачивание DOCX...');
     setDownloading(true);
     try {
       const response = await fetch("http://localhost:8000/api/download/referat", {
@@ -298,7 +298,7 @@ export default function Home() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      console.log('[Academic] DOCX скачан успешно');
+      console.log('[Refai] DOCX скачан успешно');
     } catch {
       alert("Не удалось скачать файл.");
     } finally {
@@ -307,7 +307,7 @@ export default function Home() {
   }
 
   async function runGeneration(t: string, p: number, wt: string) {
-    console.log('[Academic] Начало генерации:', { topic: t, workType: wt, pages: p });
+    console.log('[Refai] Начало генерации:', { topic: t, workType: wt, pages: p });
     stepsRef.current = getProgressSteps(wt);
 
     // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
@@ -349,13 +349,13 @@ export default function Home() {
         _gen.resolve(null, errMsg);
         setError(errMsg);
       } else {
-        console.log('[Academic] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
+        console.log('[Refai] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
         _gen.resolve(data as ReferatResult, "");
         setResult(data);
         if (data.structure?.length > 0) setActiveSection(data.structure[0]);
       }
     } catch (err) {
-      console.error('[Academic] Ошибка генерации:', err);
+      console.error('[Refai] Ошибка генерации:', err);
       stopProgress();
       const errMsg = "Не удалось подключиться к серверу";
       _gen.resolve(null, errMsg);
@@ -379,7 +379,7 @@ export default function Home() {
       }
       const checkData = await checkRes.json();
       if (!checkData.hasPaid) {
-        console.log("[Academic] Оплата не найдена, переход на страницу оплаты:", workType);
+        console.log("[Refai] Оплата не найдена, переход на страницу оплаты:", workType);
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
         router.push(`/payment?workType=${encodeURIComponent(workType)}`);
         return;
@@ -513,7 +513,7 @@ export default function Home() {
           selectWorkType(wt);
           setTopic(t);
           setPages(p);
-          console.log("[Academic] Автозапуск после оплаты:", { topic: t, workType: wt, pages: p });
+          console.log("[Refai] Автозапуск после оплаты:", { topic: t, workType: wt, pages: p });
           // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
           // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
           setTimeout(() => runGeneration(t, p, wt), 0);
@@ -560,7 +560,7 @@ export default function Home() {
               sessionStorage.removeItem("activeGeneration");
               setLoading(false);
             });
-            console.log("[Academic] Восстановление UI (клиентская навигация):", { topic: t, workType: wt });
+            console.log("[Refai] Восстановление UI (клиентская навигация):", { topic: t, workType: wt });
             return;
           }
 
@@ -569,13 +569,13 @@ export default function Home() {
           const checkData = await checkRes.json();
           if (!checkData.hasPaid) {
             // Платёж занят — оригинальная генерация завершилась или всё ещё идёт (серверная)
-            console.log("[Academic] Восстановление (F5): платёж занят, ждём результата в Мои работы");
+            console.log("[Refai] Восстановление (F5): платёж занят, ждём результата в Мои работы");
             setError("Генерация была прервана перезагрузкой страницы. Проверьте результат в разделе «Мои работы».");
             sessionStorage.removeItem("activeGeneration");
             return;
           }
           sessionStorage.removeItem("activeGeneration");
-          console.log("[Academic] Восстановление (F5): перезапуск генерации:", { topic: t, workType: wt, pages: p });
+          console.log("[Refai] Восстановление (F5): перезапуск генерации:", { topic: t, workType: wt, pages: p });
           setTimeout(() => runGeneration(t, p, wt), 0);
         } catch {
           sessionStorage.removeItem("activeGeneration");
@@ -844,7 +844,7 @@ export default function Home() {
         <section className={styles.whySection}>
           <div className={styles.whySectionInner}>
             <h2 className={styles.whySectionTitle}>
-              Почему <span className={styles.whyAccent}>Academic?</span>
+              Почему <span className={styles.whyAccent}>Refai?</span>
             </h2>
             <div className={styles.whyCards}>
               {WHY_FEATURES.map(f => (
@@ -871,7 +871,7 @@ export default function Home() {
                 <div key={w.id} className={styles.recentCard}>
                   <span className={styles.recentBadge}>{w.workType}</span>
                   <p className={styles.recentWorkTitle}>{w.topic}</p>
-                  <span className={styles.recentDate}>{formatDate(w.createdAt)}</span>
+                  <span suppressHydrationWarning className={styles.recentDate}>{formatDate(w.createdAt)}</span>
                 </div>
               ))}
             </div>

@@ -15,9 +15,9 @@ async function fetchPreview(slug: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await fetchPreview(params.slug);
-  if (!data) return { title: "Работа не найдена | Academic Service" };
+  if (!data) return { title: "Работа не найдена | Refai" };
   return {
-    title: `${data.workType} — ${data.topic} | Academic Service`,
+    title: `${data.workType} — ${data.topic} | Refai`,
     description: `Готовый ${data.workType.toLowerCase()} на тему «${data.topic}». ${data.pages} страниц, оформление по ГОСТ, уникальность 80%+`,
     openGraph: {
       title: `${data.workType}: ${data.topic}`,

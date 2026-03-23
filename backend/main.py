@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 from generator import generate_work
+from github_proxy import start_callback_server
+
+start_callback_server()
 from formatter import create_docx
 
 app = FastAPI(title="Academic Service API")

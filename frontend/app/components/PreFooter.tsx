@@ -27,13 +27,13 @@ export default function PreFooter() {
         <p className={styles.prefooterCount}>
           Более <span className={styles.prefooterAccent}>1 000+</span> работ
         </p>
-        <h2 className={styles.prefooterTitle}>сгенерировано Academic</h2>
+        <h2 className={styles.prefooterTitle}>сгенерировано Refai</h2>
         <p className={styles.prefooterSub}>Попробуй и ты</p>
         <a href="#generator" className={styles.prefooterBtn}>
           ⚡ Попробовать бесплатно
         </a>
         <p className={styles.prefooterHeart}>
-          Academic помогает сдавать работы без стресса&nbsp;❤️
+          Refai помогает сдавать работы без стресса&nbsp;❤️
         </p>
       </div>
 

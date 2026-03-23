@@ -9,6 +9,7 @@ import re
 import time
 from dotenv import load_dotenv
 import anthropic
+from github_proxy import ask_via_github
 
 load_dotenv()
 
@@ -20,19 +21,11 @@ _session_cost: float = 0.0
 
 
 def ask(prompt: str, max_tokens: int = 8000) -> str:
-    """Запрос к Claude API с логированием стоимости."""
+    """Запрос к Claude API через GitHub Actions прокси."""
     global _session_cost
-    message = client.messages.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    input_tokens  = message.usage.input_tokens
-    output_tokens = message.usage.output_tokens
-    cost = input_tokens * 0.000003 + output_tokens * 0.000015
-    _session_cost += cost
-    print(f"[COST] input={input_tokens} out={output_tokens} ${cost:.4f} | session=${_session_cost:.4f}")
-    return message.content[0].text.strip()
+    result = ask_via_github(MODEL, max_tokens, [{"role": "user", "content": prompt}])
+    print(f"[Proxy] Ответ получен, длина: {len(result)}")
+    return result
 
 
 def ask_json(prompt: str) -> dict:
