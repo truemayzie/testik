@@ -174,7 +174,7 @@ export default function ProfilePage() {
                   id="uni"
                   className={styles.input}
                   placeholder="Московский государственный университет..."
-                  value={form.university}
+                  value={form.university ?? ""}
                   onChange={e => set("university", e.target.value)}
                 />
               </div>
@@ -183,7 +183,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="экономики"
-                  value={form.faculty}
+                  value={form.faculty ?? ""}
                   onChange={e => set("faculty", e.target.value)}
                 />
               </div>
@@ -192,7 +192,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="менеджмента"
-                  value={form.department}
+                  value={form.department ?? ""}
                   onChange={e => set("department", e.target.value)}
                 />
               </div>
@@ -201,7 +201,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="38.03.01 Экономика"
-                  value={form.speciality}
+                  value={form.speciality ?? ""}
                   onChange={e => set("speciality", e.target.value)}
                 />
               </div>
@@ -210,7 +210,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="Например: Общая психология"
-                  value={form.discipline}
+                  value={form.discipline ?? ""}
                   onChange={e => set("discipline", e.target.value)}
                 />
                 <p className={styles.fieldHint}>По какой дисциплине выполняется работа</p>
@@ -230,7 +230,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="Иванов Иван Иванович"
-                  value={form.fullName}
+                  value={form.fullName ?? ""}
                   onChange={e => set("fullName", e.target.value)}
                 />
               </div>
@@ -238,7 +238,7 @@ export default function ProfilePage() {
                 <label className={styles.label}>Курс</label>
                 <select
                   className={styles.select}
-                  value={form.course}
+                  value={form.course ?? ""}
                   onChange={e => set("course", e.target.value)}
                 >
                   <option value="">— не указан —</option>
@@ -252,7 +252,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="ЭК-201"
-                  value={form.groupNumber}
+                  value={form.groupNumber ?? ""}
                   onChange={e => set("groupNumber", e.target.value)}
                 />
               </div>
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                 <input
                   className={styles.input}
                   placeholder="Москва"
-                  value={form.city}
+                  value={form.city ?? ""}
                   onChange={e => set("city", e.target.value)}
                 />
               </div>
@@ -279,7 +279,7 @@ export default function ProfilePage() {
               <input
                 className={styles.input}
                 placeholder="Петров Пётр Петрович"
-                value={form.teacherName}
+                value={form.teacherName ?? ""}
                 onChange={e => set("teacherName", e.target.value)}
               />
               <p className={styles.fieldHint}>

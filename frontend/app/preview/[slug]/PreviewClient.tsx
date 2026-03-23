@@ -51,7 +51,7 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${data.topic.replace(/[«»:]/g, "").trim()}.docx`;
+      a.download = `${data?.topic.replace(/[«»:]/g, "").trim()}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

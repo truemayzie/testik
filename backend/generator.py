@@ -12,7 +12,7 @@ import anthropic
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), base_url="https://anthropic-proxy.kakadun99.workers.dev")
 MODEL  = "claude-sonnet-4-5"
 
 # Глобальный счётчик стоимости текущей генерации
