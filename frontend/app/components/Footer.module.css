@@ -59,7 +59,22 @@
   font-size: 0.85rem;
   line-height: 1.65;
   color: #64748B;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
+
+.footerContact {
+  font-size: 0.83rem;
+  color: #475569;
+  margin-bottom: 0;
+}
+
+.footerContact a {
+  color: #818CF8;
+  text-decoration: none;
+}
+
+.footerContact a:hover {
+  text-decoration: underline;
 }
 
 .footerSocials {
