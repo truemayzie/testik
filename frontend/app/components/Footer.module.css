@@ -137,6 +137,13 @@
 .footerCopy {
   font-size: 0.8rem;
   color: #475569;
+  margin: 0 0 4px;
+}
+
+.footerInn {
+  font-size: 0.75rem;
+  color: #334155;
+  margin: 0;
 }
 
 .footerBadges {

@@ -163,10 +163,13 @@ export const authOptions: NextAuthOptions = {
     async redirect({ baseUrl }) {
       return baseUrl;
     },
-    // Добавляем id пользователя в сессию
+    // Добавляем id, role, banned пользователя в сессию
     async session({ session, user }) {
       if (session.user) {
-        (session.user as typeof session.user & { id: string }).id = user.id;
+        const u = user as typeof user & { role?: string; banned?: boolean };
+        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).id = u.id;
+        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).role = u.role ?? "user";
+        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).banned = u.banned ?? false;
       }
       return session;
     },

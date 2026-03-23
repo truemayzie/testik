@@ -56,9 +56,9 @@ export default function Footer() {
             <div className={styles.footerCol}>
               <h4 className={styles.footerColTitle}>Информация</h4>
               <ul className={styles.footerLinks}>
-                <li><a href="#">Публичная оферта</a></li>
-                <li><a href="#">Политика конфиденциальности</a></li>
-                <li><a href="#">Условия использования</a></li>
+                <li><Link href="/oferta">Публичная оферта</Link></li>
+                <li><Link href="/privacy">Политика конфиденциальности</Link></li>
+                <li><Link href="/terms">Условия использования</Link></li>
               </ul>
             </div>
           </div>
@@ -66,7 +66,10 @@ export default function Footer() {
         </div>
 
         <div className={styles.footerBottom}>
-          <p className={styles.footerCopy}>© 2025–2026 Refai. Все права защищены.</p>
+          <div>
+            <p className={styles.footerCopy}>© 2025–2026 Refai. Все права защищены.</p>
+            <p className={styles.footerInn}>ИНН самозанятого: 860233222535 · По вопросам: support@ref-ai.ru</p>
+          </div>
           <div className={styles.footerBadges}>
             <span className={styles.footerBadge}>ГОСТ 7.32-2017</span>
             <span className={styles.footerBadge}>Бесплатно</span>

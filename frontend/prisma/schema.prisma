@@ -36,6 +36,10 @@ model User {
   teacherName String?
   city        String?
 
+  // Роль и статус
+  role    String  @default("user")  // "user" | "admin"
+  banned  Boolean @default(false)
+
   // Наши данные
   generations Generation[]
   payments    Payment[]
