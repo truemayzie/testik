@@ -566,6 +566,49 @@
   }
 }
 
+/* ═══════════════════════════════════════════
+   NO ACCESS PAGE
+═══════════════════════════════════════════ */
+.noAccess {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px 20px;
+  gap: 12px;
+  text-align: center;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #faf9f7;
+}
+
+.noAccessIcon { font-size: 3rem; line-height: 1; }
+
+.noAccessTitle {
+  margin: 4px 0 0;
+  font-size: clamp(1.2rem, 5vw, 1.6rem);
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.noAccessText {
+  margin: 0;
+  font-size: clamp(0.85rem, 3.5vw, 0.95rem);
+  color: #666;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.noAccessLink {
+  margin-top: 8px;
+  color: #6366F1;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.noAccessLink:hover { text-decoration: underline; }
+
 /* На очень маленьких экранах — сайдбар прячется, внизу таббар */
 @media (max-width: 480px) {
   .adminShell {

@@ -214,6 +214,7 @@ export default function Home() {
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef      = useRef<Step[]>(getProgressSteps("Реферат"));
   const autoStarted   = useRef(false); // защита от двойного запуска (React Strict Mode)
+  const heroRef       = useRef<HTMLElement>(null);
 
   function selectWorkType(type: string) {
     setWorkType(type);
@@ -283,7 +284,7 @@ export default function Home() {
     console.log('[Refai] Скачивание DOCX...');
     setDownloading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/download/referat", {
+      const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(result),
@@ -522,6 +523,20 @@ export default function Home() {
       return;
     }
 
+    // 3. Переход из футера по типу работы (?workType=...)
+    const wtParam = params.get("workType");
+    if (wtParam && !params.get("autoGenerate") && !sessionStorage.getItem("activeGeneration")) {
+      const VALID = ["Сочинение","Эссе","Доклад","Реферат","Курсовая","ВКР"];
+      if (VALID.includes(wtParam)) {
+        selectWorkType(wtParam);
+        window.history.replaceState({}, "", "/");
+        setTimeout(() => {
+          heroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+        return;
+      }
+    }
+
     // 2. Пользователь ушёл на другую страницу и вернулся — восстанавливаем
     const active = sessionStorage.getItem("activeGeneration");
     if (active) {
@@ -621,7 +636,7 @@ export default function Home() {
       )}
 
       {/* ── Hero ── */}
-      <section className={styles.hero}>
+      <section ref={heroRef} className={styles.hero}>
         <div className={styles.heroInner}>
 
           <div className={styles.heroBadgeRow}>

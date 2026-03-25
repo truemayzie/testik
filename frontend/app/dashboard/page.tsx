@@ -95,7 +95,7 @@ export default function DashboardPage() {
       const res    = await fetch(`/api/generations/${id}`);
       const data   = await res.json();
       const result: ReferatResult = data.result;
-      const docxRes = await fetch("http://localhost:8000/api/download/referat", {
+      const docxRes = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(result),
@@ -121,7 +121,7 @@ export default function DashboardPage() {
     if (!viewing) return;
     setDownloading("viewer");
     try {
-      const docxRes = await fetch("http://localhost:8000/api/download/referat", {
+      const docxRes = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(viewing),

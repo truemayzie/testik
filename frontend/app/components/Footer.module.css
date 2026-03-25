@@ -139,6 +139,23 @@
 
 .footerLinks a:hover { color: #C7D2FE; }
 
+.footerMailLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: #818CF8 !important;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footerMailLink:hover { color: #C7D2FE !important; }
+
+.footerMailIcon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .footerBottom {
   border-top: 1px solid rgba(255,255,255,0.06);
   padding-top: 28px;

@@ -34,15 +34,25 @@ export default function Footer() {
             <div className={styles.footerCol}>
               <h4 className={styles.footerColTitle}>Поддержка</h4>
               <ul className={styles.footerLinks}>
-                <li><a href="mailto:support@ref-ai.ru">support@ref-ai.ru</a></li>
+                <li>
+                  <a href="mailto:support@ref-ai.ru" className={styles.footerMailLink}>
+                    <span className={styles.footerMailIcon}>✉</span>
+                    Написать на почту
+                  </a>
+                </li>
+                {authed && <li><Link href="/dashboard">Мои работы</Link></li>}
+                {!authed && <li><Link href="/auth/signin">Войти</Link></li>}
               </ul>
             </div>
             <div className={styles.footerCol}>
-              <h4 className={styles.footerColTitle}>О сервисе</h4>
+              <h4 className={styles.footerColTitle}>Написать работу</h4>
               <ul className={styles.footerLinks}>
-                <li><a href="/">Генератор рефератов</a></li>
-                <li><Link href="/dashboard">Мои работы</Link></li>
-                {!authed && <li><Link href="/auth/signin">Войти</Link></li>}
+                <li><a href="/?workType=Сочинение">Написать сочинение</a></li>
+                <li><a href="/?workType=Эссе">Написать эссе</a></li>
+                <li><a href="/?workType=Доклад">Написать доклад</a></li>
+                <li><a href="/?workType=Реферат">Написать реферат</a></li>
+                <li><a href="/?workType=Курсовая">Написать курсовую</a></li>
+                <li><a href="/?workType=ВКР">Написать ВКР</a></li>
               </ul>
             </div>
             <div className={styles.footerCol}>

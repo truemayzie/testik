@@ -5,6 +5,7 @@ import { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import EmailProvider from "next-auth/providers/email";
 import { prisma } from "./prisma";
+import { getDeviceId, deleteDeviceId } from "./vk-device-store";
 
 // ── Яндекс провайдер ─────────────────────────────────────────────
 const YandexProvider = {
@@ -37,59 +38,96 @@ const YandexProvider = {
   },
 };
 
-// ── VK провайдер ─────────────────────────────────────────────────
+// ── VK провайдер (VK ID + PKCE) ──────────────────────────────────
 const VKProvider = {
   id: "vk",
   name: "ВКонтакте",
   type: "oauth" as const,
+  checks: ["pkce", "state"] as ["pkce", "state"],
   authorization: {
-    url: "https://oauth.vk.com/authorize",
+    url: "https://id.vk.com/authorize",
     params: {
       scope: "email",
-      v: "5.131",
-      display: "page",
+      response_type: "code",
     },
   },
   token: {
-    url: "https://oauth.vk.com/access_token",
+    url: "https://id.vk.com/oauth2/auth",
     async request(context: {
-      params: { code: string };
+      params: { code: string; device_id?: string; state?: string; [key: string]: string | undefined };
       provider: { clientId: string; clientSecret: string; callbackUrl: string };
+      checks: { code_verifier?: string };
     }) {
-      const params = new URLSearchParams({
+      const body = new URLSearchParams({
+        grant_type: "authorization_code",
         client_id: context.provider.clientId,
         client_secret: context.provider.clientSecret,
         redirect_uri: context.provider.callbackUrl,
         code: context.params.code,
       });
-      const res = await fetch(
-        `https://oauth.vk.com/access_token?${params}`
-      );
+      // device_id от VK ID — не передаётся через стандартный OAuth context,
+      // читаем из временного store (заполняется в route.ts при callback)
+      const state = context.params.state as string | undefined;
+      const deviceId = state ? getDeviceId(state) : undefined;
+      if (deviceId) {
+        body.set("device_id", deviceId);
+        if (state) deleteDeviceId(state);
+      }
+      if (context.checks?.code_verifier) body.set("code_verifier", context.checks.code_verifier);
+      console.log("[VK] device_id found:", !!deviceId);
+      const res = await fetch("https://id.vk.com/oauth2/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
       const data = await res.json();
+      console.log("[VK] token response:", JSON.stringify(data));
       return {
         tokens: {
           access_token: data.access_token,
-          email: data.email,
-          user_id: data.user_id,
+          id_token: data.id_token,
+          // email и user_id не кладём в tokens — они не нужны PrismaAdapter
+          // и вызывают ошибку "Unknown argument user_id"
         },
       };
     },
   },
   userinfo: {
     async request(context: {
-      tokens: { access_token: string; email?: string; user_id?: string };
+      tokens: { access_token: string; id_token?: string };
+      provider: { clientId: string };
     }) {
-      const res = await fetch(
+      // VK API возвращает имя на родном языке пользователя (Иван, а не Ivan)
+      const apiRes = await fetch(
         `https://api.vk.com/method/users.get?fields=photo_200&access_token=${context.tokens.access_token}&v=5.131`
       );
-      const data = await res.json();
-      const user = data.response[0];
-      return {
-        id: String(user.id),
-        name: `${user.first_name} ${user.last_name}`,
-        email: context.tokens.email,
-        image: user.photo_200,
-      };
+      const apiData = await apiRes.json();
+      const u = apiData.response?.[0];
+      if (u) {
+        // email берём из VK ID user_info, т.к. VK API его не возвращает
+        const idRes = await fetch("https://id.vk.com/oauth2/user_info", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            access_token: context.tokens.access_token,
+            client_id: context.provider.clientId,
+          }),
+        });
+        const idData = await idRes.json();
+        const email = idData.user?.email || null;
+        return {
+          id: String(u.id),
+          name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || String(u.id),
+          email,
+          image: u.photo_200 ?? null,
+        };
+      }
+
+      // Фолбэк: user_id из id_token
+      const payload = context.tokens.id_token?.split(".")?.[1];
+      const decoded = payload ? JSON.parse(Buffer.from(payload, "base64").toString()) : {};
+      const userId = String(decoded.sub ?? "vk_user");
+      return { id: userId, name: userId, email: null, image: null };
     },
   },
   clientId: process.env.VK_CLIENT_ID!,
@@ -115,7 +153,8 @@ export const authOptions: NextAuthOptions = {
 
   providers: [
     YandexProvider,
-    // VKProvider,  // Включить когда будет домен с https
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    VKProvider as any,
     EmailProvider({
       from: process.env.EMAIL_FROM || "support@ref-ai.ru",
       async sendVerificationRequest({ identifier: email, url, provider }) {
@@ -180,4 +219,5 @@ export const authOptions: NextAuthOptions = {
   },
 
   secret: process.env.NEXTAUTH_SECRET,
+  debug: true,
 };

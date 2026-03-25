@@ -59,10 +59,13 @@ class ReusableTCPServer(HTTPServer):
 
 
 def start_callback_server():
-    server = ReusableTCPServer(("0.0.0.0", CALLBACK_PORT), CallbackHandler)
-    t = threading.Thread(target=server.serve_forever, daemon=True)
-    t.start()
-    print(f"[Proxy] Callback сервер запущен на порту {CALLBACK_PORT}")
+    try:
+        server = ReusableTCPServer(("0.0.0.0", CALLBACK_PORT), CallbackHandler)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        print(f"[Proxy] Callback сервер запущен на порту {CALLBACK_PORT}")
+    except OSError as e:
+        print(f"[Proxy] Callback сервер уже запущен или порт {CALLBACK_PORT} занят: {e}")
 
 
 def ask_via_github(model: str, max_tokens: int, messages: list) -> str:

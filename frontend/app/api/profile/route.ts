@@ -11,14 +11,21 @@ const PROFILE_FIELDS = [
 
 type ProfileField = typeof PROFILE_FIELDS[number];
 
+type SessionUser = { id?: string; email?: string | null };
+
+function getUserId(session: { user?: SessionUser } | null): string | null {
+  return (session?.user as SessionUser)?.id ?? null;
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const userId = getUserId(session);
+  if (!userId) {
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: userId },
     select: {
       id: true, name: true, email: true, image: true,
       university: true, faculty: true, department: true, speciality: true, discipline: true,
@@ -33,13 +40,13 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const userId = getUserId(session);
+  if (!userId) {
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
   const body = await request.json();
 
-  // Только разрешённые поля, макс 200 символов
   const data: Partial<Record<ProfileField, string | null>> = {};
   for (const field of PROFILE_FIELDS) {
     if (field in body) {
@@ -53,7 +60,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const user = await prisma.user.update({
-    where: { email: session.user.email },
+    where: { id: userId },
     data,
     select: {
       id: true, name: true, email: true, image: true,
