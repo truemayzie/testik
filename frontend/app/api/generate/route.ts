@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { saveGeneration } from "@/lib/db";
 import type { ReferatResult } from "@/lib/db";
+import { activeJobs } from "@/app/lib/activeJobs";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
@@ -12,8 +13,12 @@ const MAX_WAIT_MS   = 25 * 60 * 1000;
 /** Интервал опроса статуса задания. */
 const POLL_INTERVAL = 5_000;
 
+/** Типы работ, доступные тестовому аккаунту ЮКасса */
+const YUKASSA_ALLOWED_TYPES = ["Сочинение", "Эссе", "Доклад"];
+
 /** Откатывает платёж (usedAt → null), чтобы пользователь мог повторить. */
-async function revertPayment(paymentId: string) {
+async function revertPayment(paymentId: string | null) {
+  if (!paymentId) return;
   try {
     await prisma.payment.update({ where: { id: paymentId }, data: { usedAt: null } });
   } catch { /* не блокируем основной путь */ }
@@ -21,14 +26,15 @@ async function revertPayment(paymentId: string) {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const sessionUserId = (session?.user as { id?: string } | null)?.id;
+  if (!session?.user || !sessionUserId) {
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: sessionUserId },
     select: {
-      id: true,
+      id: true, role: true,
       fullName: true, university: true, faculty: true,
       department: true, speciality: true, discipline: true, course: true,
       groupNumber: true, teacherName: true, city: true,
@@ -41,33 +47,64 @@ export async function POST(request: NextRequest) {
   const body     = await request.json();
   const workType = body.workType || "Реферат";
 
-  // Находим платёж и атомарно помечаем использованным
-  const payment = await prisma.payment.findFirst({
-    where: { userId: user.id, workType, status: "succeeded", usedAt: null },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!payment) {
-    return NextResponse.json(
-      { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
-      { status: 403 }
-    );
+  const isAdmin   = user.role === "admin";
+  const isYukassa = user.role === "yukassa_test";
+  let paymentId: string | null = null;
+
+  // Тип «Тест» — только для администраторов
+  if (workType === "Тест" && !isAdmin) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
-  const claimed = await prisma.payment.updateMany({
-    where: { id: payment.id, usedAt: null },
-    data:  { usedAt: new Date() },
-  });
-  if (claimed.count === 0) {
-    return NextResponse.json(
-      { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
-      { status: 403 }
-    );
+  if (isAdmin) {
+    // Администратор генерирует бесплатно — пропускаем проверку оплаты
+  } else if (isYukassa) {
+    // Проверяем ограничение по типу работы
+    if (!YUKASSA_ALLOWED_TYPES.includes(workType)) {
+      return NextResponse.json(
+        { error: "Тестовому аккаунту доступны только: Сочинение, Эссе, Доклад", code: "TRIAL_RESTRICTED" },
+        { status: 403 }
+      );
+    }
+    // Проверяем лимит генераций (только 1)
+    const genCount = await prisma.generation.count({ where: { userId: user.id } });
+    if (genCount >= 1) {
+      return NextResponse.json(
+        { error: "Пробная генерация уже использована. Работа доступна в разделе «Мои работы».", code: "TRIAL_USED" },
+        { status: 403 }
+      );
+    }
+    // Оплата не требуется — продолжаем
+  } else {
+    // Стандартный путь: находим платёж и атомарно помечаем использованным
+    const payment = await prisma.payment.findFirst({
+      where: { userId: user.id, workType, status: "succeeded", usedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!payment) {
+      return NextResponse.json(
+        { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
+        { status: 403 }
+      );
+    }
+
+    const claimed = await prisma.payment.updateMany({
+      where: { id: payment.id, usedAt: null },
+      data:  { usedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return NextResponse.json(
+        { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
+        { status: 403 }
+      );
+    }
+    paymentId = payment.id;
   }
 
   // ── Шаг 1: запускаем задание на backend (быстрый запрос) ──────────────────
   let jobId: string;
   try {
-    const { id: _id, ...profile } = user;
+    const { id: _id, role: _role, ...profile } = user;
     const backendBody = {
       topic:     body.topic,
       pages:     body.pages,
@@ -79,11 +116,11 @@ export async function POST(request: NextRequest) {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(backendBody),
-      signal:  AbortSignal.timeout(30_000), // 30 сек — только на старт
+      signal:  AbortSignal.timeout(30_000),
     });
 
     if (!startRes.ok) {
-      await revertPayment(payment.id);
+      await revertPayment(paymentId);
       return NextResponse.json(
         { error: "Не удалось запустить генерацию на backend" },
         { status: startRes.status }
@@ -92,20 +129,22 @@ export async function POST(request: NextRequest) {
 
     const { jobId: id } = await startRes.json();
     if (!id) {
-      await revertPayment(payment.id);
+      await revertPayment(paymentId);
       return NextResponse.json({ error: "Backend не вернул jobId" }, { status: 502 });
     }
     jobId = id;
+    // Регистрируем задание — для poll-эндпоинта при восстановлении после F5
+    activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType });
   } catch (err) {
     console.error("[generate] Не удалось запустить задание:", err);
-    await revertPayment(payment.id);
+    await revertPayment(paymentId);
     return NextResponse.json(
       { error: "Сервер генерации недоступен. Запустите backend (uvicorn)." },
       { status: 503 }
     );
   }
 
-  // ── Шаг 2: опрашиваем статус каждые 5 секунд (без долгого соединения) ────
+  // ── Шаг 2: опрашиваем статус каждые 5 секунд ─────────────────────────────
   const deadline = Date.now() + MAX_WAIT_MS;
 
   while (Date.now() < deadline) {
@@ -119,18 +158,16 @@ export async function POST(request: NextRequest) {
         `${BACKEND_URL}/api/generate/status/${jobId}`,
         { signal: AbortSignal.timeout(10_000) }
       );
-      if (!statusRes.ok) continue; // временная ошибка сети — ждём следующего тика
+      if (!statusRes.ok) continue;
       const json = await statusRes.json();
       status   = json.status;
       jobError = json.error;
     } catch {
-      // backend не отвечает в этом тике — пробуем снова
       continue;
     }
 
     if (status === "not_found") {
-      // Backend был перезапущен (uvicorn --reload): задание потеряно
-      await revertPayment(payment.id);
+      await revertPayment(paymentId);
       return NextResponse.json(
         { error: "Сервер был перезапущен во время генерации. Платёж возвращён — попробуйте снова. Запускайте backend командой: uvicorn main:app (без --reload)." },
         { status: 503 }
@@ -138,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (status === "error") {
-      await revertPayment(payment.id);
+      await revertPayment(paymentId);
       return NextResponse.json(
         { error: jobError || "Ошибка генерации на backend" },
         { status: 500 }
@@ -146,14 +183,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (status === "done") {
-      // ── Шаг 3: забираем результат ─────────────────────────────────────────
       try {
         const resultRes = await fetch(
           `${BACKEND_URL}/api/generate/result/${jobId}`,
           { signal: AbortSignal.timeout(30_000) }
         );
         if (!resultRes.ok) {
-          await revertPayment(payment.id);
+          await revertPayment(paymentId);
           return NextResponse.json(
             { error: "Не удалось получить результат от backend" },
             { status: 502 }
@@ -162,17 +198,16 @@ export async function POST(request: NextRequest) {
 
         const data = await resultRes.json() as ReferatResult;
 
-        // Сохраняем в БД — не зависим от клиентского подключения
         try {
           await saveGeneration(user.id, body.topic, body.pages, workType, data);
         } catch { /* не блокируем ответ */ }
 
+        activeJobs.clear(user.id);
         return NextResponse.json(data);
       } catch (err) {
         console.error("[generate] Ошибка при получении результата:", err);
-        await revertPayment(payment.id);
+        await revertPayment(paymentId);
 
-        // Проверяем: вдруг saveGeneration уже успел записать до ошибки
         const saved = await prisma.generation.findFirst({
           where: { userId: user.id, topic: body.topic, workType },
           orderBy: { createdAt: "desc" },
@@ -189,12 +224,11 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
     // status === "running" — продолжаем ждать
   }
 
-  // Превышено MAX_WAIT_MS
-  await revertPayment(payment.id);
+  activeJobs.clear(user.id);
+  await revertPayment(paymentId);
   return NextResponse.json(
     { error: "Превышено время ожидания (25 минут). Платёж возвращён — попробуйте снова." },
     { status: 503 }

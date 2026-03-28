@@ -2,10 +2,12 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./signin.module.css";
 
 export default function SignInPage() {
+  const router = useRouter();
   const [email, setEmail]     = useState("");
   const [sent, setSent]       = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -30,8 +32,18 @@ export default function SignInPage() {
 
         {/* Логотип */}
         <Link href="/" className={styles.logo}>
-          <span className={styles.logoMark}>A</span>
-          <span className={styles.logoText}>cademic</span>
+          <span className={styles.logoIconWrap}>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="22" height="22" aria-hidden="true">
+              <path d="M12 1L14.2 9.8L23 12L14.2 14.2L12 23L9.8 14.2L1 12L9.8 9.8Z" fill="url(#signinGrad)"/>
+              <defs>
+                <linearGradient id="signinGrad" x1="1" y1="1" x2="23" y2="23" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#818CF8"/>
+                  <stop offset="1" stopColor="#60A5FA"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </span>
+          <span className={styles.logoText}>Ref<span className={styles.logoAi}>ai</span></span>
         </Link>
 
         <h1 className={styles.title}>Войти в аккаунт</h1>
@@ -58,9 +70,12 @@ export default function SignInPage() {
                 {loading === "yandex" ? (
                   <span className={styles.spinner} />
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M13.32 0H10.1C6.37 0 4.14 1.9 4.14 5.02c0 2.7 1.26 4.07 3.67 5.67L5.18 15.8H1.5L0 24h4.38l1.14-6.5h2.1L9.4 24h4.38l-2-12.07c2.43-1.6 3.84-3.6 3.84-6.5C15.62 1.9 15 0 13.32 0zm-2.1 10.1h-.9V4.3h.9c1.44 0 2.1.72 2.1 2.88 0 2.16-.66 2.92-2.1 2.92z"/>
-                  </svg>
+                  <span className={styles.yandexLogoWrap}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M2.04 12c0-5.523 4.476-10 10-10 5.522 0 10 4.477 10 10s-4.478 10-10 10c-5.524 0-10-4.477-10-10z" fill="#FC3F1D"/>
+                      <path d="M13.32 7.666h-.924c-1.694 0-2.585.858-2.585 2.123 0 1.43.616 2.1 1.881 2.959l1.045.704-3.003 4.487H7.49l2.695-4.014c-1.55-1.111-2.42-2.19-2.42-4.015 0-2.288 1.595-3.85 4.62-3.85h3.003v11.868H13.32V7.666z" fill="#fff"/>
+                    </svg>
+                  </span>
                 )}
                 Войти через Яндекс
               </button>
@@ -73,8 +88,8 @@ export default function SignInPage() {
                 {loading === "vk" ? (
                   <span className={styles.spinner} />
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.07 2H8.93C3.33 2 2 3.33 2 8.93v6.14C2 20.67 3.33 22 8.93 22h6.14C20.67 22 22 20.67 22 15.07V8.93C22 3.33 20.67 2 15.07 2zm3.08 13.36h-1.57c-.59 0-.78-.47-1.84-1.55-.93-.9-1.33-.9-1.56-.9-.32 0-.41.09-.41.53v1.41c0 .38-.12.6-1.12.6-1.65 0-3.48-1-4.76-2.87-1.93-2.72-2.46-4.75-2.46-5.17 0-.23.09-.44.53-.44h1.57c.4 0 .55.18.7.6.77 2.22 2.06 4.17 2.59 4.17.2 0 .29-.09.29-.59V9.86c-.06-1.06-.62-1.15-.62-1.53 0-.18.15-.36.38-.36h2.47c.33 0 .44.18.44.56v2.99c0 .33.15.44.24.44.2 0 .37-.11.74-.5 1.14-1.28 1.96-3.25 1.96-3.25.11-.23.29-.44.69-.44h1.57c.47 0 .57.24.47.56-.2.91-2.12 3.63-2.12 3.63-.17.27-.23.38 0 .68.17.23.72.71 1.09 1.14.67.77 1.19 1.41 1.33 1.86.12.41-.1.62-.51.62z"/>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20.4517 7.41006C20.5863 6.98006 20.4517 6.66406 19.8405 6.66406H17.827C17.3124 6.66406 17.0757 6.93806 16.9411 7.23906C16.9411 7.23906 15.9119 9.74706 14.4583 11.3701C13.9882 11.8381 13.7762 11.9861 13.5232 11.9861C13.3886 11.9861 13.2049 11.8381 13.2049 11.4081V7.41006C13.2049 6.89606 13.054 6.66406 12.6248 6.66406H9.47395C9.15353 6.66406 8.96347 6.89706 8.96347 7.11706C8.96347 7.60306 9.68934 7.71606 9.76437 9.09606V12.0721C9.76437 12.7281 9.64133 12.8481 9.38833 12.8481C8.69545 12.8481 7.02474 10.3301 6.03327 7.45306C5.83704 6.89306 5.64469 6.66406 5.12999 6.66406H3.11653C2.54138 6.66406 2.42334 6.93806 2.42334 7.23906C2.42334 7.77406 3.11653 10.4311 5.6173 13.9491C7.28055 16.3561 9.64226 17.6601 11.7923 17.6601C13.0445 17.6601 13.2049 17.3701 13.2049 16.8711V15.0701C13.2049 14.4961 13.329 14.3761 13.7388 14.3761C14.0322 14.3761 14.5411 14.5241 15.7209 15.6601C17.0757 17.0081 17.3014 17.6601 18.0699 17.6601H20.0833C20.6584 17.6601 20.9446 17.3701 20.7836 16.8041C20.6067 16.2401 19.9441 15.4161 19.068 14.4381C18.5979 13.8871 17.8926 13.2921 17.6806 12.9901C17.3872 12.6081 17.4722 12.4421 17.6806 12.1001C17.6806 12.1001 20.1399 8.62706 20.4517 7.41006Z"/>
                   </svg>
                 )}
                 Войти через ВКонтакте
@@ -116,7 +131,14 @@ export default function SignInPage() {
           </>
         )}
 
-        <Link href="/" className={styles.backLink}>← На главную</Link>
+        <Link href="/" className={styles.backLink}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Вернуться на главную
+        </Link>
+
+
       </div>
     </div>
   );

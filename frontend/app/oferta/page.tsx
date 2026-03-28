@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
-  title: "Публичная оферта — Refai",
-  description: "Договор публичной оферты на оказание услуг по генерации учебных работ с помощью ИИ.",
+  title: "Публичная оферта | Refai",
+  description: "Условия публичной оферты сервиса Refai.",
 };
 
 export default function OfertaPage() {

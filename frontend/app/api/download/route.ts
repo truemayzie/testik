@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!(session?.user as { id?: string } | null)?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
 
   const docxRes = await fetch(`${BACKEND_URL}/api/download/referat`, {

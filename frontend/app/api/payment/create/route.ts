@@ -7,7 +7,8 @@ import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const sessionUserId = (session?.user as { id?: string } | null)?.id;
+  if (!session?.user || !sessionUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: sessionUserId },
     select: { id: true },
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
     },
     body: JSON.stringify({
       amount: { value: priceInfo.price.toFixed(2), currency: "RUB" },
+      capture: true, // одностадийная оплата — деньги списываются сразу
       confirmation: {
         type: "redirect",
         return_url: `${appUrl}/payment/success`,

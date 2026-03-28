@@ -37,8 +37,9 @@ model User {
   city        String?
 
   // Роль и статус
-  role    String  @default("user")  // "user" | "admin"
-  banned  Boolean @default(false)
+  role     String  @default("user")  // "user" | "admin" | "yukassa_test"
+  banned   Boolean @default(false)
+  password String?                   // bcrypt-хэш, только для тестовых аккаунтов
 
   // Наши данные
   generations Generation[]
@@ -104,6 +105,30 @@ model Generation {
   slug      String?  @unique
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Проверки состояния системы ───────────────────────────────────
+model HealthCheck {
+  id        String   @id @default(cuid())
+  checkedAt DateTime @default(now())
+  frontend  Boolean
+  backend   Boolean
+  database  Boolean
+  groq      Boolean
+  details   String?  // JSON: { backend?: string, database?: string, groq?: string }
+}
+
+// ── SEO страницы ─────────────────────────────────────────────────
+model SeoPage {
+  id              Int      @id @default(autoincrement())
+  slug            String   @unique
+  workType        String   // referat | kursovaya | esse | doklad | vkr | sochinenie
+  subject         String   // История, Биология, Экономика и т.д.
+  title           String   // "Реферат по истории Второй мировой войны"
+  metaTitle       String   // для <title>
+  metaDescription String   // для <meta description>
+  previewText     String   // 300-500 символов тизерного текста
+  createdAt       DateTime @default(now())
 }
 
 // ── Платежи ──────────────────────────────────────────────────────

@@ -1,0 +1,158 @@
+.page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+/* ── Хлебные крошки ── */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  margin-bottom: 28px;
+}
+
+.breadcrumbs a {
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.breadcrumbs a:hover {
+  color: var(--accent);
+}
+
+.breadcrumbs span {
+  color: var(--ink-light);
+}
+
+.breadcrumbCurrent {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ── Заголовок ── */
+.label {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 20px;
+  padding: 4px 12px;
+  margin-bottom: 14px;
+  letter-spacing: 0.02em;
+}
+
+.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-bottom: 32px;
+  letter-spacing: -0.01em;
+}
+
+/* ── Превью с блюром ── */
+.previewWrap {
+  position: relative;
+  max-height: 180px;
+  overflow: hidden;
+  margin-bottom: 32px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.previewText {
+  font-size: 1rem;
+  color: var(--ink);
+  line-height: 1.75;
+}
+
+.previewFade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(to bottom, transparent, #ffffff);
+  pointer-events: none;
+}
+
+/* ── CTA блок ── */
+.cta {
+  background: linear-gradient(135deg, #0D0B2E 0%, #2D1B6E 100%);
+  border-radius: var(--radius-lg);
+  padding: 48px 32px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.ctaIcon {
+  font-size: 2.4rem;
+  margin-bottom: 16px;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+.ctaTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.ctaDesc {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 28px;
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+.ctaButton {
+  display: inline-block;
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 14px 36px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+
+.ctaButton:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.ctaNote {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+}

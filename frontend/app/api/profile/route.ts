@@ -27,15 +27,17 @@ export async function GET() {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      id: true, name: true, email: true, image: true,
+      id: true, name: true, email: true, image: true, createdAt: true,
       university: true, faculty: true, department: true, speciality: true, discipline: true,
       course: true, groupNumber: true, fullName: true, teacherName: true, city: true,
+      _count: { select: { generations: true } },
     },
   });
 
   if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
 
-  return NextResponse.json(user);
+  const { _count, ...rest } = user;
+  return NextResponse.json({ ...rest, generationsCount: _count.generations });
 }
 
 export async function PATCH(request: NextRequest) {

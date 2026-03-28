@@ -168,21 +168,112 @@ export const authOptions: NextAuthOptions = {
             from: provider.from,
             to: [email],
             subject: "Войти в Refai",
-            html: `
-              <div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#faf9f7;border-radius:8px;">
-                <h2 style="color:#1a1a1a;margin:0 0 12px;">Ссылка для входа</h2>
-                <p style="color:#555;margin:0 0 28px;line-height:1.6;">
-                  Нажмите на кнопку ниже, чтобы войти в <strong>Refai</strong>:
-                </p>
-                <a href="${url}" style="display:inline-block;background:#2d5a8e;color:#fff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:600;font-size:15px;">
-                  Войти в аккаунт →
-                </a>
-                <p style="color:#999;font-size:12px;margin-top:28px;line-height:1.5;">
-                  Ссылка действует 24 часа.<br>
-                  Если вы не запрашивали вход — просто проигнорируйте это письмо.
-                </p>
+            html: `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Войти в Refai</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0D0B2E;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0D0B2E">
+    <tr>
+      <td align="center" style="padding:48px 16px 56px;">
+
+        <!-- Основная карточка -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="480" style="max-width:480px;width:100%;">
+
+          <!-- Шапка с градиентом -->
+          <tr>
+            <td align="center" bgcolor="#4F46E5"
+                style="background:#4F46E5;background:linear-gradient(135deg,#4F46E5 0%,#7C3AED 50%,#5B21B6 100%);border-radius:20px 20px 0 0;padding:40px 40px 32px;">
+              <!-- Иконка-звезда -->
+              <div style="width:58px;height:58px;line-height:54px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);border-radius:16px;margin:0 auto 18px;text-align:center;font-size:28px;color:#fff;">
+                ✦
               </div>
-            `,
+              <!-- Название -->
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:2rem;font-weight:800;color:#fff;letter-spacing:-0.02em;margin-bottom:6px;">
+                Refai
+              </div>
+              <div style="font-size:0.72rem;color:rgba(255,255,255,0.55);letter-spacing:0.1em;text-transform:uppercase;">
+                Генератор учебных работ
+              </div>
+            </td>
+          </tr>
+
+          <!-- Тело письма -->
+          <tr>
+            <td bgcolor="#1E1B4B"
+                style="background:#1E1B4B;border-left:1px solid rgba(255,255,255,0.08);border-right:1px solid rgba(255,255,255,0.08);padding:40px 40px 36px;">
+
+              <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:1.55rem;font-weight:700;color:#fff;margin:0 0 14px;line-height:1.25;">
+                Ссылка для входа
+              </h1>
+              <p style="font-size:0.95rem;color:rgba(255,255,255,0.62);margin:0 0 30px;line-height:1.7;">
+                Вы запросили вход в <strong style="color:#A78BFA;font-weight:600;">Refai</strong>.
+                Нажмите на кнопку ниже — ссылка одноразовая и действует 24&nbsp;часа.
+              </p>
+
+              <!-- Кнопка CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td align="center" style="padding-bottom:32px;">
+                    <a href="${url}"
+                       style="display:inline-block;background:#6366F1;background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%);color:#fff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:1rem;font-weight:700;padding:17px 44px;border-radius:12px;letter-spacing:0.02em;box-shadow:0 4px 20px rgba(99,102,241,0.45);">
+                      Войти в аккаунт →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Разделитель -->
+              <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:28px;"></div>
+
+              <!-- Возможности -->
+              <p style="font-size:0.78rem;color:rgba(255,255,255,0.35);margin:0 0 12px;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">
+                С Refai вы можете
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="4" border="0" width="100%">
+                <tr>
+                  <td style="padding:5px 0;font-size:0.88rem;color:rgba(255,255,255,0.58);line-height:1.5;">
+                    ⚡&nbsp; Генерировать рефераты, эссе, курсовые и ВКР за 2–5 минут
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:5px 0;font-size:0.88rem;color:rgba(255,255,255,0.58);line-height:1.5;">
+                    📄&nbsp; Получать DOCX с оформлением по ГОСТ 7.32-2017
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:5px 0;font-size:0.88rem;color:rgba(255,255,255,0.58);line-height:1.5;">
+                    📚&nbsp; Сохранять историю работ в личном кабинете
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Подвал -->
+          <tr>
+            <td bgcolor="#100E2A"
+                style="background:#100E2A;border-radius:0 0 20px 20px;border:1px solid rgba(255,255,255,0.07);border-top:none;padding:24px 40px;text-align:center;">
+              <p style="font-size:0.78rem;color:rgba(255,255,255,0.28);margin:0 0 8px;line-height:1.65;">
+                Ссылка действует <strong style="color:rgba(255,255,255,0.45);">24 часа</strong> и может быть использована только один раз.<br>
+                Если вы не запрашивали вход — просто проигнорируйте это письмо.
+              </p>
+              <p style="font-size:0.72rem;color:rgba(255,255,255,0.18);margin:10px 0 0;">
+                © 2026 Refai &nbsp;·&nbsp;
+                <a href="mailto:support@ref-ai.ru" style="color:rgba(255,255,255,0.28);text-decoration:none;">support@ref-ai.ru</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
           }),
         });
         if (!res.ok) {

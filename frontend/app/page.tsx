@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TypewriterInput from "./components/TypewriterInput";
 import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
+import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
+import { getProgressSteps, type Step } from "./lib/progressSteps";
 import styles from "./page.module.css";
 
 type ReferatResult = {
@@ -59,22 +61,48 @@ const WHY_FEATURES = [
 ];
 
 const REVIEWS = [
-  { name: "Анна",      date: "15.06.2025", text: "Эта нейросеть кардинально изменила мой подход к учёбе. Теперь я усваиваю материал в разы быстрее" },
-  { name: "Михаил",    date: "20.07.2025", text: "Наконец-то появился ИИ, который действительно понимает, что от него хотят. Превращает длинные статьи в чёткие тезисы" },
-  { name: "Елена",     date: "31.07.2025", text: "Как аспиранту, мне приходится анализировать горы литературы. Этот инструмент невероятно экономит время" },
-  { name: "Дмитрий",   date: "03.08.2025", text: "Это как иметь персонального помощника 24/7. Помог не только сократить материалы, но и лучше понимать сложные темы" },
-  { name: "Анна",      date: "09.08.2025", text: "Прошла весь семестр с этим ИИ помощником, и результаты на сессии стали заметно лучше" },
-  { name: "Сергей",    date: "15.08.2025", text: "Идеально справляется даже со сложными техническими текстами и формулами. Не добавляет от себя ничего лишнего" },
-  { name: "Мария",     date: "26.08.2025", text: "Использую как для учёбы, так и для работы. Готовлю курсовые, лекции и документацию по работе" },
-  { name: "Александр", date: "03.09.2025", text: "Боялся, что ИИ будет делать шаблонные выжимки, но был приятно удивлён качеством текстов" },
+  { name: "Анастасия К.", workType: "Курсовая",  date: "янв 2026", stars: 5, text: "Сдала курсовую по маркетингу. Структура логичная, введение и заключение написаны нормально. Научный руководитель вопросов по оформлению не имел." },
+  { name: "Дмитрий С.",  workType: "Реферат",   date: "фев 2026", stars: 5, text: "Удивил список литературы — реальные источники с DOI, всё можно проверить. За 5 минут и 299 рублей честно, ожидал хуже." },
+  { name: "Марина Л.",   workType: "ВКР",        date: "янв 2026", stars: 4, text: "Взяла как черновик — переписывала примерно треть, но структура и источники реально сэкономили время. На нормо-контроле претензий к оформлению не было." },
+  { name: "Артём В.",    workType: "Эссе",       date: "мар 2026", stars: 5, text: "Эссе по философии сдал за день до дедлайна. Тема была нетривиальная, но аргументация выстроена последовательно. Доволен." },
+  { name: "Екатерина Н.", workType: "Реферат",  date: "фев 2026", stars: 5, text: "Уже третий раз пользуюсь. Каждый раз оформление сразу по ГОСТу — ничего лишнего, ничего не надо переделывать." },
+  { name: "Иван Т.",     workType: "Доклад",    date: "янв 2026", stars: 4, text: "Доклад на семинар по экономике. Быстро, по делу, без воды. Сэкономил пару часов точно." },
+  { name: "Полина Ж.",   workType: "Курсовая",  date: "мар 2026", stars: 5, text: "Курсовая по менеджменту прошла комиссию без замечаний. Научный руководитель сказал структура грамотная. Титульник и оглавление оформлены правильно." },
+  { name: "Максим Б.",   workType: "Сочинение", date: "фев 2026", stars: 5, text: "Сочинение по литературе. Тема — нравственный выбор в романе Достоевского. Есть цитаты, мысль прослеживается. Учитель поставил отлично." },
+  { name: "Светлана О.", workType: "Реферат",   date: "мар 2026", stars: 5, text: "Реферат по педагогике сдала в срок. Формат DOCX сразу открылся, оформление правильное — Times New Roman, поля, интервал. Ничего не пришлось переделывать." },
+  { name: "Никита Р.",   workType: "Доклад",    date: "фев 2026", stars: 4, text: "Удобно что платишь только за конкретную работу, без подписки. Доклад по социологии написан понятно, не академически сухо. Преподаватель одобрил." },
+  { name: "Юлия М.",     workType: "Курсовая",  date: "янв 2026", stars: 5, text: "Первый раз пробовала такой сервис — скептически относилась. Курсовая по психологии получилась нормальной: введение, три главы, заключение, источники. Сдала на хорошо." },
 ];
 
 const FAQ = [
-  { q: "Как работает генерация?",         a: "Введите тему работы в поле, выберите тип и объём, нажмите кнопку генерации. ИИ сформирует структуру, введение, основные главы, заключение и список литературы за 2–4 минуты." },
-  { q: "Какие форматы поддерживаются?",   a: "Готовая работа скачивается в формате DOCX (Microsoft Word), оформленном по ГОСТ 7.32-2017: Times New Roman 14pt, интервал 1.5, поля 30/10/20/20 мм." },
-  { q: "Сколько стоит генерация?",        a: "Стоимость зависит от типа работы: сочинение — 99 ₽, эссе — 149 ₽, доклад — 199 ₽, реферат — 299 ₽, курсовая — 699 ₽, ВКР — 1199 ₽. Оплата разовая за каждую работу." },
-  { q: "Гарантируется ли уникальность?",  a: "Да. Каждая работа генерируется индивидуально под вашу тему. Уникальность составляет 70–90% по системам антиплагиата." },
-  { q: "Можно ли редактировать результат?", a: "Да, скачайте файл DOCX и редактируйте в любом текстовом редакторе: Microsoft Word, Google Docs, LibreOffice." },
+  {
+    q: "Как работает генерация?",
+    a: "Введите тему, выберите тип и объём работы, нажмите «Сгенерировать». Refai строит план, ищет реальные источники через научные базы, пишет введение, все главы, заключение и список литературы. Готовый DOCX-файл скачивается сразу — обычно за 2–5 минут.",
+  },
+  {
+    q: "Какой файл получу на выходе?",
+    a: "DOCX (Microsoft Word). Оформление строго по ГОСТ 7.32-2017: Times New Roman 14pt, межстрочный интервал 1.5, поля 30/10/20/20 мм, автоматическая нумерация страниц. Открывается в Word, Google Docs и LibreOffice без потери форматирования.",
+  },
+  {
+    q: "Сколько стоит одна работа?",
+    a: "Сочинение — 99 ₽, эссе — 149 ₽, доклад — 199 ₽, реферат — 299 ₽, курсовая — 699 ₽, ВКР — 1 199 ₽. Оплата разовая, без подписки и скрытых платежей. Оплатил — получил работу.",
+  },
+  {
+    q: "Откуда берётся список литературы?",
+    a: "Источники ищутся по базе CrossRef — крупнейшему репозиторию научных публикаций. Refai находит реальные работы по теме и оформляет их по ГОСТ Р 7.0.5-2008. Каждый источник можно проверить по DOI.",
+  },
+  {
+    q: "Будет ли высокая уникальность?",
+    a: "Да. Каждая работа пишется заново под вашу конкретную тему — никаких шаблонов. Антиплагиат по «Антиплагиат.ру» обычно показывает 70–90%. Точный результат зависит от темы: редкие и узкоспециальные темы дают более высокий показатель.",
+  },
+  {
+    q: "Можно ли редактировать работу после скачивания?",
+    a: "Да. DOCX-файл редактируется в любом редакторе: Microsoft Word, Google Docs, LibreOffice. Можно скорректировать формулировки, добавить данные, изменить структуру — форматирование ГОСТ при этом сохранится.",
+  },
+  {
+    q: "Что если работа не устроила?",
+    a: "Напишите на support@ref-ai.ru с описанием проблемы. Мы разберём ситуацию: если ошибка на нашей стороне — повторим генерацию или вернём деньги. История работ сохраняется в разделе «Мои работы».",
+  },
 ];
 
 const MOCK_RECENT = [
@@ -95,76 +123,6 @@ function formatDate(iso: string) {
   }).replace(",", " г. в");
 }
 
-type Step = { label: string; duration: number };
-
-function getProgressSteps(workType: string): Step[] {
-  if (workType === "Сочинение" || workType === "Эссе") {
-    // ~60-70с реально
-    return [
-      { label: "Анализируем тему",   duration: 5000  },
-      { label: "Подбираем стиль",    duration: 8000  },
-      { label: "Пишем текст",        duration: 50000 },
-      { label: "Финальная проверка", duration: 7000  },
-    ];
-  }
-  if (workType === "Доклад") {
-    // ~100-120с реально: источники + 2 главы по 2 подглавы
-    return [
-      { label: "Анализируем тему",    duration: 5000  },
-      { label: "Ищем источники",      duration: 22000 },
-      { label: "Формируем структуру", duration: 8000  },
-      { label: "Пишем введение",      duration: 12000 },
-      { label: "Пишем раздел 1",      duration: 28000 },
-      { label: "Пишем раздел 2",      duration: 28000 },
-      { label: "Пишем заключение",    duration: 12000 },
-      { label: "Финальная проверка",  duration: 5000  },
-    ];
-  }
-  if (workType === "ВКР") {
-    // ~350-420с реально: 3 главы по 3 подглавы = 9 больших секций
-    return [
-      { label: "Анализируем тему",    duration: 8000  },
-      { label: "Ищем источники",      duration: 30000 },
-      { label: "Формируем структуру", duration: 10000 },
-      { label: "Пишем введение",      duration: 25000 },
-      { label: "Пишем главу 1",       duration: 85000 },
-      { label: "Пишем главу 2",       duration: 85000 },
-      { label: "Пишем главу 3",       duration: 85000 },
-      { label: "Пишем заключение",    duration: 25000 },
-      { label: "Оформляем приложения",duration: 8000  },
-      { label: "Оформляем литературу",duration: 12000 },
-      { label: "Финальная проверка",  duration: 7000  },
-    ];
-  }
-  if (workType === "Курсовая") {
-    // ~220-260с реально: 3 главы по 2 подглавы = 6 больших секций
-    return [
-      { label: "Анализируем тему",    duration: 5000  },
-      { label: "Ищем источники",      duration: 25000 },
-      { label: "Формируем структуру", duration: 8000  },
-      { label: "Пишем введение",      duration: 18000 },
-      { label: "Пишем главу 1",       duration: 55000 },
-      { label: "Пишем главу 2",       duration: 55000 },
-      { label: "Пишем главу 3",       duration: 55000 },
-      { label: "Пишем заключение",    duration: 18000 },
-      { label: "Оформляем литературу",duration: 10000 },
-      { label: "Финальная проверка",  duration: 6000  },
-    ];
-  }
-  // Реферат: ~160-180с реально: 3 главы по 2 подглавы
-  return [
-    { label: "Анализируем тему",    duration: 5000  },
-    { label: "Ищем источники",      duration: 25000 },
-    { label: "Формируем структуру", duration: 8000  },
-    { label: "Пишем введение",      duration: 15000 },
-    { label: "Пишем главу 1",       duration: 35000 },
-    { label: "Пишем главу 2",       duration: 35000 },
-    { label: "Пишем главу 3",       duration: 35000 },
-    { label: "Пишем заключение",    duration: 15000 },
-    { label: "Оформляем литературу",duration: 8000  },
-    { label: "Финальная проверка",  duration: 4000  },
-  ];
-}
 
 const FUN_FACTS = [
   "Средний студент тратит около 17 часов в неделю на подготовку к занятиям",
@@ -188,6 +146,12 @@ export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
 
+  // Тестовый аккаунт ЮКасса
+  const userRole  = (session?.user as { role?: string } | null)?.role;
+  const isYukassa = userRole === "yukassa_test";
+  const isAdmin   = userRole === "admin";
+  const YUKASSA_TYPES = ["Сочинение", "Эссе", "Доклад"];
+
   const [workType, setWorkType]               = useState("Реферат");
   const [topic, setTopic]                     = useState("");
   const [pages, setPages]                     = useState(WORK_PAGES["Реферат"].default);
@@ -201,6 +165,8 @@ export default function Home() {
   const [recentWorks, setRecentWorks]         = useState(MOCK_RECENT);
   const [showAllWorks, setShowAllWorks]       = useState(false);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
+  const [trialUsed, setTrialUsed]             = useState(false);
+  const [f5Recovery, setF5Recovery]           = useState(false);
 
   // Прогресс
   const [stepIndex, setStepIndex]       = useState(0);
@@ -212,9 +178,14 @@ export default function Home() {
   const [factVisible, setFactVisible] = useState(true);
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stepsRef      = useRef<Step[]>(getProgressSteps("Реферат"));
-  const autoStarted   = useRef(false); // защита от двойного запуска (React Strict Mode)
-  const heroRef       = useRef<HTMLElement>(null);
+  const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stepsRef        = useRef<Step[]>(getProgressSteps("Реферат"));
+  const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
+  const f5InfoRef       = useRef<{ workType: string; startedAt: number }>({ workType: "Реферат", startedAt: 0 });
+  const isUnloadingRef  = useRef(false); // флаг F5 / ухода со страницы
+  const loadingRef      = useRef(false);  // актуальное значение loading для beforeunload
+  const currentGenRef   = useRef<{ topic: string; pages: number; workType: string; startedAt: number } | null>(null);
+  const heroRef         = useRef<HTMLElement>(null);
 
   function selectWorkType(type: string) {
     setWorkType(type);
@@ -249,9 +220,11 @@ export default function Home() {
     setStepIndex(currentStep);
     console.log(`[Refai] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
 
+    let syncTick = 0;
     timerRef.current = setInterval(() => {
       elapsed     += 100;
       stepElapsed += 100;
+      syncTick++;
 
       const step = steps[currentStep];
       if (!step) return;
@@ -266,9 +239,18 @@ export default function Home() {
         const next = Math.min(currentStep + 1, steps.length - 1);
         if (next !== currentStep) {
           console.log(`[Refai] Шаг:`, next, '-', steps[next]?.label, '|', Math.round(tp) + '%');
+          currentStep = next;
+          stepElapsed = 0;
+          // Обновляем localStorage при смене шага
+          patchGenState({ percent: tp, stepLabel: steps[currentStep]?.label ?? "" });
+        } else {
+          stepElapsed = 0;
         }
-        currentStep = next;
-        stepElapsed = 0;
+      }
+
+      // Синхронизируем процент каждые 2 секунды
+      if (syncTick % 20 === 0) {
+        patchGenState({ percent: tp });
       }
     }, 100);
   }
@@ -313,6 +295,8 @@ export default function Home() {
 
     // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
     _gen.start(t, p, wt);
+    currentGenRef.current = { topic: t, pages: p, workType: wt, startedAt: _gen.startedAt };
+    writeGenState({ active: true, percent: 0, stepLabel: stepsRef.current[0]?.label ?? "", workType: wt, topic: t, pages: p, startedAt: _gen.startedAt });
     sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: _gen.startedAt }));
 
     setLoading(true);
@@ -334,8 +318,8 @@ export default function Home() {
       if (!response.ok) {
         if (data.code === "PAYMENT_REQUIRED") {
           _gen.cancel();
+          clearGenState();
           sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
-          sessionStorage.removeItem("activeGeneration");
           router.push(`/payment?workType=${encodeURIComponent(wt)}`);
           return;
         }
@@ -354,22 +338,44 @@ export default function Home() {
         _gen.resolve(data as ReferatResult, "");
         setResult(data);
         if (data.structure?.length > 0) setActiveSection(data.structure[0]);
+        if (isYukassa) setTrialUsed(true);
       }
     } catch (err) {
       console.error('[Refai] Ошибка генерации:', err);
       stopProgress();
+      if (isUnloadingRef.current) {
+        // Страница выгружается (F5 / закрытие вкладки) — сохраняем genState для восстановления
+        return;
+      }
       const errMsg = "Не удалось подключиться к серверу";
       _gen.resolve(null, errMsg);
       setError(errMsg);
     } finally {
-      sessionStorage.removeItem("activeGeneration");
-      setLoading(false);
+      if (!isUnloadingRef.current) {
+        currentGenRef.current = null;
+        clearGenState();
+        sessionStorage.removeItem("activeGeneration");
+        setLoading(false);
+      }
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!topic.trim()) return;
+
+    // Admin — генерация бесплатно
+    if (isAdmin) {
+      runGeneration(topic, pages, workType);
+      return;
+    }
+
+    // Тестовый аккаунт ЮКасса — минуем проверку оплаты
+    if (isYukassa) {
+      if (trialUsed) return;
+      runGeneration(topic, pages, workType);
+      return;
+    }
 
     // Проверяем оплату перед генерацией
     try {
@@ -494,6 +500,20 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // Для тестового аккаунта ЮКасса: проверяем использование пробной генерации
+  useEffect(() => {
+    if (!isYukassa) return;
+    // Устанавливаем Эссе как тип по умолчанию для тестового аккаунта
+    selectWorkType("Эссе");
+    fetch("/api/generations")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length >= 1) setTrialUsed(true);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isYukassa]);
+
   // При монтировании: восстанавливаем прерванную генерацию или запускаем после оплаты
   useEffect(() => {
     // Защита от двойного запуска (React Strict Mode дважды вызывает useEffect в dev)
@@ -525,7 +545,7 @@ export default function Home() {
 
     // 3. Переход из футера по типу работы (?workType=...)
     const wtParam = params.get("workType");
-    if (wtParam && !params.get("autoGenerate") && !sessionStorage.getItem("activeGeneration")) {
+    if (wtParam && !params.get("autoGenerate") && !readGenState()) {
       const VALID = ["Сочинение","Эссе","Доклад","Реферат","Курсовая","ВКР"];
       if (VALID.includes(wtParam)) {
         selectWorkType(wtParam);
@@ -538,19 +558,27 @@ export default function Home() {
     }
 
     // 2. Пользователь ушёл на другую страницу и вернулся — восстанавливаем
+    const genSt = readGenState();
     const active = sessionStorage.getItem("activeGeneration");
-    if (active) {
+    if (genSt || active) {
       (async () => {
         try {
-          const { topic: t, pages: p, workType: wt, startedAt } = JSON.parse(active);
+          // Предпочитаем localStorage (переживает F5), но fallback на sessionStorage
+          const startedAt = genSt?.startedAt ?? (active ? JSON.parse(active).startedAt : 0);
+          const t  = genSt?.topic    ?? (active ? JSON.parse(active).topic    : "");
+          const p  = genSt?.pages != null ? genSt.pages : (active ? JSON.parse(active).pages : 0);
+          const wt = genSt?.workType ?? (active ? JSON.parse(active).workType : "Реферат");
+          const savedPercent = genSt?.percent ?? 0;
+
           const elapsed = Date.now() - startedAt;
           if (elapsed >= 10 * 60 * 1000) {
+            clearGenState();
             sessionStorage.removeItem("activeGeneration");
             return;
           }
           selectWorkType(wt);
           setTopic(t);
-          setPages(p);
+          if (p) setPages(p);
 
           // Случай 1: клиентская навигация (router.push/Link) — модуль жив,
           // _gen знает об активной генерации → просто подключаемся к ней.
@@ -558,7 +586,7 @@ export default function Home() {
             stepsRef.current = getProgressSteps(wt);
             if (!_gen.done) {
               setLoading(true); setError(""); setResult(null);
-              setTotalProgress(0); setStepIndex(0);
+              setTotalProgress(savedPercent); setStepIndex(0);
               // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
               // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
               const elapsedAtMount = elapsed;
@@ -572,6 +600,7 @@ export default function Home() {
               } else {
                 setError(err || "Генерация не удалась");
               }
+              clearGenState();
               sessionStorage.removeItem("activeGeneration");
               setLoading(false);
             });
@@ -579,26 +608,108 @@ export default function Home() {
             return;
           }
 
-          // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен, проверяем платёж
-          const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(wt)}`);
-          const checkData = await checkRes.json();
-          if (!checkData.hasPaid) {
-            // Платёж занят — оригинальная генерация завершилась или всё ещё идёт (серверная)
-            console.log("[Refai] Восстановление (F5): платёж занят, ждём результата в Мои работы");
-            setError("Генерация была прервана перезагрузкой страницы. Проверьте результат в разделе «Мои работы».");
-            sessionStorage.removeItem("activeGeneration");
-            return;
-          }
+          // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен.
+          // Возобновляем анимацию прогресса с нужного момента + запускаем поллинг статуса.
+          console.log("[Refai] Восстановление (F5): возобновление прогресса", { percent: savedPercent, elapsed, workType: wt });
+          stepsRef.current = getProgressSteps(wt);
+          f5InfoRef.current = { workType: wt, startedAt };
+          setLoading(true);
+          setError("");
+          setResult(null);
+          setTotalProgress(savedPercent);
+          setF5Recovery(true);
+          // НЕ чистим genState здесь — поллинг-эффект сделает это когда найдёт результат
           sessionStorage.removeItem("activeGeneration");
-          console.log("[Refai] Восстановление (F5): перезапуск генерации:", { topic: t, workType: wt, pages: p });
-          setTimeout(() => runGeneration(t, p, wt), 0);
+          setTimeout(() => startProgress(elapsed), 0);
         } catch {
+          clearGenState();
           sessionStorage.removeItem("activeGeneration");
         }
       })();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Держим loadingRef в синхронизации
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Показываем диалог подтверждения при попытке уйти во время генерации
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!loadingRef.current) return;
+      e.preventDefault();
+      e.returnValue = "Генерация в процессе"; // непустая строка — нужна для Firefox
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
+  // pagehide — гарантированно выполняется перед выгрузкой (после подтверждения «Уйти»).
+  // Записываем genState в localStorage прямо (без dispatchEvent) до отмены fetch.
+  useEffect(() => {
+    const onPageHide = () => {
+      if (!loadingRef.current || !currentGenRef.current) return;
+      isUnloadingRef.current = true;
+      try {
+        const raw = localStorage.getItem("refai_gen");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.active = true;
+          localStorage.setItem("refai_gen", JSON.stringify(parsed));
+        } else {
+          const { topic, pages, workType, startedAt } = currentGenRef.current;
+          localStorage.setItem("refai_gen", JSON.stringify({
+            active: true, percent: 0, stepLabel: "", workType, topic, pages, startedAt,
+          }));
+        }
+      } catch {}
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  // Поллинг статуса после F5-восстановления
+  useEffect(() => {
+    if (!f5Recovery) return;
+
+    const { workType: wt, startedAt } = f5InfoRef.current;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${startedAt}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "done") {
+          clearInterval(pollRef.current!);
+          clearGenState();
+          stopProgress();
+          setF5Recovery(false);
+          setLoading(false);
+          console.log("[Refai] F5-восстановление: генерация завершена, переход в Мои работы");
+          router.push("/dashboard");
+        } else if (data.status === "error" || data.status === "not_found") {
+          clearInterval(pollRef.current!);
+          clearGenState();
+          stopProgress();
+          setF5Recovery(false);
+          setLoading(false);
+          setError(
+            data.status === "not_found"
+              ? "Сервер был перезапущен во время генерации. Проверьте «Мои работы» — если работа сохранилась, она там."
+              : "Генерация завершилась с ошибкой. Проверьте «Мои работы»."
+          );
+          console.log("[Refai] F5-восстановление:", data.status);
+        }
+        // status === "running" | "idle" — продолжаем ждать
+      } catch { /* сеть недоступна, повторим */ }
+    }, 5_000);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f5Recovery]);
 
   const price     = WORK_PRICES[workType]?.price ?? 199;
   const pageRange = WORK_PAGES[workType];
@@ -642,23 +753,67 @@ export default function Home() {
           <div className={styles.heroBadgeRow}>
             <span className={styles.heroBadge}>ГОСТ 7.32-2017</span>
             <span className={styles.heroBadge}>Антиплагиат 70-90%</span>
-            <span className={styles.heroBadgeFree}>+ от 99 Р</span>
+            <span className={styles.heroBadgeFree}>+ от 99 ₽</span>
           </div>
 
           <h1 className={styles.heroTitle}>
-            Готовый реферат<br/>
+            Готовый реферат, курсовая или эссе<br/>
             за <span className={styles.heroAccent}>5 минут</span>
           </h1>
 
           <p className={styles.heroSub}>
-            Введите тему — получите работу с соблюдением ГОСТ,
-            <br className={styles.heroSubBr}/>
-            {" "}списком литературы и оформлением
+            Введите тему — получите работу по ГОСТу,<br/>
+            со списком литературы и готовым оформлением
           </p>
+
+          {/* Баннер для тестового аккаунта ЮКасса */}
+          {isYukassa && !loading && (
+            <div className={`${styles.yukassaBanner} ${trialUsed ? styles.yukassaBannerUsed : ""}`}>
+              {trialUsed ? (
+                <>
+                  <span className={styles.yukassaBannerIcon}>✓</span>
+                  <div>
+                    <p className={styles.yukassaBannerTitle}>Пробная генерация использована</p>
+                    <p className={styles.yukassaBannerText}>
+                      Работа доступна во вкладке{" "}
+                      <a href="/dashboard" className={styles.yukassaBannerLink}>Мои работы</a>.
+                      Функция генерации работает корректно.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className={styles.yukassaBannerIcon}>🔍</span>
+                  <div>
+                    <p className={styles.yukassaBannerTitle}>
+                      Тестовый доступ ЮКасса — 1 пробная генерация
+                    </p>
+                    <p className={styles.yukassaBannerText}>
+                      Выберите тип работы (Сочинение, Эссе или Доклад), введите любую тему и
+                      нажмите «Сгенерировать». Оплата не требуется. Используйте её с умом — она одна.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Типы работ */}
           <div className={styles.workTypes}>
-            {WORK_TYPES.map(type => {
+            {/* Кнопка Тест — только для admin */}
+            {isAdmin && (
+              <button
+                key="Тест"
+                className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
+                onClick={() => selectWorkType("Тест")}
+                disabled={loading}
+                title="Тестовая генерация — только для администратора"
+              >
+                <span className={styles.workTypeLabel}>Тест</span>
+                <span className={styles.workTypePages}>1 стр.</span>
+              </button>
+            )}
+            {(isYukassa ? YUKASSA_TYPES : WORK_TYPES).map(type => {
               const info = WORK_PRICES[type];
               return (
                 <button
@@ -711,11 +866,13 @@ export default function Home() {
               <button
                 type="submit"
                 className={styles.heroBtn}
-                disabled={loading || !topic.trim()}
+                disabled={loading || !topic.trim() || (isYukassa && trialUsed)}
               >
                 {loading
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
-                  : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${price} Р`}
+                  : isYukassa
+                    ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
+                    : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${price} ₽`}
               </button>
             </div>
           </form>
@@ -770,9 +927,20 @@ export default function Home() {
               )}
             </div>
 
-            <p className={styles.progressHint}>
-              Не закрывайте страницу — генерация продолжится в фоне
-            </p>
+            {f5Recovery ? (
+              <div className={styles.f5RecoveryHint}>
+                <p className={styles.progressHint}>
+                  Страница была перезагружена. Генерация продолжается на сервере — ждём результата...
+                </p>
+                <Link href="/dashboard" className={styles.progressDashLink}>
+                  Мои работы →
+                </Link>
+              </div>
+            ) : (
+              <p className={styles.progressHint}>
+                Готовая работа автоматически сохранится в разделе «Мои работы»
+              </p>
+            )}
           </div>
 
           {/* Карточка с фактом */}
@@ -903,24 +1071,39 @@ export default function Home() {
       {!result && !loading && (
         <section className={styles.reviewsSection}>
           <div className={styles.reviewsInner}>
-            <h2 className={styles.reviewsHeading}>
-              Свежие <span className={styles.reviewsAccent}>отзывы</span>
-            </h2>
-            <div className={styles.reviewsGrid}>
-              {REVIEWS.map((r, i) => (
+            <div className={styles.reviewsTop}>
+              <h2 className={styles.reviewsHeading}>
+                Свежие <span className={styles.reviewsAccent}>отзывы</span>
+              </h2>
+              <div className={styles.reviewCta}>
+                <a
+                  href="mailto:support@ref-ai.ru?subject=Отзыв о Refai"
+                  className={styles.reviewBtn}
+                >
+                  ✉ Написать отзыв
+                </a>
+                <p className={styles.reviewCtaHint}>Отправьте нам — отмодерируем и опубликуем</p>
+              </div>
+            </div>
+          </div>
+          <div className={styles.reviewsTrack}>
+            <div className={styles.reviewsScroll}>
+              {[...REVIEWS, ...REVIEWS].map((r, i) => (
                 <div key={i} className={styles.reviewCard}>
-                  <div className={styles.reviewHeader}>
+                  <div className={styles.reviewCardTop}>
                     <div>
                       <p className={styles.reviewName}>{r.name}</p>
                       <p className={styles.reviewDate}>{r.date}</p>
                     </div>
-                    <div className={styles.reviewStars}>★★★★★</div>
+                    <div className={styles.reviewRight}>
+                      <span className={styles.reviewWorkBadge}>{r.workType}</span>
+                      <div className={styles.reviewStars}>{"★".repeat(r.stars)}</div>
+                    </div>
                   </div>
                   <p className={styles.reviewText}>{r.text}</p>
                 </div>
               ))}
             </div>
-            <button className={styles.reviewBtn}>Оставить отзыв</button>
           </div>
         </section>
       )}

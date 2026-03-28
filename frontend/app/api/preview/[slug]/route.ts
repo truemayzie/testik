@@ -34,6 +34,5 @@ export async function GET(
     structure:      result.structure,
     previewContent,
     sources:        (result.sources as string[]).slice(0, 3),
-    meta:           result.meta,
   });
 }

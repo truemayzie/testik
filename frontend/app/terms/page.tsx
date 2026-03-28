@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
-  title: "Условия использования — Refai",
-  description: "Правила и условия использования сервиса ref-ai.ru.",
+  title: "Условия использования | Refai",
+  description: "Условия использования сервиса Refai.",
 };
 
 export default function TermsPage() {

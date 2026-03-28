@@ -24,6 +24,7 @@ type Props = {
 
 export default function TypewriterInput({ value, onChange, disabled, className }: Props) {
   const [displayed, setDisplayed] = useState("");
+  const [focused, setFocused] = useState(false);
   const stateRef = useRef({ topicIdx: 0, charIdx: 0, isDeleting: false });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,13 +65,15 @@ export default function TypewriterInput({ value, onChange, disabled, className }
         className={className}
         value={value}
         onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         disabled={disabled}
         required
         placeholder=""
         style={{ width: "100%", boxSizing: "border-box" }}
       />
-      {/* Анимированный плейсхолдер — курсор стоит вплотную к тексту */}
-      {!value && (
+      {/* Анимированный плейсхолдер — скрывается при фокусе чтобы не конфликтовать с курсором браузера */}
+      {!value && !focused && (
         <div style={{
           position:      "absolute",
           top:           0,

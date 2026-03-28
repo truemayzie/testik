@@ -7,22 +7,32 @@ import Link from "next/link";
 import styles from "./profile.module.css";
 
 type Profile = {
-  name:        string | null;
-  email:       string | null;
-  image:       string | null;
-  university:  string | null;
-  faculty:     string | null;
-  department:  string | null;
-  speciality:  string | null;
-  discipline:  string | null;
-  course:      string | null;
-  groupNumber: string | null;
-  fullName:    string | null;
-  teacherName: string | null;
-  city:        string | null;
+  name:             string | null;
+  email:            string | null;
+  image:            string | null;
+  createdAt:        string | null;
+  generationsCount: number;
+  university:       string | null;
+  faculty:          string | null;
+  department:       string | null;
+  speciality:       string | null;
+  discipline:       string | null;
+  course:           string | null;
+  groupNumber:      string | null;
+  fullName:         string | null;
+  teacherName:      string | null;
+  city:             string | null;
 };
 
-const EMPTY: Omit<Profile, "name" | "email" | "image"> = {
+const MONTHS_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+
+function formatJoinDate(createdAt: string | null): string {
+  if (!createdAt) return "—";
+  const d = new Date(createdAt);
+  return `с ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()} года`;
+}
+
+const EMPTY: Omit<Profile, "name" | "email" | "image" | "createdAt" | "generationsCount"> = {
   university: "", faculty: "", department: "", speciality: "", discipline: "",
   course: "", groupNumber: "", fullName: "", teacherName: "", city: "",
 };
@@ -105,15 +115,27 @@ export default function ProfilePage() {
       {/* Шапка */}
       <div className={styles.hero}>
         <div className={styles.heroInner}>
-          {profile.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.image} alt="avatar" className={styles.avatar} />
-          ) : (
-            <div className={styles.avatarPlaceholder}>{initials}</div>
-          )}
+          <div className={styles.avatarWrap}>
+            {profile.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.image} alt="avatar" className={styles.avatar} />
+            ) : (
+              <div className={styles.avatarPlaceholder}>{initials}</div>
+            )}
+          </div>
           <div className={styles.heroInfo}>
             <h1 className={styles.heroName}>{profile.name ?? "Профиль"}</h1>
             <p className={styles.heroEmail}>{profile.email}</p>
+            <div className={styles.heroStats}>
+              <div className={styles.heroStat}>
+                <span className={styles.heroStatValue}>{profile.generationsCount}</span>
+                <span className={styles.heroStatLabel}>работ создано</span>
+              </div>
+              <div className={styles.heroStat}>
+                <span className={styles.heroStatValue}>{formatJoinDate(profile.createdAt)}</span>
+                <span className={styles.heroStatLabel}>на платформе</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

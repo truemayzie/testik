@@ -2,14 +2,35 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import styles from "./Header.module.css";
+
+const LogoInner = () => (
+  <>
+    <svg className={styles.logoSpark} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="url(#headerGrad)"/>
+      <defs>
+        <linearGradient id="headerGrad" x1="1" y1="1" x2="19" y2="19" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6366F1"/>
+          <stop offset="1" stopColor="#60A5FA"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <div className={styles.logoTexts}>
+      <span className={styles.logoWord}>Ref<span className={styles.logoAi}>ai</span></span>
+      <span className={styles.logoTagline}>Генератор учебных работ</span>
+    </div>
+  </>
+);
 
 export default function Header() {
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const isAuthPage = pathname?.startsWith("/auth");
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -23,12 +44,11 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
+  if (isAuthPage) return null;
+
   return (
     <header className={styles.header}>
-      <Link href="/" className={styles.logo}>
-        <span className={styles.logoIcon}>R</span>
-        <span className={styles.logoText}>efai</span>
-      </Link>
+      <Link href="/" className={styles.logo}><LogoInner /></Link>
 
       {/* Десктоп nav */}
       <nav className={styles.nav}>

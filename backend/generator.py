@@ -165,6 +165,20 @@ WORK_RULES = {
         "has_appendix": True,
         "forbidden": "никаких иностранных слов кроме терминов",
     },
+    "Тест": {
+        "has_title_page": False,
+        "has_toc":        False,
+        "has_sources":    False,
+        "has_tables":     False,
+        "has_chapters":   False,
+        "pages_min":      1,
+        "pages_max":      1,
+        "words_per_page": 100,
+        "intro_words":    0,
+        "conclusion_words": 0,
+        "style":    "краткий тестовый ответ",
+        "forbidden": "",
+    },
 }
 
 
@@ -642,6 +656,21 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Ограничиваем pages диапазоном типа
     pages = max(rules["pages_min"], min(pages, rules["pages_max"]))
+
+    # Тест — минимальная генерация для проверки pipeline
+    if work_type == "Тест":
+        print("Тестовая генерация: минимальный промпт...")
+        text = clean_text(ask(f"Напиши ровно 2-3 предложения на тему: {topic}. Только сам текст, без заголовков.", max_tokens=200))
+        result = {
+            "title":     f"[ТЕСТ] {topic}",
+            "structure": ["Результат"],
+            "content":   {"Результат": text},
+            "sources":   [],
+            "meta":      {"Тип работы": "Тест", "Объём": "1 стр."},
+            "profile":   profile or {},
+        }
+        print(f"[TOTAL] Тип: Тест | Тема: {topic[:40]}")
+        return result
 
     # Сочинение и Эссе — отдельная логика
     if work_type in ("Сочинение", "Эссе"):

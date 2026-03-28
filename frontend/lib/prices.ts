@@ -1,4 +1,5 @@
 export const WORK_PRICES: Record<string, { price: number; label: string; pages: string }> = {
+  "Тест":      { price: 0,    label: "Тест",             pages: "1 стр."     },
   "Сочинение": { price: 99,   label: "Сочинение",       pages: "3-5 стр."   },
   "Эссе":      { price: 149,  label: "Эссе",             pages: "4-8 стр."   },
   "Доклад":    { price: 199,  label: "Доклад",           pages: "15-20 стр." },
@@ -8,6 +9,7 @@ export const WORK_PRICES: Record<string, { price: number; label: string; pages: 
 }
 
 export const WORK_PAGES: Record<string, { min: number; max: number; default: number }> = {
+  "Тест":      { min: 1,  max: 1,  default: 1  },
   "Сочинение": { min: 3,  max: 5,  default: 3  },
   "Эссе":      { min: 4,  max: 8,  default: 5  },
   "Доклад":    { min: 15, max: 20, default: 15 },

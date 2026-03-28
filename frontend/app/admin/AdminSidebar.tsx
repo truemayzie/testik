@@ -9,6 +9,7 @@ const NAV = [
   { href: "/admin/users",    icon: "👥", label: "Пользователи" },
   { href: "/admin/works",    icon: "📄", label: "Работы" },
   { href: "/admin/payments", icon: "💳", label: "Платежи" },
+  { href: "/admin/health",   icon: "🟢", label: "Статус системы" },
 ];
 
 export default function AdminSidebar() {

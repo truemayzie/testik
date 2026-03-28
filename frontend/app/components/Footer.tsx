@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import styles from "./Footer.module.css";
 
 export default function Footer() {
   const { status } = useSession();
   const authed = status === "authenticated";
+  const pathname = usePathname();
+  if (pathname?.startsWith("/auth")) return null;
 
   return (
     <footer className={styles.footer}>
@@ -17,8 +20,16 @@ export default function Footer() {
           {/* Бренд */}
           <div className={styles.footerBrand}>
             <div className={styles.footerLogo}>
-              <span className={styles.footerLogoIcon}>R</span>
-              <span className={styles.footerLogoText}>efai</span>
+              <svg className={styles.footerLogoSpark} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="url(#footerGrad)"/>
+                <defs>
+                  <linearGradient id="footerGrad" x1="1" y1="1" x2="19" y2="19" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#818CF8"/>
+                    <stop offset="1" stopColor="#60A5FA"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <span className={styles.footerLogoWord}>Ref<span className={styles.footerLogoAi}>ai</span></span>
             </div>
             <p className={styles.footerTagline}>
               Генератор учебных работ по ГОСТ.<br />

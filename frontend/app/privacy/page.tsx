@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
-  title: "Политика конфиденциальности — Refai",
-  description: "Политика обработки персональных данных пользователей сервиса ref-ai.ru.",
+  title: "Политика конфиденциальности | Refai",
+  description: "Политика конфиденциальности сервиса Refai.",
 };
 
 export default function PrivacyPage() {

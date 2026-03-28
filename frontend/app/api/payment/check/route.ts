@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const sessionUserId = (session?.user as { id?: string } | null)?.id;
+  if (!session?.user || !sessionUserId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   const workType = searchParams.get("workType") || "Реферат";
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: sessionUserId },
     select: { id: true },
   });
   if (!user) return NextResponse.json({ hasPaid: false });

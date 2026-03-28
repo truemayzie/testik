@@ -36,6 +36,11 @@ function PaymentPageContent() {
         setError(data.error || "Ошибка создания платежа");
         return;
       }
+      // Сохраняем paymentId чтобы success-страница могла следить за статусом
+      try {
+        const pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");
+        sessionStorage.setItem("pendingGeneration", JSON.stringify({ ...pending, paymentId: data.paymentId }));
+      } catch {}
       window.location.href = data.paymentUrl;
     } catch {
       setError("Не удалось создать платёж");

@@ -29,30 +29,28 @@
   font-size: 1.2rem;
   font-weight: 800;
   color: #fff;
-  margin-bottom: 12px;
-  letter-spacing: -0.02em;
+  margin-bottom: 14px;
+  letter-spacing: -0.03em;
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
+  text-decoration: none;
 }
 
-.footerLogoIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: linear-gradient(135deg, #6366F1, #818CF8);
-  color: #fff;
-  border-radius: 7px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  margin-right: 9px;
+.footerLogoSpark {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
+  filter: drop-shadow(0 1px 6px rgba(129,140,248,0.5));
 }
 
-.footerLogoText {
-  color: #fff;
+.footerLogoWord { color: rgba(255,255,255,0.9); }
+
+.footerLogoAi {
+  background: linear-gradient(135deg, #818CF8, #60A5FA);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .footerTagline {
