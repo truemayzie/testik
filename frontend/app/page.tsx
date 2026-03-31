@@ -1597,6 +1597,7 @@ export default function Home() {
       {result && showResultModal && createPortal((() => {
         const hasTitlePage = ["Реферат", "Курсовая", "ВКР", "Доклад"].includes(workType);
         const hasSources   = !["Эссе", "Сочинение"].includes(workType);
+        const hasExtras    = !["Эссе", "Сочинение"].includes(workType);
         const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 219 : 0);
         const closeModal   = () => { setModalClosing(true); setTimeout(() => { setShowResultModal(false); setModalClosing(false); }, 200); };
         const DownloadBtn  = () => (
@@ -1721,7 +1722,7 @@ export default function Home() {
                 </ul>
                 <hr className={styles.modalDivider} />
                 <DownloadBtn />
-                <Toggles />
+                {hasExtras && <Toggles />}
                 {hasTitlePage && (
                   <>
                     <hr className={styles.modalDivider} />
@@ -1754,7 +1755,7 @@ export default function Home() {
                   </div>
                 )}
                 <DownloadBtn />
-                {!extrasGenerating && extrasReady.length === 0 && (
+                {hasExtras && !extrasGenerating && extrasReady.length === 0 && (
                   <div className={styles.mobileToggles}>
                     <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
                       <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
@@ -1772,7 +1773,7 @@ export default function Home() {
                     </label>
                   </div>
                 )}
-                {!extrasGenerating && extrasReady.length === 0 && extrasTotal > 0 && (
+                {hasExtras && !extrasGenerating && extrasReady.length === 0 && extrasTotal > 0 && (
                   <button className={styles.payExtrasBtn} onClick={handleExtrasPayment}>
                     Оплатить {extrasTotal} ₽
                   </button>

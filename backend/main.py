@@ -173,10 +173,11 @@ def create_extras(request: ExtrasRequest):
 
     def run():
         ready = []
+        slide_titles = None  # заголовки слайдов для синхронизации с текстом выступления
         try:
             from presentation_generator import generate_presentation, generate_speech
             if "presentation" in request.items:
-                generate_presentation(
+                _, slide_titles = generate_presentation(
                     extras_job_id,
                     request.topic,
                     request.work_type,
@@ -190,6 +191,7 @@ def create_extras(request: ExtrasRequest):
                     request.topic,
                     request.work_type,
                     request.result,
+                    slide_titles,
                 )
                 ready.append("speech")
             with _extras_lock:
