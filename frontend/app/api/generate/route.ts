@@ -101,6 +101,35 @@ export async function POST(request: NextRequest) {
     paymentId = payment.id;
   }
 
+  // ── Rate limiting ─────────────────────────────────────────────────────────
+
+  // Проверка 1: активная генерация у этого юзера
+  if (activeJobs.get(user.id)) {
+    return NextResponse.json(
+      { error: "У вас уже идёт генерация. Дождитесь завершения." },
+      { status: 429 }
+    );
+  }
+
+  // Проверка 2: дневной лимит (5 генераций в день)
+  if (!isAdmin) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const todayCount = await prisma.payment.count({
+      where: {
+        userId: user.id,
+        status: "succeeded",
+        createdAt: { gte: startOfDay },
+      },
+    });
+    if (todayCount >= 5) {
+      return NextResponse.json(
+        { error: "Дневной лимит генераций исчерпан. Попробуйте завтра." },
+        { status: 429 }
+      );
+    }
+  }
+
   // ── Шаг 1: запускаем задание на backend (быстрый запрос) ──────────────────
   let jobId: string;
   try {
@@ -198,12 +227,14 @@ export async function POST(request: NextRequest) {
 
         const data = await resultRes.json() as ReferatResult;
 
+        let savedId: string | undefined;
         try {
-          await saveGeneration(user.id, body.topic, body.pages, workType, data);
+          const saved = await saveGeneration(user.id, body.topic, body.pages, workType, data);
+          savedId = saved.id;
         } catch { /* не блокируем ответ */ }
 
         activeJobs.clear(user.id);
-        return NextResponse.json(data);
+        return NextResponse.json({ ...data, _generationId: savedId });
       } catch (err) {
         console.error("[generate] Ошибка при получении результата:", err);
         await revertPayment(paymentId);

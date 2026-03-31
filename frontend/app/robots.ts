@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/preview/', '/dashboard/', '/profile/', '/payment/', '/auth/'],
+        disallow: ['/api/', '/preview/', '/dashboard/', '/profile/', '/payment/', '/auth/', '/*?workType='],
       },
     ],
     sitemap: 'https://ref-ai.ru/sitemap.xml',

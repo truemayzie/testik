@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,6 +9,7 @@ import TypewriterInput from "./components/TypewriterInput";
 import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
+import { useModalContext } from "./lib/ModalContext";
 import styles from "./page.module.css";
 
 type ReferatResult = {
@@ -16,6 +18,16 @@ type ReferatResult = {
   content: Record<string, string>;
   sources: string[];
   meta: Record<string, string | number>;
+  profile?: Record<string, string | number | null>;
+};
+
+type TitleForm = {
+  fullName: string;
+  university: string;
+  faculty: string;
+  department: string;
+  groupNumber: string;
+  teacherName: string;
 };
 
 // ── Состояние текущей генерации (живёт между client-side навигациями) ────────
@@ -48,6 +60,37 @@ const _gen = (() => {
     cancel() { _cbs.splice(0); _startedAt = 0; _done = false; },
   };
 })();
+
+// ── Состояние extras-генерации (живёт между навигациями, как _gen) ───────────
+type ExtrasCb = (ready: string[], error: string) => void;
+const _extras = (() => {
+  let _jobId: string | null   = null;
+  let _done  = false;
+  let _ready: string[]        = [];
+  let _err   = "";
+  const _cbs: ExtrasCb[]      = [];
+  return {
+    get active() { return !!_jobId && !_done; },
+    get jobId()  { return _jobId; },
+    get done()   { return _done; },
+    get ready()  { return _ready; },
+    start(jobId: string) { _jobId = jobId; _done = false; _ready = []; _err = ""; },
+    resolve(ready: string[], err: string) {
+      _done = true; _ready = ready; _err = err;
+      _cbs.splice(0).forEach(cb => cb(ready, err));
+    },
+    listen(cb: ExtrasCb) {
+      if (_done || !_jobId) { cb(_ready, _err); return; }
+      _cbs.push(cb);
+    },
+    clear() { _jobId = null; _done = false; _ready = []; _err = ""; },
+  };
+})();
+
+// Флаг: поллинг extras уже запущен (один на весь модуль — не дублируется при ремонте)
+let _extrasPollingStarted = false;
+// ID генерации (для записи extras в БД после завершения)
+let _extrasGenId: string | null = null;
 
 // Сортировка по возрастанию страниц: Сочинение < Эссе < Доклад < Реферат < Курсовая < ВКР
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
@@ -106,15 +149,33 @@ const FAQ = [
 ];
 
 const MOCK_RECENT = [
-  { id: "1", workType: "Реферат",  topic: "Распределительная функция финансов. Виды распределения",                   createdAt: "2026-03-17T21:53:00Z" },
-  { id: "2", workType: "Реферат",  topic: "Мировые религии: Буддизм, Ислам, Христианство",                             createdAt: "2026-03-17T21:53:00Z" },
-  { id: "3", workType: "Реферат",  topic: "Изображение детских забот и радостей в поэзии Саши Черного",                createdAt: "2026-03-17T21:52:00Z" },
-  { id: "4", workType: "Реферат",  topic: "Местный анестетик Ропивакаин: Химия, Применение и Перспективы",             createdAt: "2026-03-17T21:52:00Z" },
-  { id: "5", workType: "Реферат",  topic: "Курсы (котировки) ценных бумаг",                                            createdAt: "2026-03-17T21:51:00Z" },
-  { id: "6", workType: "Реферат",  topic: "Аутогенная тренировка по Шульцу: Теория и практика",                        createdAt: "2026-03-17T21:49:00Z" },
-  { id: "7", workType: "Реферат",  topic: "Современные технологии в подготовке к сдаче нормативов ГТО",                createdAt: "2026-03-17T21:49:00Z" },
-  { id: "8", workType: "Реферат",  topic: "Использование пищевых добавок в ресторанных технологиях",                   createdAt: "2026-03-17T21:49:00Z" },
+  { id: "1", workType: "ВКР",       topic: "Разработка системы мониторинга качества ПО на основе машинного обучения",           createdAt: "2026-03-31T10:12:00Z" },
+  { id: "2", workType: "Курсовая",  topic: "Рынок электромобилей в России: тенденции и перспективы 2025–2030",                  createdAt: "2026-03-31T08:47:00Z" },
+  { id: "3", workType: "Реферат",   topic: "Нейропластичность мозга: как обучение изменяет структуру нейронных связей",         createdAt: "2026-03-30T22:30:00Z" },
+  { id: "4", workType: "Эссе",      topic: "Человек и машина: этические вызовы искусственного интеллекта в XXI веке",           createdAt: "2026-03-30T19:15:00Z" },
+  { id: "5", workType: "Доклад",    topic: "Квантовые вычисления: принципы работы и практические применения сегодня",            createdAt: "2026-03-30T16:40:00Z" },
+  { id: "6", workType: "Курсовая",  topic: "Психологические методы управления стрессом у студентов в период сессии",            createdAt: "2026-03-30T13:22:00Z" },
+  { id: "7", workType: "Реферат",   topic: "Экологические последствия таяния арктических льдов для мировой экономики",          createdAt: "2026-03-30T09:55:00Z" },
+  { id: "8", workType: "Сочинение", topic: "Образ маленького человека в русской литературе XIX века: от Гоголя до Достоевского", createdAt: "2026-03-29T21:18:00Z" },
 ];
+
+const WORK_TYPE_COLORS: Record<string, string> = {
+  "Сочинение": "#7C3AED",
+  "Эссе":      "#4F46E5",
+  "Доклад":    "#0891B2",
+  "Реферат":   "#2563EB",
+  "Курсовая":  "#D97706",
+  "ВКР":       "#DC2626",
+};
+
+const WORK_TYPE_ICONS: Record<string, string> = {
+  "Сочинение": "✍️",
+  "Эссе":      "📝",
+  "Доклад":    "📋",
+  "Реферат":   "📄",
+  "Курсовая":  "📚",
+  "ВКР":       "🎓",
+};
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", {
@@ -157,9 +218,27 @@ export default function Home() {
   const [pages, setPages]                     = useState(WORK_PAGES["Реферат"].default);
   const [loading, setLoading]                 = useState(false);
   const [result, setResult]                   = useState<ReferatResult | null>(null);
-  const [error, setError]                     = useState("");
+  const [error, setError]                     = useState<{ message: string; status: number } | null>(null);
   const [activeSection, setActiveSection]     = useState("");
   const [downloading, setDownloading]         = useState(false);
+  const [previewLoading, setPreviewLoading]   = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [modalClosing, setModalClosing]       = useState(false);
+  const { setModalOpen }                      = useModalContext();
+  const [presentationSel, setPresentationSel] = useState(false);
+  const [speechSel, setSpeechSel]             = useState(false);
+  const [extrasJobId, setExtrasJobId]         = useState<string | null>(null);
+  const [extrasGenerating, setExtrasGenerating] = useState(false);
+  const [extrasReady, setExtrasReady]         = useState<string[]>([]);
+  const [extrasError, setExtrasError]         = useState<string | null>(null);
+  const [generationId, setGenerationId]       = useState<string | null>(null);
+  const extrasProgressRef                     = useRef<number>(0);
+  const [extrasProgress, setExtrasProgress]   = useState(0);
+  const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "" });
+  const [titleUpdating, setTitleUpdating]     = useState(false);
+  const previewContainerRef                   = useRef<HTMLDivElement>(null);
+  const baseScaleRef                          = useRef<number>(1);
+  const [previewZoom, setPreviewZoom]         = useState(1);
   const [bannerDismissed, setBannerDismissed] = useState(true); // true пока не проверили
   const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
   const [recentWorks, setRecentWorks]         = useState(MOCK_RECENT);
@@ -192,7 +271,7 @@ export default function Home() {
     setPages(WORK_PAGES[type]?.default ?? 20);
     stepsRef.current = getProgressSteps(type);
     setResult(null);
-    setError("");
+    setError(null);
   }
 
   function startProgress(elapsedOffset = 0) {
@@ -289,6 +368,147 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (result) {
+      setShowResultModal(true);
+      setPresentationSel(false);
+      setSpeechSel(false);
+      setTitleForm({
+        fullName:    String(result.profile?.fullName    ?? ""),
+        university:  String(result.profile?.university  ?? ""),
+        faculty:     String(result.profile?.faculty     ?? ""),
+        department:  String(result.profile?.department  ?? ""),
+        groupNumber: String(result.profile?.groupNumber ?? ""),
+        teacherName: String(result.profile?.teacherName ?? ""),
+      });
+    }
+  }, [result]);
+
+  const DOC_WIDTH = 816; // стандартная ширина A4-страницы в docx-preview
+
+  // Применяет transform: scale к контейнеру и схлопывает лишнее пространство
+  function applyScale(container: HTMLElement, scale: number) {
+    container.style.transform = scale < 1 ? `scale(${scale})` : "";
+    container.style.transformOrigin = "top left";
+    // transform не влияет на layout — компенсируем высоту через marginBottom
+    if (scale < 1) {
+      const h = container.scrollHeight;
+      container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+    } else {
+      container.style.marginBottom = "";
+    }
+  }
+
+  // Рендер превью — вызывается и при открытии модала, и при обновлении титульника
+  async function renderPreview(data: ReferatResult) {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    // Сбрасываем предыдущий рендер
+    container.innerHTML = "";
+    container.style.transform = "";
+    container.style.marginBottom = "";
+
+    // Читаем целевую ширину ДО фиксации контейнера
+    const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
+    const isDesktop = targetWidth >= DOC_WIDTH;
+
+    if (isDesktop) {
+      // Десктоп: растягиваем на всю ширину контейнера
+      container.style.width = "100%";
+    } else {
+      // Мобиль: фиксируем 816px чтобы ResizeObserver не сбрасывал наш scale
+      container.style.width = `${DOC_WIDTH}px`;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const response = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const { renderAsync } = await import("docx-preview");
+
+      if (isDesktop) {
+        // Десктоп: ignoreWidth растягивает документ на всю ширину контейнера
+        await renderAsync(blob, container, undefined, {
+          className: "docx-viewer",
+          inWrapper: true,
+          ignoreWidth: true,
+          ignoreHeight: false,
+        });
+        container.style.width = "100%";
+        baseScaleRef.current = 1;
+        setPreviewZoom(1);
+      } else {
+        // Мобиль: фиксированная ширина + transform scale
+        await renderAsync(blob, container, undefined, {
+          className: "docx-preview",
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+        });
+        const base = Math.min(1, targetWidth / DOC_WIDTH);
+        baseScaleRef.current = base;
+        setPreviewZoom(1);
+        applyScale(container, base);
+      }
+    } catch (e) {
+      console.error("[Preview] Error:", e);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // Применяем масштаб когда пользователь нажимает +/−
+  function applyZoom(delta: number) {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const next = Math.min(2, Math.max(0.3, previewZoom + delta));
+    setPreviewZoom(next);
+    applyScale(container, baseScaleRef.current * next);
+  }
+
+  // Блокируем скролл и сигналим в контекст когда модал открыт
+  useEffect(() => {
+    if (showResultModal) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      document.body.classList.add("modal-open");
+      setModalOpen(true);
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      document.body.classList.remove("modal-open");
+      setModalOpen(false);
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      document.body.classList.remove("modal-open");
+      setModalOpen(false);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResultModal]);
+
+  // Запускаем превью когда модал открылся (showResultModal гарантирует что ref доступен)
+  useEffect(() => {
+    if (!result || !showResultModal) return;
+    renderPreview(result);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResultModal]);
+
+  async function handleTitleUpdate() {
+    if (!result) return;
+    setTitleUpdating(true);
+    const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...titleForm } };
+    await renderPreview(updated);
+    setTitleUpdating(false);
+  }
+
   async function runGeneration(t: string, p: number, wt: string) {
     console.log('[Refai] Начало генерации:', { topic: t, workType: wt, pages: p });
     stepsRef.current = getProgressSteps(wt);
@@ -300,7 +520,7 @@ export default function Home() {
     sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: _gen.startedAt }));
 
     setLoading(true);
-    setError("");
+    setError(null);
     setResult(null);
     setActiveSection("");
     setTotalProgress(0);
@@ -327,17 +547,20 @@ export default function Home() {
           // Соединение прервалось, но работа сохранена — направляем в Мои работы
           const errMsg = "Соединение прервалось, но работа сохранена. Найдите её в разделе «Мои работы».";
           _gen.resolve(null, errMsg);
-          setError(errMsg);
+          setError({ message: errMsg, status: response.status });
           return;
         }
         const errMsg = data.error || "Произошла ошибка";
         _gen.resolve(null, errMsg);
-        setError(errMsg);
+        setError({ message: errMsg, status: response.status });
       } else {
         console.log('[Refai] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
-        _gen.resolve(data as ReferatResult, "");
-        setResult(data);
-        if (data.structure?.length > 0) setActiveSection(data.structure[0]);
+        // Извлекаем _generationId из ответа (не должен попасть в ReferatResult)
+        const { _generationId, ...resultData } = data as ReferatResult & { _generationId?: string };
+        if (_generationId) { setGenerationId(_generationId); _extrasGenId = _generationId; }
+        _gen.resolve(resultData as ReferatResult, "");
+        setResult(resultData as ReferatResult);
+        if (resultData.structure?.length > 0) setActiveSection(resultData.structure[0]);
         if (isYukassa) setTrialUsed(true);
       }
     } catch (err) {
@@ -349,7 +572,7 @@ export default function Home() {
       }
       const errMsg = "Не удалось подключиться к серверу";
       _gen.resolve(null, errMsg);
-      setError(errMsg);
+      setError({ message: errMsg, status: 0 });
     } finally {
       if (!isUnloadingRef.current) {
         currentGenRef.current = null;
@@ -358,6 +581,109 @@ export default function Home() {
         setLoading(false);
       }
     }
+  }
+
+  async function triggerExtrasGeneration(items: string[], savedResult?: ReferatResult) {
+    const src = savedResult ?? result;
+    if (!src) return;
+    _extras.clear();
+    _extrasPollingStarted = false;
+    setExtrasGenerating(true);
+    setExtrasReady([]);
+    setExtrasError(null);
+    setExtrasJobId(null);
+    try {
+      const res = await fetch("/api/generate/extras", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic:     src.title || topic,
+          work_type: workType,
+          items,
+          result:    src,
+          profile:   src.profile ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.extrasJobId) {
+        setExtrasError(data.error || "Ошибка запуска генерации");
+        setExtrasGenerating(false);
+        return;
+      }
+      // Сохраняем в модульную переменную (живёт между навигациями)
+      _extras.start(data.extrasJobId);
+      setExtrasJobId(data.extrasJobId);
+    } catch {
+      setExtrasError("Сервер недоступен");
+      setExtrasGenerating(false);
+    }
+  }
+
+  async function handleExtrasPayment() {
+    const items: string[] = [];
+    if (presentationSel) items.push("presentation");
+    if (speechSel) items.push("speech");
+    if (!items.length) return;
+
+    // Для администратора — бесплатно и без редиректа
+    if (isAdmin) {
+      triggerExtrasGeneration(items);
+      return;
+    }
+
+    // Сохраняем result в sessionStorage на случай редиректа
+    try {
+      sessionStorage.setItem("pendingExtras", JSON.stringify({ result, workType, pages, topic, items }));
+    } catch {}
+
+    try {
+      const res = await fetch("/api/payment/extras", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Ошибка создания платежа"); return; }
+
+      if (data.autoSucceed) {
+        // Dev режим — сразу генерируем
+        sessionStorage.removeItem("pendingExtras");
+        triggerExtrasGeneration(items);
+      } else {
+        // Редирект на ЮКассу
+        window.location.href = data.paymentUrl;
+      }
+    } catch {
+      alert("Не удалось создать платёж. Попробуйте снова.");
+    }
+  }
+
+  async function downloadPresentation() {
+    if (!extrasJobId) return;
+    try {
+      const res = await fetch(`/api/download/presentation/${extrasJobId}`);
+      if (!res.ok) { alert("Файл недоступен"); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "presentation.pptx";
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { alert("Не удалось скачать файл."); }
+  }
+
+  async function downloadSpeech() {
+    if (!extrasJobId) return;
+    try {
+      const res = await fetch(`/api/download/speech/${extrasJobId}`);
+      if (!res.ok) { alert("Файл недоступен"); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "speech.docx";
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { alert("Не удалось скачать файл."); }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -392,7 +718,7 @@ export default function Home() {
         return;
       }
     } catch {
-      setError("Не удалось проверить статус оплаты");
+      setError({ message: "Не удалось проверить статус оплаты", status: 0 });
       return;
     }
 
@@ -496,7 +822,7 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/generations/recent")
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data) && data.length > 0) setRecentWorks(data); })
+      .then(data => { if (Array.isArray(data) && data.length >= 8) setRecentWorks(data); })
       .catch(() => {});
   }, []);
 
@@ -521,6 +847,25 @@ export default function Home() {
     autoStarted.current = true;
 
     const params = new URLSearchParams(window.location.search);
+
+    // 0. Вернулись после оплаты extras
+    if (params.get("extrasAutoGenerate") === "1") {
+      try {
+        const raw = sessionStorage.getItem("pendingExtras");
+        if (raw) {
+          const { result: savedResult, workType: savedWt, pages: savedPages, topic: savedTopic, items } = JSON.parse(raw);
+          sessionStorage.removeItem("pendingExtras");
+          window.history.replaceState({}, "", "/");
+          selectWorkType(savedWt);
+          if (savedPages) setPages(savedPages);
+          if (savedTopic) setTopic(savedTopic);
+          setResult(savedResult);
+          // Открываем модал и запускаем extras
+          setTimeout(() => triggerExtrasGeneration(items, savedResult), 600);
+        }
+      } catch {}
+      return;
+    }
 
     // 1. Вернулись после оплаты
     if (params.get("autoGenerate") === "1") {
@@ -585,7 +930,7 @@ export default function Home() {
           if (_gen.active || (_gen.done && _gen.startedAt === startedAt)) {
             stepsRef.current = getProgressSteps(wt);
             if (!_gen.done) {
-              setLoading(true); setError(""); setResult(null);
+              setLoading(true); setError(null); setResult(null);
               setTotalProgress(savedPercent); setStepIndex(0);
               // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
               // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
@@ -598,7 +943,7 @@ export default function Home() {
                 setResult(data);
                 if (data.structure?.length > 0) setActiveSection(data.structure[0]);
               } else {
-                setError(err || "Генерация не удалась");
+                setError({ message: err || "Генерация не удалась", status: 0 });
               }
               clearGenState();
               sessionStorage.removeItem("activeGeneration");
@@ -614,7 +959,7 @@ export default function Home() {
           stepsRef.current = getProgressSteps(wt);
           f5InfoRef.current = { workType: wt, startedAt };
           setLoading(true);
-          setError("");
+          setError(null);
           setResult(null);
           setTotalProgress(savedPercent);
           setF5Recovery(true);
@@ -668,6 +1013,104 @@ export default function Home() {
     return () => window.removeEventListener("pagehide", onPageHide);
   }, []);
 
+  // Анимация прогресса extras — имитируем заполнение до ~90%
+  useEffect(() => {
+    if (!extrasGenerating) {
+      extrasProgressRef.current = 0;
+      setExtrasProgress(0);
+      return;
+    }
+    extrasProgressRef.current = 5;
+    setExtrasProgress(5);
+    const id = setInterval(() => {
+      const cur = extrasProgressRef.current;
+      // Логарифмическое замедление: быстро до 40%, медленно к 88%
+      const inc = cur < 40 ? 1.5 : cur < 70 ? 0.5 : 0.15;
+      const next = Math.min(88, cur + inc);
+      extrasProgressRef.current = next;
+      setExtrasProgress(next);
+    }, 300);
+    return () => clearInterval(id);
+  }, [extrasGenerating]);
+
+  // Поллинг extras — запускается при монтировании (подключается к _extras)
+  // и перезапускается когда extrasJobId меняется
+  useEffect(() => {
+    // Если модуль уже завершён — сразу покажем результат
+    if (_extras.done) {
+      if (_extras.ready.length > 0) {
+        setExtrasGenerating(false);
+        setExtrasReady(_extras.ready);
+      }
+      return;
+    }
+
+    // Если нет активного jobId — ничего не делаем
+    const jobId = _extras.jobId ?? extrasJobId;
+    if (!jobId) return;
+
+    // Синхронизируем state с модулем
+    if (!extrasGenerating && _extras.active) setExtrasGenerating(true);
+
+    // Регистрируем колбэк (сработает когда модульный поллинг завершится)
+    _extras.listen((ready, err) => {
+      extrasProgressRef.current = 100;
+      setExtrasProgress(100);
+      setExtrasGenerating(false);
+      if (err) {
+        setExtrasError(err);
+      } else {
+        setExtrasReady(ready);
+      }
+    });
+
+    // Запускаем поллинг только если ещё не запущен (один поллинг на весь модуль)
+    if (_extrasPollingStarted) return;
+    _extrasPollingStarted = true;
+
+    async function poll() {
+      const currentJobId = _extras.jobId;
+      if (!currentJobId || _extras.done) {
+        _extrasPollingStarted = false;
+        return;
+      }
+      try {
+        const res  = await fetch(`/api/generate/extras/status/${currentJobId}`, { cache: "no-store" });
+        const data = await res.json();
+
+        if (data.status === "done") {
+          const readyItems: string[] = data.ready ?? [];
+          _extras.resolve(readyItems, "");
+          _extrasPollingStarted = false;
+          // Сохраняем extras job IDs в БД
+          try {
+            const savedGenId = _extrasGenId;
+            if (savedGenId && readyItems.length > 0) {
+              const extrasObj: Record<string, string> = {};
+              readyItems.forEach(item => { extrasObj[item] = currentJobId; });
+              fetch(`/api/generations/${savedGenId}/extras`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ extras: extrasObj }),
+              }).catch(() => {});
+            }
+          } catch {}
+          return;
+        }
+        if (data.status === "error" || data.status === "not_found") {
+          _extras.resolve([], data.error || "Ошибка генерации дополнительных материалов");
+          _extrasPollingStarted = false;
+          return;
+        }
+      } catch { /* сеть — повторим */ }
+      // status === "running" — ждём и повторяем
+      setTimeout(poll, 4_000);
+    }
+
+    poll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extrasJobId]);
+
   // Поллинг статуса после F5-восстановления
   useEffect(() => {
     if (!f5Recovery) return;
@@ -696,11 +1139,12 @@ export default function Home() {
           stopProgress();
           setF5Recovery(false);
           setLoading(false);
-          setError(
-            data.status === "not_found"
+          setError({
+            message: data.status === "not_found"
               ? "Сервер был перезапущен во время генерации. Проверьте «Мои работы» — если работа сохранилась, она там."
-              : "Генерация завершилась с ошибкой. Проверьте «Мои работы»."
-          );
+              : "Генерация завершилась с ошибкой. Проверьте «Мои работы».",
+            status: 500,
+          });
           console.log("[Refai] F5-восстановление:", data.status);
         }
         // status === "running" | "idle" — продолжаем ждать
@@ -968,8 +1412,15 @@ export default function Home() {
           <div className={styles.error}>
             <div className={styles.errorIcon}>⚠</div>
             <div className={styles.errorBody}>
-              <p className={styles.errorTitle}>Генерация временно недоступна</p>
-              <p className={styles.errorText}>{error}. Попробуйте позже — обычно это занимает несколько минут.</p>
+              <p className={styles.errorTitle}>
+                {error.status === 429
+                  ? "Генерация уже запущена"
+                  : "Генерация временно недоступна"}
+              </p>
+              <p className={styles.errorText}>
+                {error.message}
+                {error.status !== 429 && ". Попробуйте позже — обычно это занимает несколько минут."}
+              </p>
             </div>
           </div>
         </div>
@@ -1050,13 +1501,19 @@ export default function Home() {
               Последние <span className={styles.recentAccent}>проекты</span>
             </h2>
             <div className={styles.recentGrid}>
-              {(showAllWorks ? recentWorks : recentWorks.slice(0, 8)).map(w => (
-                <div key={w.id} className={styles.recentCard}>
-                  <span className={styles.recentBadge}>{w.workType}</span>
-                  <p className={styles.recentWorkTitle}>{w.topic}</p>
-                  <span suppressHydrationWarning className={styles.recentDate}>{formatDate(w.createdAt)}</span>
-                </div>
-              ))}
+              {(showAllWorks ? recentWorks : recentWorks.slice(0, 8)).map(w => {
+                const typeColor = WORK_TYPE_COLORS[w.workType] || "#6366F1";
+                const typeIcon  = WORK_TYPE_ICONS[w.workType]  || "📄";
+                return (
+                  <div key={w.id} className={styles.recentCard} style={{ borderLeft: `3px solid ${typeColor}` }}>
+                    <span className={styles.recentBadge} style={{ color: typeColor }}>
+                      <span className={styles.recentBadgeIcon}>{typeIcon}</span>{w.workType}
+                    </span>
+                    <p className={styles.recentWorkTitle}>{w.topic}</p>
+                    <span suppressHydrationWarning className={styles.recentDate}>{formatDate(w.createdAt)}</span>
+                  </div>
+                );
+              })}
             </div>
             {recentWorks.length > 8 && !showAllWorks && (
               <button className={styles.showMoreBtn} onClick={() => setShowAllWorks(true)}>
@@ -1136,74 +1593,224 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Результат ── */}
-      {result && (
-        <section className={styles.result}>
-          <div className={styles.docHeader}>
-            <div className={styles.docHeaderTop}>
-              <h2 className={styles.docTitle}>{result.title}</h2>
-              <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
-                {downloading ? (
-                  <span className={styles.buttonLoading}>
-                    <span className={styles.spinner}/>Создаём...
-                  </span>
-                ) : "⬇ Скачать DOCX"}
-              </button>
+      {/* ── Модальное окно результата (portal → вне main, поверх header) ── */}
+      {result && showResultModal && createPortal((() => {
+        const hasTitlePage = ["Реферат", "Курсовая", "ВКР", "Доклад"].includes(workType);
+        const hasSources   = !["Эссе", "Сочинение"].includes(workType);
+        const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 219 : 0);
+        const closeModal   = () => { setModalClosing(true); setTimeout(() => { setShowResultModal(false); setModalClosing(false); }, 200); };
+        const DownloadBtn  = () => (
+          <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
+            {downloading
+              ? <span className={styles.buttonLoading}><span className={styles.spinner}/>Создаём файл...</span>
+              : <><img src="/docx-icon.png" alt="" className={styles.downloadIcon} />Скачать DOCX</>
+            }
+          </button>
+        );
+        const ExtrasStatus = () => {
+          if (extrasGenerating) return (
+            <div className={styles.extrasLoading}>
+              <div className={styles.extrasProgressRow}>
+                <span className={styles.extrasProgressLabel}>Генерируем дополнительные материалы...</span>
+                <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
+              </div>
+              <div className={styles.extrasProgressBar}>
+                <div className={styles.extrasProgressFill} style={{ width: `${extrasProgress}%` }} />
+              </div>
             </div>
-            <div className={styles.metaGrid}>
-              {Object.entries(result.meta).map(([key, val]) => (
-                <div key={key} className={styles.metaItem}>
-                  <span className={styles.metaKey}>{key}</span>
-                  <span className={styles.metaVal}>{String(val)}</span>
-                </div>
-              ))}
+          );
+          if (extrasError) return (
+            <p className={styles.extrasErrorMsg}>{extrasError}</p>
+          );
+          if (extrasReady.length > 0) return (
+            <div className={styles.extrasDownloads}>
+              {extrasReady.includes("presentation") && (
+                <button className={styles.extrasDownloadBtn} onClick={downloadPresentation}>
+                  <img src="/pptx-icon.svg" alt="" className={styles.extrasDownloadIcon} />
+                  Скачать презентацию .pptx
+                </button>
+              )}
+              {extrasReady.includes("speech") && (
+                <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
+                  <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
+                  Скачать выступление .txt
+                </button>
+              )}
             </div>
-          </div>
+          );
+          return null;
+        };
 
-          <div className={styles.toc}>
-            <h3 className={styles.tocTitle}>Содержание</h3>
-            <ol className={styles.tocList}>
-              {result.structure.map((section, i) => (
-                <li
-                  key={i}
-                  className={`${styles.tocItem} ${activeSection === section ? styles.tocItemActive : ""}`}
-                  onClick={() => toggleSection(section)}
-                >
-                  <span>{section}</span>
-                  <span className={styles.tocDots}/>
-                  <span className={styles.tocPage}>{i + 1}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className={styles.sections}>
-            {result.structure.map(section => {
-              const text   = result.content[section];
-              if (!text) return null;
-              const isOpen = activeSection === section;
-              return (
-                <div key={section} className={`${styles.sectionBlock} ${isOpen ? styles.sectionOpen : ""}`}>
-                  <button className={styles.sectionToggle} onClick={() => toggleSection(section)}>
-                    <span>{section}</span>
-                    <span className={styles.chevron}>{isOpen ? "▲" : "▼"}</span>
+        const Toggles = () => (
+          <div className={styles.extrasSection}>
+            {!extrasGenerating && extrasReady.length === 0 && (
+              <>
+                <label className={styles.toggleRow}>
+                  <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
+                  <span className={styles.toggleSlider} />
+                  <span className={styles.toggleLabel}>📊 Презентация</span>
+                  <span className={styles.togglePrice}>+199 ₽</span>
+                </label>
+                <label className={styles.toggleRow}>
+                  <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
+                  <span className={styles.toggleSlider} />
+                  <span className={styles.toggleLabel}>🎤 Текст выступления</span>
+                  <span className={styles.togglePrice}>+219 ₽</span>
+                </label>
+                {extrasTotal > 0 && (
+                  <button className={styles.payExtrasBtn} onClick={handleExtrasPayment}>
+                    Оплатить {extrasTotal} ₽
                   </button>
-                  {isOpen && <div className={styles.sectionContent}>{renderContent(text)}</div>}
-                </div>
-              );
-            })}
+                )}
+              </>
+            )}
+            <ExtrasStatus />
           </div>
+        );
+        return (
+          <div className={`${styles.modalOverlay} ${modalClosing ? styles.modalOverlayClosing : ""}`}>
+            <div className={`${styles.modalBox} ${modalClosing ? styles.modalBoxClosing : ""}`}>
 
-          <div className={styles.sources}>
-            <h3 className={styles.sourcesTitle}>Список литературы</h3>
-            <ul className={styles.sourcesList}>
-              {result.sources.map((src, i) => (
-                <li key={i} className={styles.sourceItem}>{src}</li>
-              ))}
-            </ul>
+              {/* Крестик — только на десктопе */}
+              <button className={styles.modalClose} onClick={closeModal}>✕</button>
+
+              {/* Мобильная шапка (скрыта на десктопе) */}
+              <div className={styles.mobileModalHeader}>
+                <div>
+                  <h2 className={styles.modalTitle}>{result.title}</h2>
+                  <div className={styles.modalBadges}>
+                    <span className={styles.badge}>{workType}</span>
+                    <span className={styles.badge}>{pages} стр.</span>
+                  </div>
+                </div>
+                <button className={styles.mobileCloseBtn} onClick={closeModal}>✕</button>
+              </div>
+
+              {/* Левый столбец — предпросмотр */}
+              <div className={styles.modalLeft}>
+                {previewLoading && (
+                  <div className={styles.previewSpinner}>
+                    <span className={styles.spinnerDark}/> Загружаем предпросмотр...
+                  </div>
+                )}
+                <div ref={previewContainerRef} className={styles.previewContainer} />
+              </div>
+
+              {/* Кнопки зума — вне скролла, прибиты к углу modalBox */}
+              {!previewLoading && (
+                <div className={styles.zoomControls}>
+                  <button className={styles.zoomBtn} onClick={() => applyZoom(0.1)} title="Увеличить">＋</button>
+                  <span className={styles.zoomLevel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
+                  <button className={styles.zoomBtn} onClick={() => applyZoom(-0.1)} title="Уменьшить">－</button>
+                </div>
+              )}
+
+              {/* Правый столбец — десктоп (скрыт на мобильном) */}
+              <div className={styles.modalRight}>
+                <h2 className={styles.modalTitle}>{result.title}</h2>
+                <div className={styles.modalBadges}>
+                  <span className={styles.badge}>{workType}</span>
+                  <span className={styles.badge}>{pages} стр.</span>
+                </div>
+                <hr className={styles.modalDivider} />
+                <ul className={styles.featureList}>
+                  <li>✅ Оформление по ГОСТ 7.32-2017</li>
+                  <li>✅ Уникальность текста 80%+</li>
+                  {hasSources && <li>✅ Реальные источники 2020–2025</li>}
+                  <li>✅ Готов к скачиванию</li>
+                </ul>
+                <hr className={styles.modalDivider} />
+                <DownloadBtn />
+                <Toggles />
+                {hasTitlePage && (
+                  <>
+                    <hr className={styles.modalDivider} />
+                    <div className={styles.titleSection}>
+                      <p className={styles.titleSectionHeading}>Титульный лист</p>
+                      {(["fullName", "university", "faculty", "department", "groupNumber", "teacherName"] as (keyof TitleForm)[]).map(field => (
+                        <input key={field} className={styles.titleInput}
+                          placeholder={{ fullName: "ФИО студента", university: "Университет", faculty: "Факультет", department: "Кафедра", groupNumber: "Группа", teacherName: "Научный руководитель" }[field]}
+                          value={titleForm[field]}
+                          onChange={e => setTitleForm(prev => ({ ...prev, [field]: e.target.value }))}
+                        />
+                      ))}
+                      <button className={styles.updateDocBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
+                        {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                <p className={styles.savedNote}>Работа сохранена в личном кабинете</p>
+              </div>
+
+              {/* Нижняя панель — только мобильный (sticky) */}
+              <div className={styles.mobileBottom}>
+                {/* Зум-кнопки (мобиль) */}
+                {!previewLoading && (
+                  <div className={styles.mobileZoomRow}>
+                    <button className={styles.mobileZoomBtn} onClick={() => applyZoom(0.1)}>＋</button>
+                    <span className={styles.mobileZoomLabel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
+                    <button className={styles.mobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
+                  </div>
+                )}
+                <DownloadBtn />
+                {!extrasGenerating && extrasReady.length === 0 && (
+                  <div className={styles.mobileToggles}>
+                    <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
+                      <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
+                      <span className={styles.mobileChipIcon}>📊</span>
+                      <span className={styles.mobileChipLabel}>Презентация</span>
+                      <span className={styles.mobileChipPrice}>+199 ₽</span>
+                      <span className={styles.mobileChipToggle}><span /></span>
+                    </label>
+                    <label className={`${styles.mobileToggleChip} ${speechSel ? styles.mobileToggleChipActive : ""}`}>
+                      <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
+                      <span className={styles.mobileChipIcon}>🎤</span>
+                      <span className={styles.mobileChipLabel}>Выступление</span>
+                      <span className={styles.mobileChipPrice}>+219 ₽</span>
+                      <span className={styles.mobileChipToggle}><span /></span>
+                    </label>
+                  </div>
+                )}
+                {!extrasGenerating && extrasReady.length === 0 && extrasTotal > 0 && (
+                  <button className={styles.payExtrasBtn} onClick={handleExtrasPayment}>
+                    Оплатить {extrasTotal} ₽
+                  </button>
+                )}
+                {extrasGenerating && (
+                  <div className={styles.extrasLoading}>
+                    <div className={styles.extrasProgressRow}>
+                      <span className={styles.extrasProgressLabel}>Генерируем...</span>
+                      <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
+                    </div>
+                    <div className={styles.extrasProgressBar}>
+                      <div className={styles.extrasProgressFill} style={{ width: `${extrasProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+                {extrasError && <p className={styles.extrasErrorMsg}>{extrasError}</p>}
+                {extrasReady.length > 0 && (
+                  <div className={styles.extrasDownloadsMobile}>
+                    {extrasReady.includes("presentation") && (
+                      <button className={styles.extrasDownloadBtn} onClick={downloadPresentation}>
+                        <img src="/pptx-icon.svg" alt="" className={styles.extrasDownloadIcon} />
+                        Презентация .pptx
+                      </button>
+                    )}
+                    {extrasReady.includes("speech") && (
+                      <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
+                        <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
+                        Выступление .txt
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
-        </section>
-      )}
+        );
+      })(), document.body)}
 
     </main>
   );

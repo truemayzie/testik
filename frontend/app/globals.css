@@ -71,3 +71,28 @@ main, .page-transition {
   --radius-sm: 8px;
   --radius-lg: 20px;
 }
+
+/* Когда модальное окно результата открыто — скрываем виджет генерации */
+body.modal-open [class*="GenerationWidget_widget"] {
+  display: none !important;
+}
+
+/* Десктоп: DOCX-превью растягивается на всю ширину левого блока */
+@media (min-width: 769px) {
+  .docx-viewer {
+    width: 100% !important;
+  }
+  .docx-viewer section {
+    width: 100% !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    margin: 0 auto;
+    padding: 40px !important;
+  }
+}
+
+/* Когда модалка открыта — шапка уходит под оверлей */
+body.modal-open header {
+  z-index: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

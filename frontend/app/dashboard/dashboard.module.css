@@ -497,6 +497,39 @@
 .downloadBtn:hover:not(:disabled) { background: #4F46E5; }
 .downloadBtn:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* Badges в карточке для extras */
+.cardBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.extrasBadgePres {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #EF4444;
+  border-radius: 4px;
+  padding: 2px 7px;
+  display: inline-block;
+}
+
+.extrasBadgeSpeech {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #F59E0B;
+  border-radius: 4px;
+  padding: 2px 7px;
+  display: inline-block;
+}
+
 /* Кнопка удалить */
 .deleteBtn {
   font-size: 0.82rem;
@@ -520,9 +553,9 @@
 .deleteBtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ══════════════════════════════════════════
-   MODAL VIEWER
+   DOCX-MODAL (новый, portal)
 ══════════════════════════════════════════ */
-.modalOverlay {
+.docModalOverlay {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.65);
@@ -940,5 +973,439 @@
 
   .modalBody {
     padding: 16px;
+  }
+}
+
+/* ══════════════════════════════════════════
+   DOCX-MODAL (portal) — новые стили
+══════════════════════════════════════════ */
+
+/* Overlay */
+.docModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 30, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: docOverlayIn 0.2s ease;
+}
+
+@keyframes docOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.docModalOverlayClosing { animation: docOverlayOut 0.2s ease forwards; }
+
+@keyframes docOverlayOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Box: 2-column grid — плавающий центрированный попап */
+.docModalBox {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: 1fr;
+  width: min(1100px, 96vw);
+  height: min(88vh, 860px);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+  animation: docBoxIn 0.25s ease;
+  overflow: hidden;
+}
+
+@keyframes docBoxIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.docModalBoxClosing { animation: docBoxOut 0.2s ease forwards; }
+
+@keyframes docBoxOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.98); }
+}
+
+/* Close button (desktop) */
+.docModalClose {
+  position: absolute;
+  top: 12px; right: 316px;
+  z-index: 10;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #E2E8F0;
+  color: #64748B;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.docModalClose:hover {
+  background: #FEE2E2;
+  border-color: #FECACA;
+  color: #DC2626;
+}
+
+/* Left column: preview */
+.docModalLeft {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  overflow-y: auto;
+  background: #F1F5F9;
+  position: relative;
+  min-width: 0;
+}
+
+.docPreviewContainer {
+  min-height: 100%;
+  padding: 16px;
+}
+
+.docPreviewSpinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #64748B;
+  font-size: 0.88rem;
+  background: #F1F5F9;
+  z-index: 5;
+}
+
+.docSpinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid rgba(99,102,241,0.15);
+  border-top-color: #6366F1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* docZoomControls удалён — зум только в мобильной нижней панели */
+
+/* Right column: info panel */
+.docModalRight {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 22px;
+  overflow-y: auto;
+  background: #fff;
+  border-left: 1px solid #E2E8F0;
+}
+
+.docModalTitle {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.35;
+}
+
+.docModalBadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.docBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #6366F1;
+  background: #EEF2FF;
+  border-radius: 5px;
+  padding: 3px 9px;
+}
+
+.docExtrasBadgePres {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #EF4444;
+  border-radius: 4px;
+  padding: 2px 7px;
+  display: inline-block;
+}
+
+.docExtrasBadgeSpeech {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #F59E0B;
+  border-radius: 4px;
+  padding: 2px 7px;
+  display: inline-block;
+}
+
+.docDivider {
+  border: none;
+  border-top: 1px solid #E2E8F0;
+  margin: 0;
+}
+
+.docDownloadBtn {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366F1, #4F46E5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 0.2s, transform 0.2s;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+}
+.docDownloadBtn:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
+.docDownloadBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.docDownloadIcon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.docBtnSpinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.docExtrasHeading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94A3B8;
+  margin: 0;
+}
+
+.docExtrasDownloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docExtrasDownloadBtn {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid #E2E8F0;
+  cursor: pointer;
+  background: #F8FAFC;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  text-align: left;
+}
+.docExtrasDownloadBtn:hover {
+  border-color: #6366F1;
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.docShareBtn {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  cursor: pointer;
+  background: #F8FAFC;
+  color: #64748B;
+  transition: all 0.2s;
+}
+.docShareBtn:hover { border-color: #6366F1; color: #6366F1; background: #EEF2FF; }
+
+/* Mobile header (hidden on desktop) */
+.docMobileHeader {
+  display: none;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #E2E8F0;
+  background: #fff;
+}
+
+.docMobileCloseBtn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #64748B;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.docMobileCloseBtn:hover { background: #FEE2E2; border-color: #FECACA; color: #DC2626; }
+
+/* Mobile bottom panel (hidden on desktop) */
+.docMobileBottom {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 20px;
+  border-top: 1px solid #E2E8F0;
+  background: #fff;
+}
+
+.docMobileZoomRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.docMobileZoomBtn {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #334155;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.docMobileZoomBtn:hover { background: #EEF2FF; border-color: #6366F1; color: #6366F1; }
+
+.docMobileZoomLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748B;
+  min-width: 40px;
+  text-align: center;
+}
+
+.docExtrasDownloadsMobile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.docExtrasDownloadBtnSmall {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 1.5px solid #E2E8F0;
+  cursor: pointer;
+  background: #F8FAFC;
+  color: #334155;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.docExtrasDownloadBtnSmall:hover { border-color: #6366F1; background: #EEF2FF; color: #4F46E5; }
+
+/* Zoom buttons (inside modal on MOBILE only) */
+.docZoomBtn {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.92);
+  color: #334155;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: all 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.docZoomBtn:hover { background: #fff; border-color: #6366F1; color: #6366F1; }
+
+.docZoomLevel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748B;
+  background: rgba(255,255,255,0.9);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* ── Mobile overrides ── */
+@media (max-width: 768px) {
+  .docModalOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .docModalBox {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    width: 100%;
+    height: 92dvh;
+    border-radius: 20px 20px 0 0;
+    overflow: hidden;
+  }
+
+  .docModalClose { display: none; }
+
+  .docMobileHeader {
+    display: flex;
+    grid-row: 1;
+  }
+
+  .docModalLeft {
+    grid-column: 1;
+    grid-row: 2;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .docModalRight { display: none; }
+
+  .docMobileBottom {
+    display: flex;
+    grid-row: 3;
   }
 }

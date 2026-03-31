@@ -1,7 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import styles from "./dashboard.module.css";
 
@@ -13,6 +14,7 @@ type Generation = {
   status: string;
   createdAt: string;
   slug: string | null;
+  extras: string | null; // JSON: {"presentation":"job_id","speech":"job_id"}
 };
 
 type ReferatResult = {
@@ -23,6 +25,18 @@ type ReferatResult = {
   meta: Record<string, string | number>;
 };
 
+type ViewingGen = {
+  id: string;
+  topic: string;
+  workType: string;
+  pages: number;
+  slug: string | null;
+  extras: Record<string, string> | null;
+  result: ReferatResult;
+};
+
+const DOC_WIDTH = 816;
+
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -32,10 +46,14 @@ export default function DashboardPage() {
   const [deleting, setDeleting]       = useState<string | null>(null);
   const [copiedId, setCopiedId]       = useState<string | null>(null);
 
-  // Просмотр работы
-  const [viewing, setViewing]         = useState<ReferatResult | null>(null);
+  // DOCX-предпросмотр
+  const [viewingGen, setViewingGen]   = useState<ViewingGen | null>(null);
+  const [viewingClosing, setViewingClosing] = useState(false);
   const [loadingView, setLoadingView] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const baseScaleRef        = useRef<number>(1);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
@@ -52,18 +70,99 @@ export default function DashboardPage() {
 
   // Закрыть по Escape
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") closeViewer();
-    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeViewer(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Заблокировать скролл страницы при открытом модале
+  // Блокировать скролл
   useEffect(() => {
-    document.body.style.overflow = viewing ? "hidden" : "";
+    document.body.style.overflow = viewingGen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [viewing]);
+  }, [viewingGen]);
+
+  function applyScale(container: HTMLElement, scale: number) {
+    container.style.transform = scale < 1 ? `scale(${scale})` : "";
+    container.style.transformOrigin = "top left";
+    if (scale < 1) {
+      const h = container.scrollHeight;
+      container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+    } else {
+      container.style.marginBottom = "";
+    }
+  }
+
+  async function renderPreview(data: ReferatResult) {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    container.innerHTML = "";
+    container.style.transform = "";
+    container.style.marginBottom = "";
+
+    const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
+    const isDesktop = targetWidth >= DOC_WIDTH;
+
+    if (isDesktop) {
+      container.style.width = "100%";
+    } else {
+      container.style.width = `${DOC_WIDTH}px`;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const response = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const { renderAsync } = await import("docx-preview");
+
+      if (isDesktop) {
+        await renderAsync(blob, container, undefined, {
+          className: "docx-viewer",
+          inWrapper: true,
+          ignoreWidth: true,
+          ignoreHeight: false,
+        });
+        container.style.width = "100%";
+        baseScaleRef.current = 1;
+        setPreviewZoom(1);
+      } else {
+        await renderAsync(blob, container, undefined, {
+          className: "docx-preview",
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+        });
+        const base = Math.min(1, targetWidth / DOC_WIDTH);
+        baseScaleRef.current = base;
+        setPreviewZoom(1);
+        applyScale(container, base);
+      }
+    } catch (e) {
+      console.error("[DashPreview] Error:", e);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function applyZoom(delta: number) {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const next = Math.min(2, Math.max(0.3, previewZoom + delta));
+    setPreviewZoom(next);
+    applyScale(container, baseScaleRef.current * next);
+  }
+
+  // Запускаем превью когда модал открылся и ref доступен
+  useEffect(() => {
+    if (!viewingGen) return;
+    renderPreview(viewingGen.result);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingGen?.id]);
 
   async function handleOpen(id: string) {
     setLoadingView(id);
@@ -71,8 +170,20 @@ export default function DashboardPage() {
       const res  = await fetch(`/api/generations/${id}`);
       const data = await res.json();
       const result: ReferatResult = data.result;
-      setViewing(result);
-      setActiveSection(result.structure?.[0] ?? "");
+      const gen = generations.find(g => g.id === id);
+      let extrasObj: Record<string, string> | null = null;
+      if (gen?.extras) {
+        try { extrasObj = JSON.parse(gen.extras); } catch {}
+      }
+      setViewingGen({
+        id:      data.id,
+        topic:   gen?.topic ?? "",
+        workType: gen?.workType ?? "Реферат",
+        pages:   gen?.pages ?? 0,
+        slug:    gen?.slug ?? null,
+        extras:  extrasObj,
+        result,
+      });
     } catch {
       alert("Не удалось загрузить работу");
     } finally {
@@ -81,34 +192,28 @@ export default function DashboardPage() {
   }
 
   function closeViewer() {
-    setViewing(null);
-    setActiveSection("");
+    setViewingClosing(true);
+    setTimeout(() => { setViewingGen(null); setViewingClosing(false); }, 200);
   }
 
-  function toggleSection(section: string) {
-    setActiveSection(prev => prev === section ? "" : section);
-  }
-
-  async function handleDownload(id: string) {
-    setDownloading(id);
+  async function handleDownloadDocx(gen?: ViewingGen) {
+    const src = gen ?? viewingGen;
+    if (!src) return;
+    const key = gen ? gen.id : "viewer";
+    setDownloading(key);
     try {
-      const res    = await fetch(`/api/generations/${id}`);
-      const data   = await res.json();
-      const result: ReferatResult = data.result;
       const docxRes = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result),
+        body: JSON.stringify(src.result),
       });
       if (!docxRes.ok) throw new Error();
       const blob = await docxRes.blob();
       const url  = window.URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = `${result.title.replace(/[«»:]/g, "").trim()}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.download = `${src.result.title.replace(/[«»:]/g, "").trim()}.docx`;
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
     } catch {
       alert("Не удалось скачать файл");
@@ -117,30 +222,22 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleDownloadFromViewer() {
-    if (!viewing) return;
-    setDownloading("viewer");
+  async function handleDownloadExtra(type: "presentation" | "speech") {
+    if (!viewingGen?.extras) return;
+    const jobId = viewingGen.extras[type];
+    if (!jobId) return;
+    const ext  = type === "presentation" ? "pptx" : "docx";
+    const name = type === "presentation" ? "presentation" : "speech";
     try {
-      const docxRes = await fetch("/api/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(viewing),
-      });
-      if (!docxRes.ok) throw new Error();
-      const blob = await docxRes.blob();
+      const res = await fetch(`/api/download/${name}/${jobId}`);
+      if (!res.ok) { alert("Файл недоступен. Перегенерируйте дополнительные материалы."); return; }
+      const blob = await res.blob();
       const url  = window.URL.createObjectURL(blob);
       const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `${viewing.title.replace(/[«»:]/g, "").trim()}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = `${name}.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      alert("Не удалось скачать файл");
-    } finally {
-      setDownloading(null);
-    }
+    } catch { alert("Не удалось скачать файл."); }
   }
 
   async function handleDelete(id: string) {
@@ -161,34 +258,9 @@ export default function DashboardPage() {
     });
   }
 
-  function renderContent(text: string) {
-    const parts = text.split(/(\[TABLE\][\s\S]*?\[\/TABLE\])/g);
-    return parts.map((part, i) => {
-      if (part.startsWith("[TABLE]")) {
-        try {
-          const json = part.replace("[TABLE]", "").replace("[/TABLE]", "").trim();
-          const data = JSON.parse(json);
-          return (
-            <div key={i} className={styles.tableWrapper}>
-              {data.caption && <p className={styles.tableCaption}>{data.caption}</p>}
-              <table className={styles.table}>
-                <thead>
-                  <tr>{data.headers.map((h: string, j: number) => <th key={j} className={styles.th}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row: string[], j: number) => (
-                    <tr key={j}>{row.map((cell: string, k: number) => <td key={k} className={styles.td}>{cell}</td>)}</tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        } catch { return null; }
-      }
-      return part.split("\n").filter(p => p.trim()).map((para, j) => (
-        <p key={`${i}-${j}`} className={styles.para}>{para}</p>
-      ));
-    });
+  function parseExtras(raw: string | null): Record<string, string> | null {
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
   }
 
   if (status === "loading" || status === "unauthenticated") {
@@ -206,11 +278,9 @@ export default function DashboardPage() {
 
       {/* ── Hero-баннер ── */}
       <div className={styles.heroBanner}>
-        {/* Декоративные фигуры */}
         <div className={styles.heroShape1} />
         <div className={styles.heroShape2} />
         <div className={styles.heroShape3} />
-        {/* Декоративные карточки-документы */}
         <div className={styles.heroDocCards}>
           <div className={styles.heroDocCard}><div className={styles.hdLine}/><div className={styles.hdLine}/><div className={styles.hdLineShort}/><span>РЕФЕРАТ</span></div>
           <div className={`${styles.heroDocCard} ${styles.heroDocCardAlt}`}><div className={styles.hdLine}/><div className={styles.hdLine}/><div className={styles.hdLineShort}/><span>ЭССЕ</span></div>
@@ -244,7 +314,6 @@ export default function DashboardPage() {
       </div>
 
       <main className={styles.main}>
-        {/* Список работ */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Мои работы</h2>
 
@@ -261,168 +330,253 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className={styles.list}>
-              {generations.map(gen => (
-                <div key={gen.id} className={styles.card}>
-                  <div
-                    className={styles.cardLeft}
-                    onClick={() => handleOpen(gen.id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={e => e.key === "Enter" && handleOpen(gen.id)}
-                  >
-                    <span className={styles.workType}>{gen.workType}</span>
-                    <h3 className={styles.cardTitle}>{gen.topic}</h3>
-                    <div className={styles.cardMeta}>
-                      <span>~{gen.pages} страниц</span>
-                      <span className={styles.dot}>·</span>
-                      <span suppressHydrationWarning>{formatDate(gen.createdAt)}</span>
-                    </div>
-                  </div>
-                  <div className={styles.cardActions}>
-                    <button
-                      className={styles.openBtn}
+              {generations.map(gen => {
+                const extrasData = parseExtras(gen.extras);
+                const hasPresentation = !!extrasData?.presentation;
+                const hasSpeech = !!extrasData?.speech;
+                return (
+                  <div key={gen.id} className={styles.card}>
+                    <div
+                      className={styles.cardLeft}
                       onClick={() => handleOpen(gen.id)}
-                      disabled={loadingView === gen.id}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => e.key === "Enter" && handleOpen(gen.id)}
                     >
-                      {loadingView === gen.id
-                        ? <span className={styles.btnSpinner} />
-                        : "Открыть"}
-                    </button>
-                    <button
-                      className={styles.downloadBtn}
-                      onClick={() => handleDownload(gen.id)}
-                      disabled={downloading === gen.id}
-                    >
-                      {downloading === gen.id
-                        ? <span className={styles.btnSpinner} />
-                        : "⬇ DOCX"}
-                    </button>
-                    {gen.slug && (
-                      <div className={styles.shareWrap}>
-                        <button
-                          className={styles.shareBtn}
-                          onClick={() => {
-                            navigator.clipboard.writeText(`${window.location.origin}/preview/${gen.slug}`);
-                            setCopiedId(gen.id);
-                            setTimeout(() => setCopiedId(null), 2000);
-                          }}
-                          title="Поделиться"
-                        >
-                          🔗
-                        </button>
-                        {copiedId === gen.id && (
-                          <span className={styles.copiedTooltip}>Скопировано</span>
+                      <div className={styles.cardBadges}>
+                        <span className={styles.workType}>{gen.workType}</span>
+                        {hasPresentation && (
+                          <span className={styles.extrasBadgePres}>Презентация</span>
+                        )}
+                        {hasSpeech && (
+                          <span className={styles.extrasBadgeSpeech}>Выступление</span>
                         )}
                       </div>
-                    )}
-                    <button
-                      className={styles.deleteBtn}
-                      onClick={() => handleDelete(gen.id)}
-                      disabled={deleting === gen.id}
-                    >
-                      {deleting === gen.id ? <span className={styles.btnSpinner} /> : "✕"}
-                    </button>
+                      <h3 className={styles.cardTitle}>{gen.topic}</h3>
+                      <div className={styles.cardMeta}>
+                        <span>~{gen.pages} страниц</span>
+                        <span className={styles.dot}>·</span>
+                        <span suppressHydrationWarning>{formatDate(gen.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className={styles.cardActions}>
+                      <button
+                        className={styles.openBtn}
+                        onClick={() => handleOpen(gen.id)}
+                        disabled={loadingView === gen.id}
+                      >
+                        {loadingView === gen.id
+                          ? <span className={styles.btnSpinner} />
+                          : "Открыть"}
+                      </button>
+                      <button
+                        className={styles.downloadBtn}
+                        onClick={async () => {
+                          setDownloading(gen.id);
+                          try {
+                            const res  = await fetch(`/api/generations/${gen.id}`);
+                            const data = await res.json();
+                            const result: ReferatResult = data.result;
+                            const docxRes = await fetch("/api/download", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(result),
+                            });
+                            if (!docxRes.ok) throw new Error();
+                            const blob = await docxRes.blob();
+                            const url  = window.URL.createObjectURL(blob);
+                            const a    = document.createElement("a");
+                            a.href     = url;
+                            a.download = `${result.title.replace(/[«»:]/g, "").trim()}.docx`;
+                            document.body.appendChild(a); a.click(); a.remove();
+                            window.URL.revokeObjectURL(url);
+                          } catch { alert("Не удалось скачать файл"); }
+                          finally { setDownloading(null); }
+                        }}
+                        disabled={downloading === gen.id}
+                      >
+                        {downloading === gen.id
+                          ? <span className={styles.btnSpinner} />
+                          : "⬇ DOCX"}
+                      </button>
+                      {gen.slug && (
+                        <div className={styles.shareWrap}>
+                          <button
+                            className={styles.shareBtn}
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/preview/${gen.slug}`);
+                              setCopiedId(gen.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            title="Поделиться"
+                          >
+                            🔗
+                          </button>
+                          {copiedId === gen.id && (
+                            <span className={styles.copiedTooltip}>Скопировано</span>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        className={styles.deleteBtn}
+                        onClick={() => handleDelete(gen.id)}
+                        disabled={deleting === gen.id}
+                      >
+                        {deleting === gen.id ? <span className={styles.btnSpinner} /> : "✕"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
       </main>
 
-      {/* ── МОДАЛЬНЫЙ ПРОСМОТР ── */}
-      {viewing && (
-        <div className={styles.modalOverlay} onClick={e => { if (e.target === e.currentTarget) closeViewer(); }}>
-          <div className={styles.modal}>
+      {/* ── DOCX-МОДАЛ (portal) ── */}
+      {viewingGen && createPortal((
+        <div
+          className={`${styles.docModalOverlay} ${viewingClosing ? styles.docModalOverlayClosing : ""}`}
+          onClick={e => { if (e.target === e.currentTarget) closeViewer(); }}
+        >
+          <div className={`${styles.docModalBox} ${viewingClosing ? styles.docModalBoxClosing : ""}`}>
 
-            {/* Modal header */}
-            <div className={styles.modalHeader}>
-              <div className={styles.modalHeaderLeft}>
-                <h2 className={styles.modalTitle}>{viewing.title}</h2>
+            {/* Крестик — только на десктопе */}
+            <button className={styles.docModalClose} onClick={closeViewer}>✕</button>
+
+            {/* Мобильная шапка */}
+            <div className={styles.docMobileHeader}>
+              <div>
+                <h2 className={styles.docModalTitle}>{viewingGen.result.title}</h2>
+                <div className={styles.docModalBadges}>
+                  <span className={styles.docBadge}>{viewingGen.workType}</span>
+                  <span className={styles.docBadge}>{viewingGen.pages} стр.</span>
+                  {viewingGen.extras?.presentation && (
+                    <span className={styles.docExtrasBadgePres}>Презентация</span>
+                  )}
+                  {viewingGen.extras?.speech && (
+                    <span className={styles.docExtrasBadgeSpeech}>Выступление</span>
+                  )}
+                </div>
               </div>
-              <div className={styles.modalHeaderActions}>
-                <button
-                  className={styles.modalDownloadBtn}
-                  onClick={handleDownloadFromViewer}
-                  disabled={downloading === "viewer"}
-                >
-                  {downloading === "viewer"
-                    ? <><span className={styles.btnSpinner} />Создаём...</>
-                    : "⬇ Скачать DOCX"}
-                </button>
-                <button className={styles.modalCloseBtn} onClick={closeViewer} aria-label="Закрыть">
-                  ✕
-                </button>
-              </div>
+              <button className={styles.docMobileCloseBtn} onClick={closeViewer}>✕</button>
             </div>
 
-            {/* Modal body */}
-            <div className={styles.modalBody}>
-
-              {/* Meta */}
-              {Object.keys(viewing.meta).length > 0 && (
-                <div className={styles.metaGrid}>
-                  {Object.entries(viewing.meta).map(([key, val]) => (
-                    <div key={key} className={styles.metaItem}>
-                      <span className={styles.metaKey}>{key}</span>
-                      <span className={styles.metaVal}>{String(val)}</span>
-                    </div>
-                  ))}
+            {/* Левый столбец — предпросмотр */}
+            <div className={styles.docModalLeft}>
+              {previewLoading && (
+                <div className={styles.docPreviewSpinner}>
+                  <span className={styles.docSpinner} /> Загружаем предпросмотр...
                 </div>
               )}
-
-              {/* TOC */}
-              <div className={styles.toc}>
-                <h3 className={styles.tocTitle}>Содержание</h3>
-                <ol className={styles.tocList}>
-                  {viewing.structure.map((section, i) => (
-                    <li
-                      key={i}
-                      className={`${styles.tocItem} ${activeSection === section ? styles.tocItemActive : ""}`}
-                      onClick={() => toggleSection(section)}
-                    >
-                      <span>{section}</span>
-                      <span className={styles.tocDots} />
-                      <span className={styles.tocPage}>{i + 1}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Sections accordion */}
-              <div className={styles.sections}>
-                {viewing.structure.map(section => {
-                  const text   = viewing.content[section];
-                  if (!text) return null;
-                  const isOpen = activeSection === section;
-                  return (
-                    <div key={section} className={`${styles.sectionBlock} ${isOpen ? styles.sectionOpen : ""}`}>
-                      <button className={styles.sectionToggle} onClick={() => toggleSection(section)}>
-                        <span>{section}</span>
-                        <span className={styles.chevron}>{isOpen ? "▲" : "▼"}</span>
-                      </button>
-                      {isOpen && (
-                        <div className={styles.sectionContent}>{renderContent(text)}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Sources */}
-              <div className={styles.sources}>
-                <h3 className={styles.sourcesTitle}>Список литературы</h3>
-                <ul className={styles.sourcesList}>
-                  {viewing.sources.map((src, i) => (
-                    <li key={i} className={styles.sourceItem}>{src}</li>
-                  ))}
-                </ul>
-              </div>
-
+              <div ref={previewContainerRef} className={styles.docPreviewContainer} />
             </div>
+
+            {/* Зум — убран, используется только в мобильной нижней панели */}
+
+            {/* Правый столбец — десктоп */}
+            <div className={styles.docModalRight}>
+              <h2 className={styles.docModalTitle}>{viewingGen.result.title}</h2>
+              <div className={styles.docModalBadges}>
+                <span className={styles.docBadge}>{viewingGen.workType}</span>
+                <span className={styles.docBadge}>{viewingGen.pages} стр.</span>
+              </div>
+              <hr className={styles.docDivider} />
+
+              {/* Скачать DOCX */}
+              <button
+                className={styles.docDownloadBtn}
+                onClick={() => handleDownloadDocx(viewingGen)}
+                disabled={downloading === "viewer"}
+              >
+                {downloading === "viewer"
+                  ? <><span className={styles.docBtnSpinner} />Создаём...</>
+                  : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
+              </button>
+
+              {/* Дополнительные материалы */}
+              {(viewingGen.extras?.presentation || viewingGen.extras?.speech) && (
+                <>
+                  <hr className={styles.docDivider} />
+                  <p className={styles.docExtrasHeading}>Дополнительные материалы</p>
+                  <div className={styles.docExtrasDownloads}>
+                    {viewingGen.extras?.presentation && (
+                      <button
+                        className={styles.docExtrasDownloadBtn}
+                        onClick={() => handleDownloadExtra("presentation")}
+                      >
+                        <img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />
+                        Презентация .pptx
+                      </button>
+                    )}
+                    {viewingGen.extras?.speech && (
+                      <button
+                        className={styles.docExtrasDownloadBtn}
+                        onClick={() => handleDownloadExtra("speech")}
+                      >
+                        <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
+                        Выступление .txt
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {viewingGen.slug && (
+                <>
+                  <hr className={styles.docDivider} />
+                  <button
+                    className={styles.docShareBtn}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/preview/${viewingGen.slug}`);
+                    }}
+                  >
+                    🔗 Скопировать ссылку
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Мобильная нижняя панель */}
+            <div className={styles.docMobileBottom}>
+              {!previewLoading && (
+                <div className={styles.docMobileZoomRow}>
+                  <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(0.1)}>＋</button>
+                  <span className={styles.docMobileZoomLabel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
+                  <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
+                </div>
+              )}
+              <button
+                className={styles.docDownloadBtn}
+                onClick={() => handleDownloadDocx(viewingGen)}
+                disabled={downloading === "viewer"}
+              >
+                {downloading === "viewer"
+                  ? <><span className={styles.docBtnSpinner} />Создаём...</>
+                  : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
+              </button>
+              {(viewingGen.extras?.presentation || viewingGen.extras?.speech) && (
+                <div className={styles.docExtrasDownloadsMobile}>
+                  {viewingGen.extras?.presentation && (
+                    <button className={styles.docExtrasDownloadBtnSmall} onClick={() => handleDownloadExtra("presentation")}>
+                      <img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />
+                      Презентация .pptx
+                    </button>
+                  )}
+                  {viewingGen.extras?.speech && (
+                    <button className={styles.docExtrasDownloadBtnSmall} onClick={() => handleDownloadExtra("speech")}>
+                      <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
+                      Выступление .txt
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
-      )}
+      ), document.body)}
+
     </div>
   );
 }

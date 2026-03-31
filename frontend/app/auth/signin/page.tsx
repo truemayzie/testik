@@ -126,7 +126,8 @@ export default function SignInPage() {
 
             <p className={styles.terms}>
               Входя в аккаунт, вы принимаете{" "}
-              <a href="/terms">условия использования</a>
+              <a href="/terms">условия использования</a>{" "}
+              и <a href="/privacy">политику конфиденциальности</a>
             </p>
           </>
         )}

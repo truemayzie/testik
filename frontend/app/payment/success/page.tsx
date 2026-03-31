@@ -12,6 +12,46 @@ export default function PaymentSuccessPage() {
   const [workType, setWorkType] = useState("");
 
   useEffect(() => {
+    // Проверяем режим: extras или обычная генерация
+    const searchParams = new URLSearchParams(window.location.search);
+    const isExtras = searchParams.get("mode") === "extras";
+
+    if (isExtras) {
+      // Extras: читаем pendingExtras
+      let pending: { paymentId?: string } = {};
+      try { pending = JSON.parse(sessionStorage.getItem("pendingExtras") || "{}"); } catch {}
+
+      const paymentId = pending.paymentId;
+      if (!paymentId) {
+        router.push("/?extrasAutoGenerate=1");
+        return;
+      }
+
+      const MAX_POLLS = 15;
+      let polls = 0;
+      const id = setInterval(async () => {
+        polls++;
+        try {
+          const res  = await fetch(`/api/payment/status?id=${paymentId}`);
+          const data = await res.json();
+          if (data.status === "succeeded") {
+            clearInterval(id);
+            setState("succeeded");
+            setTimeout(() => router.push("/?extrasAutoGenerate=1"), 1200);
+            return;
+          }
+          if (data.status === "cancelled") { clearInterval(id); setState("cancelled"); return; }
+        } catch {}
+        if (polls >= MAX_POLLS) {
+          clearInterval(id);
+          setState("timeout");
+          setTimeout(() => router.push("/?extrasAutoGenerate=1"), 2000);
+        }
+      }, 2000);
+      return () => clearInterval(id);
+    }
+
+    // Обычная генерация
     let pending: { paymentId?: string; workType?: string } = {};
     try {
       pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");

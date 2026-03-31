@@ -49,10 +49,19 @@ export async function getUserGenerations(userId: string) {
       status:    true,
       createdAt: true,
       slug:      true,
+      extras:    true,
       // result не включаем — он большой, загружаем отдельно
     },
   });
   return generations;
+}
+
+// ── Обновить поле extras у генерации ─────────────────────────────
+export async function updateGenerationExtras(id: string, userId: string, extras: string) {
+  return await prisma.generation.updateMany({
+    where: { id, userId },
+    data: { extras },
+  });
 }
 
 // ── Получить одну генерацию ──────────────────────────────────────

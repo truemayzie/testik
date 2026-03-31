@@ -1,3 +1,4 @@
+import os
 import threading
 import uuid
 from fastapi import FastAPI, HTTPException
@@ -24,6 +25,8 @@ app.add_middleware(
 # Каждая запись: {"status": "running"|"done"|"error", "result": dict|None, "error": str|None}
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+
+MAX_CONCURRENT_JOBS = 8
 
 
 def _job_start(job_id: str):
@@ -84,6 +87,14 @@ def create_referat(request: ReferatRequest):
     Запускает генерацию в фоновом потоке и сразу возвращает jobId.
     Next.js опрашивает /api/generate/status/{jobId} каждые 5 секунд.
     """
+    with _jobs_lock:
+        running = sum(1 for j in _jobs.values() if j["status"] == "running")
+        if running >= MAX_CONCURRENT_JOBS:
+            raise HTTPException(
+                status_code=503,
+                detail="Сервер перегружен, попробуйте через минуту"
+            )
+
     job_id = str(uuid.uuid4())
     _job_start(job_id)
 
@@ -136,4 +147,98 @@ def download_referat(request: ReferatResponse):
         content=docx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": "attachment; filename=referat.docx"}
+    )
+
+
+# ── Extras: генерация презентации и текста выступления ───────────────────────
+
+_extras_jobs: dict[str, dict] = {}
+_extras_lock = threading.Lock()
+
+
+class ExtrasRequest(BaseModel):
+    topic: str
+    work_type: str
+    items: list[str]          # ["presentation", "speech"]
+    result: dict
+    profile: dict | None = None
+
+
+@app.post("/api/generate/extras")
+def create_extras(request: ExtrasRequest):
+    """Запускает генерацию доп. материалов в фоновом потоке."""
+    extras_job_id = str(uuid.uuid4())
+    with _extras_lock:
+        _extras_jobs[extras_job_id] = {"status": "running", "ready": [], "error": None}
+
+    def run():
+        ready = []
+        try:
+            from presentation_generator import generate_presentation, generate_speech
+            if "presentation" in request.items:
+                generate_presentation(
+                    extras_job_id,
+                    request.topic,
+                    request.work_type,
+                    request.profile or {},
+                    request.result,
+                )
+                ready.append("presentation")
+            if "speech" in request.items:
+                generate_speech(
+                    extras_job_id,
+                    request.topic,
+                    request.work_type,
+                    request.result,
+                )
+                ready.append("speech")
+            with _extras_lock:
+                _extras_jobs[extras_job_id] = {"status": "done", "ready": ready, "error": None}
+            print(f"[extras {extras_job_id}] Готово: {ready}")
+        except Exception as exc:
+            print(f"[extras {extras_job_id}] Ошибка: {exc}")
+            with _extras_lock:
+                _extras_jobs[extras_job_id] = {"status": "error", "ready": ready, "error": str(exc)}
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"extrasJobId": extras_job_id}
+
+
+@app.get("/api/generate/extras/status/{extras_job_id}")
+def get_extras_status(extras_job_id: str):
+    """Возвращает статус генерации доп. материалов."""
+    with _extras_lock:
+        job = _extras_jobs.get(extras_job_id)
+    if not job:
+        return {"status": "not_found", "ready": []}
+    return {"status": job["status"], "ready": job.get("ready", []), "error": job.get("error")}
+
+
+@app.get("/api/download/presentation/{job_id}")
+def download_presentation(job_id: str):
+    """Возвращает PPTX-файл презентации."""
+    path = f"/tmp/pptx_{job_id}.pptx"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    with open(path, "rb") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": "attachment; filename=presentation.pptx"},
+    )
+
+
+@app.get("/api/download/speech/{job_id}")
+def download_speech(job_id: str):
+    """Возвращает DOCX-файл текста выступления."""
+    path = f"/tmp/speech_{job_id}.docx"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    with open(path, "rb") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=speech.docx"},
     )

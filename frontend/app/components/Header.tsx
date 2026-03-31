@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import styles from "./Header.module.css";
+import { useModalContext } from "@/app/lib/ModalContext";
 
 const LogoInner = () => (
   <>
@@ -31,6 +32,7 @@ export default function Header() {
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const isAuthPage = pathname?.startsWith("/auth");
+  const { isModalOpen } = useModalContext();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -47,7 +49,7 @@ export default function Header() {
   if (isAuthPage) return null;
 
   return (
-    <header className={styles.header}>
+    <header className={styles.header} style={{ zIndex: isModalOpen ? 1 : undefined }}>
       <Link href="/" className={styles.logo}><LogoInner /></Link>
 
       {/* Десктоп nav */}

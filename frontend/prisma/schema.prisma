@@ -104,6 +104,9 @@ model Generation {
   isPublic  Boolean  @default(true)
   slug      String?  @unique
 
+  // Дополнительные материалы (JSON: {"presentation":"job_id","speech":"job_id"})
+  extras    String?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
