@@ -242,7 +242,6 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
     from datetime import datetime
     year = datetime.now().year
 
-    # Читаем профиль — поддерживаем оба варианта ключей (старый и новый)
     def _get(*keys):
         for k in keys:
             v = (profile.get(k) or "").strip()
@@ -250,47 +249,17 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
                 return v
         return ""
 
-    def clean_field(label, value):
-        """Убирает дубль если пользователь уже вписал label в value.
-        Возвращает None если поле пустое."""
-        if not value or not value.strip():
-            return None
-        clean = value.strip()
-        prefixes = [label + " ", label + ":", label.lower() + " ", label.lower() + ":"]
-        for prefix in prefixes:
-            if clean.lower().startswith(prefix.lower()):
-                clean = clean[len(prefix):].strip()
-        return clean if clean else None
-
     university = _get("university")
     faculty    = _get("faculty")
-    department = _get("department")
-    direction  = _get("direction", "speciality")
+    speciality = _get("speciality", "direction", "department")
     discipline = _get("discipline")
     full_name  = _get("full_name", "fullName")
-    course     = _get("course")
     group      = _get("group", "groupNumber")
     teacher    = _get("teacher", "teacherName")
-    city       = _get("city") or "Москва"
+    city       = _get("city") or "Город"
 
-    UL       = "_" * 24  # подчёркивание для имён/полей
-    UL_SHORT = "_" * 16  # подчёркивание для оценки/даты
-
-    # ── Вспомогательные функции ──────────────────────────────────────────────
-
-    def head_line(text, bold=True):
-        """Строка шапки: центр, жирный, 14pt, одинарный интервал."""
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.paragraph_format.first_line_indent = Cm(0)
-        p.paragraph_format.space_before      = Pt(0)
-        p.paragraph_format.space_after       = Pt(0)
-        p.paragraph_format.line_spacing      = Pt(16)
-        r = p.add_run(text)
-        set_run_font(r, bold=bold, size=14)
-
-    def center_line(text, bold=False):
-        """Строка по центру, обычный 14pt."""
+    def cline(text, bold=False):
+        """Строка по центру, 14pt."""
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.first_line_indent = Cm(0)
@@ -300,7 +269,7 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
         r = p.add_run(text)
         set_run_font(r, bold=bold, size=14)
 
-    def right_line(text, bold=False):
+    def rline(text, bold=False):
         """Строка по правому краю, 14pt."""
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -311,102 +280,69 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
         r = p.add_run(text)
         set_run_font(r, bold=bold, size=14)
 
-    # ── БЛОК 1 — Шапка ───────────────────────────────────────────────────────
+    # ── БЛОК 1: Шапка ────────────────────────────────────────────────────────
+    cline(university  or "Название учебного заведения", bold=True)
+    cline(faculty     or "Направление (факультет)")
+    cline(speciality  or "Специализация")
 
-    head_line("МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ")
-    if university:
-        head_line(university.upper())
-    else:
-        head_line("ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ ОБРАЗОВАТЕЛЬНОЕ")
-        head_line("УЧРЕЖДЕНИЕ ВЫСШЕГО ОБРАЗОВАНИЯ")
-
-    blank(doc)
-
-    # Исправление 1: убираем дубль и пустые поля не выводим
-    clean_faculty    = clean_field("Факультет", faculty)
-    clean_direction  = clean_field("Направление подготовки", direction)
-    clean_department = clean_field("Кафедра", department)
-
-    if clean_faculty is not None:
-        head_line(f"Факультет / Институт: {clean_faculty}")
-    else:
-        head_line(f"Факультет / Институт: {UL}")
-
-    if clean_direction is not None:
-        head_line(f"Направление подготовки: {clean_direction}")
-    else:
-        head_line(f"Направление подготовки: {UL}")
-
-    if clean_department is not None:
-        head_line(f"Кафедра: {clean_department}")
-    else:
-        head_line(f"Кафедра: {UL}")
-
-    # ── БЛОК 2 — Тип работы и тема ───────────────────────────────────────────
-
-    for _ in range(6):
-        blank(doc)
-
-    TITLE_LABELS = {
-        "Реферат":  "РЕФЕРАТ",
-        "Доклад":   "ДОКЛАД",
-        "Курсовая": "КУРСОВАЯ РАБОТА",
-        "ВКР":      "ВЫПУСКНАЯ КВАЛИФИКАЦИОННАЯ РАБОТА",
-    }
-    center_line(TITLE_LABELS.get(work_type, "РЕФЕРАТ"), bold=True)
-
-    # Строка "по дисциплине" — только если discipline задана и работа не ВКР
-    if discipline and work_type != "ВКР":
-        center_line(f"по дисциплине: «{discipline}»")
-
-    center_line(f"на тему: «{topic}»", bold=True)
-
-    # ── БЛОК 3 — Студент и руководитель ──────────────────────────────────────
-
+    # ── 4 пустые строки ──────────────────────────────────────────────────────
     for _ in range(4):
         blank(doc)
 
-    right_line("Выполнил(а):")
-    if course and group:
-        right_line(f"студент(ка) {course} курса, гр. {group}")
-    elif course:
-        right_line(f"студент(ка) {course} курса, гр. {UL}")
-    elif group:
-        right_line(f"студент(ка) {UL} курса, гр. {group}")
+    # ── БЛОК 2: Тип работы и тема ────────────────────────────────────────────
+    TITLE_LABELS = {
+        "Реферат":  "Реферат",
+        "Доклад":   "Доклад",
+        "Курсовая": "Курсовая работа",
+        "ВКР":      "Выпускная квалификационная работа",
+    }
+    cline(TITLE_LABELS.get(work_type, "Реферат"), bold=True)
+
+    if discipline and work_type != "ВКР":
+        cline(discipline)
     else:
-        right_line(f"студент(ка) {UL} курса, гр. {UL}")
-    right_line(full_name if full_name else UL)
+        cline("Предмет")
 
-    blank(doc)
+    # "На тему:" обычный, само название жирное
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.space_before      = Pt(0)
+    p.paragraph_format.space_after       = Pt(0)
+    p.paragraph_format.line_spacing      = Pt(21)
+    r_lbl = p.add_run("На тему: ")
+    set_run_font(r_lbl, bold=False, size=14)
+    r_top = p.add_run(f"«{topic}»")
+    set_run_font(r_top, bold=True, size=14)
 
-    # Исправление 2: убрана лишняя строка с подчёркиванием перед ФИО руководителя
-    right_line("Руководитель:")
-    right_line(teacher if teacher else UL)
+    # ── 4 пустые строки ──────────────────────────────────────────────────────
+    for _ in range(4):
+        blank(doc)
 
-    blank(doc)
+    # ── БЛОК 3: Студент и руководитель ───────────────────────────────────────
+    rline("Выполнил:")
+    rline(full_name or "ФИО")
+    rline(f"Группа: {group}" if group else "Группа: №")
+    rline("Проверил(а):")
+    rline(teacher or "ФИО")
 
-    # Исправление 3: укороченные поля оценки и даты
-    right_line(f"Оценка: {UL_SHORT}")
-    right_line(f"Дата: {UL_SHORT}")
+    # ── 3 пустые строки ──────────────────────────────────────────────────────
+    for _ in range(3):
+        blank(doc)
 
-    # ── БЛОК 4 — Город и год (нижний колонтитул первой страницы) ─────────────
-    # Исправление 4: город и год в footer — всегда внизу страницы независимо от объёма
-
+    # ── БЛОК 4: Город и год в footer первой страницы ─────────────────────────
     section = doc.sections[0]
-    # Убеждаемся что titlePg включён (чтобы первая страница имела свой footer)
-    sectPr = section._sectPr
+    sectPr  = section._sectPr
     if sectPr.find(qn("w:titlePg")) is None:
         titlePg = OxmlElement("w:titlePg")
         sectPr.append(titlePg)
 
-    footer = section.first_page_footer
-    footer_para = footer.paragraphs[0]
+    footer_para = section.first_page_footer.paragraphs[0]
     footer_para.clear()
-    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer_para.alignment                    = WD_ALIGN_PARAGRAPH.CENTER
     footer_para.paragraph_format.space_before = Pt(0)
     footer_para.paragraph_format.space_after  = Pt(0)
-    run_city = footer_para.add_run(f"{city}, {year}")
-    set_run_font(run_city, size=14)
+    set_run_font(footer_para.add_run(f"{city}, {year}"), size=14)
 
     doc.add_page_break()
 

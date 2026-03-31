@@ -1249,6 +1249,69 @@
 }
 .docShareBtn:hover { border-color: #6366F1; color: #6366F1; background: #EEF2FF; }
 
+.docTitleSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.docTitleHeading {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.docTitleInput {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: #0F172A;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.docTitleInput:focus { border-color: #6366F1; background: #fff; }
+.docTitleInput::placeholder { color: #94A3B8; }
+.docUpdateBtn {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #6366F1;
+  background: #EEF2FF;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 4px;
+}
+.docUpdateBtn:hover:not(:disabled) { background: #E0E7FF; }
+.docUpdateBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+.docSaveProfileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  color: #64748B;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 2px;
+}
+.docSaveProfileCheck {
+  width: 15px;
+  height: 15px;
+  accent-color: #6366F1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* Mobile header (hidden on desktop) */
 .docMobileHeader {
   display: none;

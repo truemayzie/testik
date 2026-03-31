@@ -58,7 +58,6 @@ export default function Header() {
           <div className={styles.skeleton}/>
         ) : session ? (
           <>
-            <Link href="/profile" className={styles.dashLink}>Профиль</Link>
             <Link href="/dashboard" className={styles.dashLink}>Мои работы</Link>
             {session.user?.image && (
               <img src={session.user.image} alt="" className={styles.avatar}/>
@@ -110,12 +109,6 @@ export default function Header() {
                     </span>
                   </div>
                 )}
-                <Link href="/profile" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                  </svg>
-                  Профиль
-                </Link>
                 <Link href="/dashboard" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>

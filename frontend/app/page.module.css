@@ -1446,6 +1446,25 @@
 .updateDocBtn:hover:not(:disabled) { background: #E0E7FF; }
 .updateDocBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.saveProfileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  color: #64748B;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 2px;
+}
+.saveProfileCheck {
+  width: 15px;
+  height: 15px;
+  accent-color: #6366F1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .previewSpinner {
   display: flex;
   align-items: center;

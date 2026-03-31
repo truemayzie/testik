@@ -236,6 +236,7 @@ export default function Home() {
   const [extrasProgress, setExtrasProgress]   = useState(0);
   const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "" });
   const [titleUpdating, setTitleUpdating]     = useState(false);
+  const [saveProfile, setSaveProfile]         = useState(false);
   const previewContainerRef                   = useRef<HTMLDivElement>(null);
   const baseScaleRef                          = useRef<number>(1);
   const [previewZoom, setPreviewZoom]         = useState(1);
@@ -340,9 +341,21 @@ export default function Home() {
     setStepIndex(stepsRef.current.length - 1);
   }
 
+  async function persistProfile() {
+    if (!saveProfile || !session?.user) return;
+    try {
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(titleForm),
+      });
+    } catch {}
+  }
+
   async function handleDownload() {
     if (!result) return;
     console.log('[Refai] Скачивание DOCX...');
+    persistProfile();
     setDownloading(true);
     try {
       const response = await fetch("/api/download", {
@@ -501,9 +514,31 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResultModal]);
 
+  // При открытии модалки — загружаем профиль и заполняем поля титульника
+  useEffect(() => {
+    if (!showResultModal || !session?.user) return;
+    fetch("/api/profile")
+      .then(r => r.json())
+      .then((data: Record<string, string>) => {
+        const hasData = !!(data.fullName || data.university || data.groupNumber);
+        setSaveProfile(hasData);
+        setTitleForm(prev => ({
+          fullName:    data.fullName    || prev.fullName    || "",
+          university:  data.university  || prev.university  || "",
+          faculty:     data.faculty     || prev.faculty     || "",
+          department:  data.department  || prev.department  || "",
+          groupNumber: data.groupNumber || prev.groupNumber || "",
+          teacherName: data.teacherName || prev.teacherName || "",
+        }));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResultModal]);
+
   async function handleTitleUpdate() {
     if (!result) return;
     setTitleUpdating(true);
+    persistProfile();
     const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...titleForm } };
     await renderPreview(updated);
     setTitleUpdating(false);
@@ -1738,6 +1773,15 @@ export default function Home() {
                       <button className={styles.updateDocBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
                         {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
                       </button>
+                      <label className={styles.saveProfileRow}>
+                        <input
+                          type="checkbox"
+                          className={styles.saveProfileCheck}
+                          checked={saveProfile}
+                          onChange={e => setSaveProfile(e.target.checked)}
+                        />
+                        <span>Запомнить данные</span>
+                      </label>
                     </div>
                   </>
                 )}

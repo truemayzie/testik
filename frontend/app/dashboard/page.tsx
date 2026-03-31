@@ -37,6 +37,13 @@ type ViewingGen = {
 
 const DOC_WIDTH = 816;
 
+const TITLE_PAGE_TYPES = ["Реферат", "Курсовая", "ВКР", "Доклад"];
+
+type TitleForm = {
+  fullName: string; university: string; faculty: string;
+  department: string; groupNumber: string; teacherName: string;
+};
+
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -54,6 +61,11 @@ export default function DashboardPage() {
   const [previewZoom, setPreviewZoom] = useState(1);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const baseScaleRef        = useRef<number>(1);
+
+  // Титульный лист
+  const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "" });
+  const [titleUpdating, setTitleUpdating] = useState(false);
+  const [saveProfile, setSaveProfile] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
@@ -164,6 +176,27 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewingGen?.id]);
 
+  // При открытии модалки — загружаем профиль и заполняем поля титульника
+  useEffect(() => {
+    if (!viewingGen) return;
+    fetch("/api/profile")
+      .then(r => r.json())
+      .then((data: Record<string, string>) => {
+        const hasData = !!(data.fullName || data.university || data.groupNumber);
+        setSaveProfile(hasData);
+        setTitleForm({
+          fullName:    data.fullName    || "",
+          university:  data.university  || "",
+          faculty:     data.faculty     || "",
+          department:  data.department  || "",
+          groupNumber: data.groupNumber || "",
+          teacherName: data.teacherName || "",
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingGen?.id]);
+
   async function handleOpen(id: string) {
     setLoadingView(id);
     try {
@@ -196,16 +229,32 @@ export default function DashboardPage() {
     setTimeout(() => { setViewingGen(null); setViewingClosing(false); }, 200);
   }
 
+  async function persistProfile() {
+    if (!saveProfile || !session?.user) return;
+    try {
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(titleForm),
+      });
+    } catch {}
+  }
+
   async function handleDownloadDocx(gen?: ViewingGen) {
     const src = gen ?? viewingGen;
     if (!src) return;
     const key = gen ? gen.id : "viewer";
+    // Если скачиваем из просмотрщика — мержим данные титульника
+    const body = (!gen && TITLE_PAGE_TYPES.includes(src.workType))
+      ? { ...src.result, profile: titleForm }
+      : src.result;
+    if (!gen) persistProfile();
     setDownloading(key);
     try {
       const docxRes = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(src.result),
+        body: JSON.stringify(body),
       });
       if (!docxRes.ok) throw new Error();
       const blob = await docxRes.blob();
@@ -220,6 +269,15 @@ export default function DashboardPage() {
     } finally {
       setDownloading(null);
     }
+  }
+
+  async function handleTitleUpdate() {
+    if (!viewingGen) return;
+    setTitleUpdating(true);
+    persistProfile();
+    const updated = { ...viewingGen.result, profile: titleForm };
+    await renderPreview(updated as typeof viewingGen.result);
+    setTitleUpdating(false);
   }
 
   async function handleDownloadExtra(type: "presentation" | "speech") {
@@ -533,6 +591,34 @@ export default function DashboardPage() {
                   >
                     🔗 Скопировать ссылку
                   </button>
+                </>
+              )}
+
+              {TITLE_PAGE_TYPES.includes(viewingGen.workType) && (
+                <>
+                  <hr className={styles.docDivider} />
+                  <div className={styles.docTitleSection}>
+                    <p className={styles.docTitleHeading}>Титульный лист</p>
+                    {(["fullName", "university", "faculty", "department", "groupNumber", "teacherName"] as (keyof TitleForm)[]).map(field => (
+                      <input key={field} className={styles.docTitleInput}
+                        placeholder={{ fullName: "ФИО студента", university: "Университет", faculty: "Факультет", department: "Кафедра", groupNumber: "Группа", teacherName: "Научный руководитель" }[field]}
+                        value={titleForm[field]}
+                        onChange={e => setTitleForm(prev => ({ ...prev, [field]: e.target.value }))}
+                      />
+                    ))}
+                    <button className={styles.docUpdateBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
+                      {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
+                    </button>
+                    <label className={styles.docSaveProfileRow}>
+                      <input
+                        type="checkbox"
+                        className={styles.docSaveProfileCheck}
+                        checked={saveProfile}
+                        onChange={e => setSaveProfile(e.target.checked)}
+                      />
+                      <span>Запомнить данные</span>
+                    </label>
+                  </div>
                 </>
               )}
             </div>
