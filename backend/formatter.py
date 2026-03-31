@@ -113,19 +113,33 @@ def add_page_break_before(p):
     pPr.append(pageBreakBefore)
 
 
+def _force_black_color(h_style):
+    """Устанавливает чёрный цвет заголовка через API и удаляет theme-атрибуты из XML."""
+    h_style.font.color.rgb = RGBColor(0, 0, 0)
+    rPr = h_style.element.get_or_add_rPr()
+    color_el = rPr.find(qn("w:color"))
+    if color_el is None:
+        color_el = OxmlElement("w:color")
+        rPr.append(color_el)
+    color_el.set(qn("w:val"), "000000")
+    for attr in ("w:themeColor", "w:themeShade", "w:themeTint"):
+        if color_el.get(qn(attr)) is not None:
+            del color_el.attrib[qn(attr)]
+
+
 def setup_heading_styles(doc):
     """
     Heading 1 — главные разделы (ВВЕДЕНИЕ, ГЛАВА 1, ЗАКЛЮЧЕНИЕ и т.д.)
-                с разрывом страницы, по центру, жирный
-    Heading 2 — подглавы (1.1. 1.2.) без разрыва, по левому краю
-    Heading 3 — используем для подглав чтобы не было разрыва
+                с разрывом страницы, по центру, жирный, прописные (all caps)
+    Heading 2 — подглавы (1.1. 1.2.) без разрыва, по левому краю, жирный
     """
     # Heading 1 — главные разделы С разрывом страницы
     h1 = doc.styles["Heading 1"]
-    h1.font.name      = "Times New Roman"
-    h1.font.size      = Pt(14)
-    h1.font.bold      = True
-    h1.font.color.rgb = RGBColor(0, 0, 0)
+    h1.font.name     = "Times New Roman"
+    h1.font.size     = Pt(14)
+    h1.font.bold     = True
+    h1.font.all_caps = True
+    _force_black_color(h1)
     h1.paragraph_format.alignment         = WD_ALIGN_PARAGRAPH.CENTER
     h1.paragraph_format.space_before      = Pt(0)
     h1.paragraph_format.space_after       = Pt(12)
@@ -139,12 +153,13 @@ def setup_heading_styles(doc):
     pb = OxmlElement("w:pageBreakBefore")
     pPr.append(pb)
 
-    # Heading 2 — подглавы БЕЗ разрыва, по левому краю
+    # Heading 2 — подглавы БЕЗ разрыва, по левому краю, жирный
     h2 = doc.styles["Heading 2"]
-    h2.font.name      = "Times New Roman"
-    h2.font.size      = Pt(14)
-    h2.font.bold      = False
-    h2.font.color.rgb = RGBColor(0, 0, 0)
+    h2.font.name     = "Times New Roman"
+    h2.font.size     = Pt(14)
+    h2.font.bold     = True
+    h2.font.all_caps = False
+    _force_black_color(h2)
     h2.paragraph_format.alignment         = WD_ALIGN_PARAGRAPH.LEFT
     h2.paragraph_format.space_before      = Pt(12)
     h2.paragraph_format.space_after       = Pt(6)
@@ -156,56 +171,67 @@ def setup_heading_styles(doc):
         pPr2.remove(numPr2)
 
 
-# ── Автособираемое оглавление ────────────────────────────────────────────────
+# ── Программное оглавление ───────────────────────────────────────────────────
 
-def add_auto_toc(doc, title: str = "СОДЕРЖАНИЕ"):
+_WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, интервал 1.5, поля ГОСТ)
+
+# Ширина текстовой зоны для A4 с полями 3+1 см: 170мм = 9638 twips
+# Tab stop ставим чуть левее правого края чтобы число не обрезалось
+_TOC_TAB_POS = "9200"  # twips (~16.3 cm от левого поля)
+
+
+def _count_words(text: str) -> int:
+    """Подсчёт слов в тексте (без таблиц)."""
+    if not text:
+        return 0
+    text = re.sub(r'\[TABLE\].*?\[/TABLE\]', '', text, flags=re.DOTALL)
+    return len(text.split())
+
+
+def _toc_line(doc, title: str, level: int, page_num: int):
+    """Одна строка оглавления: название + точки-заполнители + номер страницы."""
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before      = Pt(0)
+    p.paragraph_format.space_after       = Pt(4)
+    p.paragraph_format.line_spacing      = Pt(21)
+    p.paragraph_format.first_line_indent = Cm(0)
+    if level == 2:
+        p.paragraph_format.left_indent = Cm(1.25)
+
+    # Tab stop с точками-заполнителями на правом крае
+    pPr = p._element.get_or_add_pPr()
+    tabs_el = OxmlElement("w:tabs")
+    tab_stop = OxmlElement("w:tab")
+    tab_stop.set(qn("w:val"), "right")
+    tab_stop.set(qn("w:pos"), _TOC_TAB_POS)
+    tab_stop.set(qn("w:leader"), "dot")
+    tabs_el.append(tab_stop)
+    pPr.append(tabs_el)
+
+    # Текст названия
+    r1 = p.add_run(title)
+    set_run_font(r1, bold=(level == 1), size=14)
+    r1.font.color.rgb = RGBColor(0, 0, 0)
+    # Символ табуляции (переход к номеру страницы)
+    r1._r.append(OxmlElement("w:tab"))
+
+    # Номер страницы
+    r2 = p.add_run(str(page_num))
+    set_run_font(r2, bold=False, size=14)
+    r2.font.color.rgb = RGBColor(0, 0, 0)
+
+
+def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ"):
     """
-    Настоящее автособираемое оглавление Word.
-    Обновляется при открытии документа (Ctrl+A → F9 в Word).
-    Точки заполняют всю ширину страницы автоматически.
+    Программное оглавление: название по центру + строки с точками.
+    entries — список (title, level, page_num).
     """
     p = doc.add_paragraph()
     fmt(p, WD_ALIGN_PARAGRAPH.CENTER, 0, 21, 0, 12)
     run(p, title, bold=True, size=14)
 
-    # XML поле TOC — автоматически собирает заголовки Heading 1 и Heading 2
-    p_toc = doc.add_paragraph()
-    p_toc.paragraph_format.space_before = Pt(0)
-    p_toc.paragraph_format.space_after  = Pt(0)
-
-    # Начало поля
-    r1 = p_toc.add_run()
-    set_run_font(r1, size=14)
-    fldChar_begin = OxmlElement("w:fldChar")
-    fldChar_begin.set(qn("w:fldCharType"), "begin")
-    r1._r.append(fldChar_begin)
-
-    # Инструкция TOC: уровни 1-2, с точками-заполнителями, с номерами страниц
-    r2 = p_toc.add_run()
-    set_run_font(r2, size=14)
-    instrText = OxmlElement("w:instrText")
-    instrText.set(qn("xml:space"), "preserve")
-    instrText.text = ' TOC \\o "1-2" \\h \\z '
-    r2._r.append(instrText)
-
-    # Разделитель
-    r3 = p_toc.add_run()
-    set_run_font(r3, size=14)
-    fldChar_sep = OxmlElement("w:fldChar")
-    fldChar_sep.set(qn("w:fldCharType"), "separate")
-    r3._r.append(fldChar_sep)
-
-    # Заглушка (пока не обновлено)
-    r4 = p_toc.add_run()
-    set_run_font(r4, size=12)
-    r4.text = "Откройте документ в Word и нажмите Ctrl+A, затем F9 для обновления содержания"
-
-    # Конец поля
-    r5 = p_toc.add_run()
-    set_run_font(r5, size=14)
-    fldChar_end = OxmlElement("w:fldChar")
-    fldChar_end.set(qn("w:fldCharType"), "end")
-    r5._r.append(fldChar_end)
+    for entry_title, level, page_num in entries:
+        _toc_line(doc, entry_title, level, page_num)
 
     doc.add_page_break()
 
@@ -397,6 +423,7 @@ def add_service_heading(doc, title):
     p.paragraph_format.first_line_indent = Cm(0)
     r = p.add_run(title.upper())
     set_run_font(r, bold=True, size=14)
+    r.font.color.rgb = RGBColor(0, 0, 0)
 
 
 # ── Заголовки глав и подглав ─────────────────────────────────────────────────
@@ -409,24 +436,26 @@ def is_subheading(title):
 
 def add_chapter_heading(doc, title):
     """
-    ГЛАВА (1. 2. 3.) — Heading 1, разрыв страницы, жирный, по центру.
+    ГЛАВА (1. 2. 3.) — Heading 1, разрыв страницы, жирный, по центру, прописные.
     """
     p = doc.add_paragraph(style="Heading 1")
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.first_line_indent = Cm(0)
-    r = p.add_run(title.rstrip("."))
+    r = p.add_run(title.rstrip(".").upper())
     set_run_font(r, bold=True, size=14)
+    r.font.color.rgb = RGBColor(0, 0, 0)
 
 
 def add_subchapter_heading(doc, title):
     """
-    ПОДГЛАВА (1.1. 1.2.) — Heading 2, БЕЗ разрыва страницы, по левому краю.
+    ПОДГЛАВА (1.1. 1.2.) — Heading 2, БЕЗ разрыва страницы, по левому краю, жирный.
     """
     p = doc.add_paragraph(style="Heading 2")
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p.paragraph_format.first_line_indent = Cm(0)
     r = p.add_run(title.rstrip("."))
-    set_run_font(r, bold=False, size=14)
+    set_run_font(r, bold=True, size=14)
+    r.font.color.rgb = RGBColor(0, 0, 0)
 
 
 # ── Таблица по ГОСТ ─────────────────────────────────────────────────────────
@@ -677,6 +706,27 @@ def create_docx(referat_data: dict) -> bytes:
             break
     topic = topic.strip("«» ")
 
+    SERVICE_HEADINGS = {"Введение", "Заключение", "Вступление"}
+
+    # ── Предварительный расчёт оглавления ────────────────────────────────────
+    toc_entries = []
+    if rules["has_toc"]:
+        # Страница 1 — титульник, страница 2 — оглавление,
+        # содержательные разделы начинаются со страницы 3
+        cur_page = 3
+        for name in referat_data["structure"]:
+            if name in ("Список литературы", "Приложения"):
+                continue
+            text = referat_data["content"].get(name, "")
+            level = 2 if is_subheading(name) else 1
+            toc_entries.append((name.rstrip("."), level, cur_page))
+            words = _count_words(text)
+            pages_used = max(1, (words + _WORDS_PER_PAGE - 1) // _WORDS_PER_PAGE)
+            cur_page += pages_used
+
+        if rules["has_sources"] and referat_data.get("sources"):
+            toc_entries.append(("Список литературы", 1, cur_page))
+
     # 1. Титульная страница — только для Реферат/Курсовая/ВКР
     if rules["has_title_page"]:
         profile = referat_data.get("profile", {}) or {}
@@ -685,12 +735,10 @@ def create_docx(referat_data: dict) -> bytes:
     # 2. Оглавление — только для Реферат/Курсовая/ВКР
     if rules["has_toc"]:
         toc_title = TOC_TITLES.get(work_type, "СОДЕРЖАНИЕ")
-        add_auto_toc(doc, title=toc_title)
+        add_toc(doc, toc_entries, title=toc_title)
 
     # Счётчик таблиц — сквозная нумерация по всему документу
     table_counter = [0]
-
-    SERVICE_HEADINGS = {"Введение", "Заключение", "Вступление"}
 
     # 3. Разделы
     for name in referat_data["structure"]:
