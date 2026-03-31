@@ -984,15 +984,15 @@
 .docModalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 30, 0.72);
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  animation: docOverlayIn 0.2s ease;
+  padding: 20px;
+  animation: docOverlayIn 300ms ease forwards;
 }
 
 @keyframes docOverlayIn {
@@ -1007,65 +1007,62 @@
   to   { opacity: 0; }
 }
 
-/* Box: 2-column grid — плавающий центрированный попап */
+/* Box: flex — 2 колонки как в page.tsx */
 .docModalBox {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  grid-template-rows: 1fr;
-  width: min(1100px, 96vw);
-  height: min(88vh, 860px);
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 32px 80px rgba(0,0,0,0.35);
-  animation: docBoxIn 0.25s ease;
+  display: flex;
+  width: 90vw;
+  max-width: 1400px;
+  height: 90vh;
+  background: #F8FAFC;
+  border-radius: 20px;
   overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  animation: docBoxIn 350ms ease-out forwards;
 }
 
 @keyframes docBoxIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.docModalBoxClosing { animation: docBoxOut 0.2s ease forwards; }
+.docModalBoxClosing { animation: docBoxOut 200ms ease-in forwards; }
 
 @keyframes docBoxOut {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.98); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(20px); }
 }
 
 /* Close button (desktop) */
 .docModalClose {
   position: absolute;
-  top: 12px; right: 316px;
+  top: 16px;
+  right: 16px;
   z-index: 10;
-  width: 32px; height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.9);
-  border: 1px solid #E2E8F0;
-  color: #64748B;
-  font-size: 0.8rem;
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  color: #374151;
+  font-size: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: background 0.15s;
 }
-.docModalClose:hover {
-  background: #FEE2E2;
-  border-color: #FECACA;
-  color: #DC2626;
-}
+.docModalClose:hover { background: rgba(0, 0, 0, 0.15); }
 
 /* Left column: preview */
 .docModalLeft {
-  grid-column: 1;
-  grid-row: 1 / -1;
+  flex: 0 0 70%;
   overflow-y: auto;
-  background: #F1F5F9;
+  overflow-x: hidden;
+  background: #E5E7EB;
   position: relative;
-  min-width: 0;
+  height: 100%;
+  border-radius: 20px 0 0 20px;
 }
 
 .docPreviewContainer {
@@ -1082,7 +1079,7 @@
   gap: 10px;
   color: #64748B;
   font-size: 0.88rem;
-  background: #F1F5F9;
+  background: #E5E7EB;
   z-index: 5;
 }
 
@@ -1099,12 +1096,11 @@
 
 /* Right column: info panel */
 .docModalRight {
-  grid-column: 2;
-  grid-row: 1 / -1;
+  flex: 0 0 30%;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 28px 22px;
+  padding: 32px 28px;
   overflow-y: auto;
   background: #fff;
   border-left: 1px solid #E2E8F0;
@@ -1112,10 +1108,10 @@
 
 .docModalTitle {
   font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 1.1rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #0F172A;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .docModalBadges {
@@ -1379,6 +1375,7 @@
   }
 
   .docModalBox {
+    display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
     width: 100%;
@@ -1395,6 +1392,9 @@
   }
 
   .docModalLeft {
+    flex: unset;
+    height: unset;
+    border-radius: 0;
     grid-column: 1;
     grid-row: 2;
     overflow-y: auto;
