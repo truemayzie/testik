@@ -1312,6 +1312,25 @@
   flex-shrink: 0;
 }
 
+.docSkipRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  color: #64748B;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 2px;
+}
+.docSkipRow input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  accent-color: #6366F1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* Mobile header (hidden on desktop) */
 .docMobileHeader {
   display: none;

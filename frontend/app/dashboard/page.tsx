@@ -23,6 +23,8 @@ type ReferatResult = {
   content: Record<string, string>;
   sources: string[];
   meta: Record<string, string | number>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  profile?: Record<string, any>;
 };
 
 type ViewingGen = {
@@ -42,6 +44,7 @@ const TITLE_PAGE_TYPES = ["Реферат", "Курсовая", "ВКР", "До�
 type TitleForm = {
   fullName: string; university: string; faculty: string;
   department: string; groupNumber: string; teacherName: string;
+  city: string; speciality: string; discipline: string;
 };
 
 export default function DashboardPage() {
@@ -63,9 +66,12 @@ export default function DashboardPage() {
   const baseScaleRef        = useRef<number>(1);
 
   // Титульный лист
-  const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "" });
+  const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
   const [titleUpdating, setTitleUpdating] = useState(false);
   const [saveProfile, setSaveProfile] = useState(false);
+  const [skipFaculty, setSkipFaculty]       = useState(false);
+  const [skipSpeciality, setSkipSpeciality] = useState(false);
+  const [skipDiscipline, setSkipDiscipline] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
@@ -191,6 +197,9 @@ export default function DashboardPage() {
           department:  data.department  || "",
           groupNumber: data.groupNumber || "",
           teacherName: data.teacherName || "",
+          city:        data.city        || "",
+          speciality:  data.speciality  || "",
+          discipline:  data.discipline  || "",
         });
       })
       .catch(() => {});
@@ -240,13 +249,17 @@ export default function DashboardPage() {
     } catch {}
   }
 
+  function buildProfilePayload() {
+    return { ...titleForm, skipFaculty, skipSpeciality, skipDiscipline };
+  }
+
   async function handleDownloadDocx(gen?: ViewingGen) {
     const src = gen ?? viewingGen;
     if (!src) return;
     const key = gen ? gen.id : "viewer";
     // Если скачиваем из просмотрщика — мержим данные титульника
     const body = (!gen && TITLE_PAGE_TYPES.includes(src.workType))
-      ? { ...src.result, profile: titleForm }
+      ? { ...src.result, profile: { ...(src.result.profile ?? {}), ...buildProfilePayload() } }
       : src.result;
     if (!gen) persistProfile();
     setDownloading(key);
@@ -275,7 +288,7 @@ export default function DashboardPage() {
     if (!viewingGen) return;
     setTitleUpdating(true);
     persistProfile();
-    const updated = { ...viewingGen.result, profile: titleForm };
+    const updated = { ...viewingGen.result, profile: { ...(viewingGen.result.profile ?? {}), ...buildProfilePayload() } };
     await renderPreview(updated as typeof viewingGen.result);
     setTitleUpdating(false);
   }
@@ -599,13 +612,27 @@ export default function DashboardPage() {
                   <hr className={styles.docDivider} />
                   <div className={styles.docTitleSection}>
                     <p className={styles.docTitleHeading}>Титульный лист</p>
-                    {(["fullName", "university", "faculty", "department", "groupNumber", "teacherName"] as (keyof TitleForm)[]).map(field => (
-                      <input key={field} className={styles.docTitleInput}
-                        placeholder={{ fullName: "ФИО студента", university: "Университет", faculty: "Факультет", department: "Кафедра", groupNumber: "Группа", teacherName: "Научный руководитель" }[field]}
-                        value={titleForm[field]}
-                        onChange={e => setTitleForm(prev => ({ ...prev, [field]: e.target.value }))}
-                      />
-                    ))}
+                    <input className={styles.docTitleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
+                    <input className={styles.docTitleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
+                    <label className={styles.docSkipRow}>
+                      <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
+                      <span>Не указывать факультет</span>
+                    </label>
+                    {!skipFaculty && <input className={styles.docTitleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
+                    <label className={styles.docSkipRow}>
+                      <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
+                      <span>Не указывать специализацию</span>
+                    </label>
+                    {!skipSpeciality && <input className={styles.docTitleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
+                    <label className={styles.docSkipRow}>
+                      <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
+                      <span>Не указывать предмет</span>
+                    </label>
+                    {!skipDiscipline && <input className={styles.docTitleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
+                    <input className={styles.docTitleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
+                    <input className={styles.docTitleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
+                    <input className={styles.docTitleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
+                    <input className={styles.docTitleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
                     <button className={styles.docUpdateBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
                       {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
                     </button>

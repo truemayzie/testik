@@ -18,7 +18,8 @@ type ReferatResult = {
   content: Record<string, string>;
   sources: string[];
   meta: Record<string, string | number>;
-  profile?: Record<string, string | number | null>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  profile?: Record<string, any>;
 };
 
 type TitleForm = {
@@ -28,6 +29,9 @@ type TitleForm = {
   department: string;
   groupNumber: string;
   teacherName: string;
+  city: string;
+  speciality: string;
+  discipline: string;
 };
 
 // ── Состояние текущей генерации (живёт между client-side навигациями) ────────
@@ -148,6 +152,108 @@ const FAQ = [
   },
 ];
 
+// ── Пул из 50 работ для имитации живой ленты ─────────────────────────────────
+const MOCK_WORKS_POOL = [
+  { type: "Курсовая",  title: "Народное художественное творчество как материал для речевого развития школьников" },
+  { type: "ВКР",       title: "Цифровая трансформация банковского сектора России в условиях санкционного давления" },
+  { type: "Реферат",   title: "Причины распада Советского Союза: экономические и политические факторы" },
+  { type: "Курсовая",  title: "Психологические особенности подросткового возраста и их влияние на учебную мотивацию" },
+  { type: "Эссе",      title: "Роль искусственного интеллекта в современной медицине: перспективы и риски" },
+  { type: "Реферат",   title: "Глобальное потепление и его последствия для экосистем арктического региона" },
+  { type: "ВКР",       title: "Управление финансовыми рисками в коммерческом банке на примере ПАО Сбербанк" },
+  { type: "Курсовая",  title: "Маркетинговые стратегии продвижения образовательных услуг в цифровой среде" },
+  { type: "Доклад",    title: "Нейронные сети в обработке естественного языка: архитектура трансформеров" },
+  { type: "Реферат",   title: "Экономические реформы Петра I и их влияние на развитие Российского государства" },
+  { type: "Курсовая",  title: "Правовое регулирование криптовалют в Российской Федерации и зарубежных странах" },
+  { type: "ВКР",       title: "Разработка системы автоматизированного тестирования для микросервисной архитектуры" },
+  { type: "Сочинение", title: "Тема маленького человека в произведениях Достоевского и Гоголя" },
+  { type: "Реферат",   title: "Современные методы лечения сахарного диабета второго типа" },
+  { type: "Курсовая",  title: "Влияние социальных сетей на политическую активность молодёжи" },
+  { type: "ВКР",       title: "Оптимизация логистических процессов торгового предприятия методами линейного программирования" },
+  { type: "Доклад",    title: "Квантовые вычисления: современное состояние и перспективы применения" },
+  { type: "Реферат",   title: "Феномен буллинга в современной школьной среде: причины и профилактика" },
+  { type: "Курсовая",  title: "Налоговое планирование в малом бизнесе: инструменты и ограничения" },
+  { type: "Эссе",      title: "Этические проблемы клонирования человека в свете современной биоэтики" },
+  { type: "ВКР",       title: "Анализ конкурентоспособности российских автопроизводителей в условиях ухода западных брендов" },
+  { type: "Реферат",   title: "Экологические последствия нефтяного загрязнения морских акваторий" },
+  { type: "Курсовая",  title: "Гендерные стереотипы в рекламе: эволюция образов за последние 30 лет" },
+  { type: "Доклад",    title: "История развития интернета: от ARPANET до Web 3.0" },
+  { type: "Сочинение", title: "Образ природы как отражение внутреннего мира героев в лирике Тютчева" },
+  { type: "ВКР",       title: "Эффективность государственных программ поддержки малого бизнеса в регионах России" },
+  { type: "Реферат",   title: "Философия стоицизма и её актуальность для современного человека" },
+  { type: "Курсовая",  title: "Организационная культура как фактор удержания талантов в IT-компаниях" },
+  { type: "Эссе",      title: "Свобода и ответственность в эпоху социальных сетей" },
+  { type: "Реферат",   title: "Влияние пандемии COVID-19 на систему образования: дистанционное обучение" },
+  { type: "Курсовая",  title: "Методы оценки инвестиционной привлекательности региона" },
+  { type: "ВКР",       title: "Проектирование RESTful API для системы управления складом" },
+  { type: "Доклад",    title: "Современные тенденции в архитектуре: биомиметика и зелёное строительство" },
+  { type: "Реферат",   title: "Роль НАТО в системе европейской безопасности после 2022 года" },
+  { type: "Курсовая",  title: "Психологические механизмы формирования зависимости от смартфона у подростков" },
+  { type: "Сочинение", title: "Мечта и реальность в романе Булгакова «Мастер и Маргарита»" },
+  { type: "ВКР",       title: "Управление проектами в условиях неопределённости: методология Agile vs Waterfall" },
+  { type: "Реферат",   title: "Нанотехнологии в медицине: адресная доставка лекарственных препаратов" },
+  { type: "Курсовая",  title: "Трансформация рынка труда под влиянием автоматизации и робототехники" },
+  { type: "Эссе",      title: "Право на забвение в цифровую эпоху: между приватностью и историей" },
+  { type: "Реферат",   title: "Экономика совместного потребления: Airbnb, Uber и будущее собственности" },
+  { type: "ВКР",       title: "Финансовая устойчивость страховых компаний: методы оценки и управления" },
+  { type: "Курсовая",  title: "Развитие электронного правительства в России: достижения и барьеры" },
+  { type: "Доклад",    title: "Революция в хранении энергии: твердотельные аккумуляторы" },
+  { type: "Сочинение", title: "Война и её цена в повести Быкова «Сотников»" },
+  { type: "Реферат",   title: "Психологические аспекты принятия решений: когнитивные искажения и их преодоление" },
+  { type: "Курсовая",  title: "Международный туризм как фактор экономического развития малых городов России" },
+  { type: "ВКР",       title: "Оценка кредитоспособности физических лиц методами машинного обучения" },
+  { type: "Реферат",   title: "Правовой статус искусственного интеллекта: субъект или объект права?" },
+  { type: "Эссе",      title: "Одиночество как феномен современного общества потребления" },
+];
+
+// Fisher-Yates shuffle
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getDailyGenCount(): number {
+  const now = new Date();
+  const h = now.getHours() + now.getMinutes() / 60;
+  let target: number;
+  if (h < 8)       target = Math.round(h * 3);
+  else if (h < 13) target = Math.round(24 + (h - 8) * 18);
+  else if (h < 20) target = Math.round(114 + (h - 13) * 14);
+  else             target = Math.round(212 + (h - 20) * 10);
+  const jitter = Math.floor((Math.random() - 0.5) * 6);
+  return Math.max(0, target + jitter);
+}
+
+function timeAgo(minutesAgo: number): string {
+  if (minutesAgo < 1) return "только что";
+  if (minutesAgo < 60) return `${minutesAgo} мин. назад`;
+  const h = Math.floor(minutesAgo / 60);
+  if (h < 24) return `${h} ч. назад`;
+  return `${Math.floor(h / 24)} дн. назад`;
+}
+
+type DisplayWork = {
+  id: string;
+  workType: string;
+  topic: string;
+  minutesAgo: number;
+  isNew: boolean;
+};
+
+function buildInitialWorks(pool: typeof MOCK_WORKS_POOL): DisplayWork[] {
+  return shuffleArray(pool).slice(0, 8).map((w, i) => ({
+    id: `mock-${i}-${Date.now()}`,
+    workType: w.type,
+    topic: w.title,
+    minutesAgo: 2 + Math.floor(Math.random() * 53), // 2–55 мин назад
+    isNew: false,
+  }));
+}
+
 const MOCK_RECENT = [
   { id: "1", workType: "ВКР",       topic: "Разработка системы мониторинга качества ПО на основе машинного обучения",           createdAt: "2026-03-31T10:12:00Z" },
   { id: "2", workType: "Курсовая",  topic: "Рынок электромобилей в России: тенденции и перспективы 2025–2030",                  createdAt: "2026-03-31T08:47:00Z" },
@@ -234,9 +340,13 @@ export default function Home() {
   const [generationId, setGenerationId]       = useState<string | null>(null);
   const extrasProgressRef                     = useRef<number>(0);
   const [extrasProgress, setExtrasProgress]   = useState(0);
-  const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "" });
+  const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
   const [titleUpdating, setTitleUpdating]     = useState(false);
   const [saveProfile, setSaveProfile]         = useState(false);
+  const [skipFaculty, setSkipFaculty]         = useState(false);
+  const [skipSpeciality, setSkipSpeciality]   = useState(false);
+  const [skipDiscipline, setSkipDiscipline]   = useState(false);
+  const [showTitleModal, setShowTitleModal]   = useState(false);
   const previewContainerRef                   = useRef<HTMLDivElement>(null);
   const baseScaleRef                          = useRef<number>(1);
   const [previewZoom, setPreviewZoom]         = useState(1);
@@ -244,6 +354,11 @@ export default function Home() {
   const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
   const [recentWorks, setRecentWorks]         = useState(MOCK_RECENT);
   const [showAllWorks, setShowAllWorks]       = useState(false);
+  const [displayedWorks, setDisplayedWorks]   = useState<DisplayWork[]>([]);
+  const [usingRealWorks, setUsingRealWorks]   = useState(false);
+  const poolRef                               = useRef<typeof MOCK_WORKS_POOL>([]);
+  const poolCursorRef                         = useRef(0);
+  const [dailyCount, setDailyCount]           = useState(0);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
   const [trialUsed, setTrialUsed]             = useState(false);
   const [f5Recovery, setF5Recovery]           = useState(false);
@@ -352,16 +467,21 @@ export default function Home() {
     } catch {}
   }
 
+  function buildProfilePayload() {
+    return { ...titleForm, skipFaculty, skipSpeciality, skipDiscipline };
+  }
+
   async function handleDownload() {
     if (!result) return;
     console.log('[Refai] Скачивание DOCX...');
     persistProfile();
     setDownloading(true);
+    const downloadData = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
     try {
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result),
+        body: JSON.stringify(downloadData),
       });
       if (!response.ok) throw new Error();
       const blob = await response.blob();
@@ -393,6 +513,9 @@ export default function Home() {
         department:  String(result.profile?.department  ?? ""),
         groupNumber: String(result.profile?.groupNumber ?? ""),
         teacherName: String(result.profile?.teacherName ?? ""),
+        city:        String(result.profile?.city        ?? ""),
+        speciality:  String(result.profile?.speciality  ?? ""),
+        discipline:  String(result.profile?.discipline  ?? ""),
       });
     }
   }, [result]);
@@ -529,6 +652,9 @@ export default function Home() {
           department:  data.department  || prev.department  || "",
           groupNumber: data.groupNumber || prev.groupNumber || "",
           teacherName: data.teacherName || prev.teacherName || "",
+          city:        data.city        || prev.city        || "",
+          speciality:  data.speciality  || prev.speciality  || "",
+          discipline:  data.discipline  || prev.discipline  || "",
         }));
       })
       .catch(() => {});
@@ -539,7 +665,7 @@ export default function Home() {
     if (!result) return;
     setTitleUpdating(true);
     persistProfile();
-    const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...titleForm } };
+    const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
     await renderPreview(updated);
     setTitleUpdating(false);
   }
@@ -857,9 +983,48 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/generations/recent")
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data) && data.length >= 8) setRecentWorks(data); })
+      .then(data => { if (Array.isArray(data) && data.length >= 8) { setRecentWorks(data); setUsingRealWorks(true); } })
       .catch(() => {});
   }, []);
+
+  // Инициализация пула мок-работ
+  useEffect(() => {
+    const shuffled = shuffleArray(MOCK_WORKS_POOL);
+    poolRef.current = shuffled;
+    poolCursorRef.current = 8; // первые 8 уже использованы в начальном списке
+    setDisplayedWorks(buildInitialWorks(shuffled));
+    setDailyCount(getDailyGenCount());
+  }, []);
+
+  // Счётчик генераций — обновляем каждые 37 секунд
+  useEffect(() => {
+    const t = setInterval(() => setDailyCount(getDailyGenCount()), 37_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Ротация карточек каждые 5 минут (только если не используем реальные данные)
+  useEffect(() => {
+    if (usingRealWorks) return;
+    const t = setInterval(() => {
+      const pool = poolRef.current;
+      if (!pool.length) return;
+      const idx  = poolCursorRef.current % pool.length;
+      const next = pool[idx];
+      poolCursorRef.current = idx + 1;
+      const newCard: DisplayWork = {
+        id: `mock-${idx}-${Date.now()}`,
+        workType: next.type,
+        topic: next.title,
+        minutesAgo: 0,
+        isNew: true,
+      };
+      setDisplayedWorks(prev => [newCard, ...prev.slice(0, 7)]);
+      setTimeout(() => {
+        setDisplayedWorks(prev => prev.map(w => w.id === newCard.id ? { ...w, isNew: false } : w));
+      }, 8_000);
+    }, 5 * 60_000);
+    return () => clearInterval(t);
+  }, [usingRealWorks]);
 
   // Для тестового аккаунта ЮКасса: проверяем использование пробной генерации
   useEffect(() => {
@@ -1283,6 +1448,7 @@ export default function Home() {
             {isAdmin && (
               <button
                 key="Тест"
+                style={{ display: "none" }}
                 className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
                 onClick={() => selectWorkType("Тест")}
                 disabled={loading}
@@ -1356,10 +1522,12 @@ export default function Home() {
             </div>
           </form>
 
-          <p className={styles.heroNote}>
-            <span className={styles.heroNoteCheck}>✓</span>{" "}
-            Уже сгенерировано более <strong>1 000 работ</strong>
-          </p>
+          {dailyCount > 0 && (
+            <div className={styles.heroNote}>
+              <span className={styles.heroDailyDot} />
+              <span>{dailyCount} генераций сегодня</span>
+            </div>
+          )}
 
         </div>
       </section>
@@ -1472,7 +1640,7 @@ export default function Home() {
                 <div className={styles.stepNum}>01</div>
                 <div className={styles.stepTitle}>Вводишь тему</div>
                 <p className={styles.stepText}>
-                  Напиши тему реферата в поле выше — любую, на русском или английском языке
+                  Напиши любую тему в поле выше — развёрнуто или кратко, главное суть
                 </p>
               </div>
               <div className={styles.stepCard}>
@@ -1532,25 +1700,49 @@ export default function Home() {
       {!result && !loading && (
         <section className={styles.recentSection}>
           <div className={styles.recentInner}>
-            <h2 className={styles.recentHeading}>
-              Последние <span className={styles.recentAccent}>проекты</span>
-            </h2>
+            <div className={styles.recentHeadRow}>
+              <div>
+                <h2 className={styles.recentHeading}>
+                  Последние <span className={styles.recentAccent}>проекты</span>
+                </h2>
+                <p className={styles.recentSubline}>
+                  Более <strong>1 000 работ</strong> уже сгенерировано
+                </p>
+              </div>
+            </div>
             <div className={styles.recentGrid}>
-              {(showAllWorks ? recentWorks : recentWorks.slice(0, 8)).map(w => {
-                const typeColor = WORK_TYPE_COLORS[w.workType] || "#6366F1";
-                const typeIcon  = WORK_TYPE_ICONS[w.workType]  || "📄";
+              {(usingRealWorks
+                ? (showAllWorks ? recentWorks : recentWorks.slice(0, 8))
+                : displayedWorks
+              ).map(w => {
+                const workType  = (w as DisplayWork).workType ?? (w as typeof MOCK_RECENT[0]).workType;
+                const topic     = (w as DisplayWork).topic    ?? (w as typeof MOCK_RECENT[0]).topic;
+                const isNew     = (w as DisplayWork).isNew;
+                const minsAgo   = (w as DisplayWork).minutesAgo;
+                const createdAt = (w as typeof MOCK_RECENT[0]).createdAt;
+                const typeColor = WORK_TYPE_COLORS[workType] || "#6366F1";
+                const typeIcon  = WORK_TYPE_ICONS[workType]  || "📄";
                 return (
-                  <div key={w.id} className={styles.recentCard} style={{ borderLeft: `3px solid ${typeColor}` }}>
-                    <span className={styles.recentBadge} style={{ color: typeColor }}>
-                      <span className={styles.recentBadgeIcon}>{typeIcon}</span>{w.workType}
+                  <div
+                    key={(w as DisplayWork).id ?? (w as typeof MOCK_RECENT[0]).id}
+                    className={`${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`}
+                    style={{ "--card-accent": typeColor } as React.CSSProperties}
+                  >
+                    <div className={styles.recentBadgeRow2}>
+                      <span className={styles.recentBadge} style={{ color: typeColor }}>
+                        <span className={styles.recentBadgeIcon}>{typeIcon}</span>{workType}
+                      </span>
+                      {isNew && <span className={styles.recentNewBadge}>новая</span>}
+                    </div>
+                    <p className={styles.recentWorkTitle}>{topic}</p>
+                    <span suppressHydrationWarning className={styles.recentDate}>
+                      {createdAt ? formatDate(createdAt) : timeAgo(minsAgo ?? 0)}
                     </span>
-                    <p className={styles.recentWorkTitle}>{w.topic}</p>
-                    <span suppressHydrationWarning className={styles.recentDate}>{formatDate(w.createdAt)}</span>
                   </div>
                 );
               })}
             </div>
-            {recentWorks.length > 8 && !showAllWorks && (
+            {usingRealWorks && recentWorks.length > 8 && !showAllWorks && (
               <button className={styles.showMoreBtn} onClick={() => setShowAllWorks(true)}>
                 Показать ещё
               </button>
@@ -1763,13 +1955,27 @@ export default function Home() {
                     <hr className={styles.modalDivider} />
                     <div className={styles.titleSection}>
                       <p className={styles.titleSectionHeading}>Титульный лист</p>
-                      {(["fullName", "university", "faculty", "department", "groupNumber", "teacherName"] as (keyof TitleForm)[]).map(field => (
-                        <input key={field} className={styles.titleInput}
-                          placeholder={{ fullName: "ФИО студента", university: "Университет", faculty: "Факультет", department: "Кафедра", groupNumber: "Группа", teacherName: "Научный руководитель" }[field]}
-                          value={titleForm[field]}
-                          onChange={e => setTitleForm(prev => ({ ...prev, [field]: e.target.value }))}
-                        />
-                      ))}
+                      <input className={styles.titleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
+                      <input className={styles.titleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
+                      <label className={styles.skipRow}>
+                        <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
+                        <span>Не указывать факультет</span>
+                      </label>
+                      {!skipFaculty && <input className={styles.titleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
+                      <label className={styles.skipRow}>
+                        <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
+                        <span>Не указывать специализацию</span>
+                      </label>
+                      {!skipSpeciality && <input className={styles.titleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
+                      <label className={styles.skipRow}>
+                        <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
+                        <span>Не указывать предмет</span>
+                      </label>
+                      {!skipDiscipline && <input className={styles.titleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
+                      <input className={styles.titleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
+                      <input className={styles.titleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
+                      <input className={styles.titleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
+                      <input className={styles.titleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
                       <button className={styles.updateDocBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
                         {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
                       </button>
@@ -1799,6 +2005,11 @@ export default function Home() {
                   </div>
                 )}
                 <DownloadBtn />
+                {hasTitlePage && (
+                  <button className={styles.mobileTitleBtn} onClick={() => setShowTitleModal(true)}>
+                    ✏ Титульный лист
+                  </button>
+                )}
                 {hasExtras && !extrasGenerating && extrasReady.length === 0 && (
                   <div className={styles.mobileToggles}>
                     <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
@@ -1856,6 +2067,49 @@ export default function Home() {
           </div>
         );
       })(), document.body)}
+
+      {/* Мобильный bottom-sheet редактирования титульника */}
+      {showTitleModal && typeof document !== "undefined" && createPortal(
+        <div className={styles.titleSheetOverlay} onClick={() => setShowTitleModal(false)}>
+          <div className={styles.titleSheet} onClick={e => e.stopPropagation()}>
+            <div className={styles.titleSheetHeader}>
+              <span className={styles.titleSheetTitle}>Титульный лист</span>
+              <button className={styles.titleSheetClose} onClick={() => setShowTitleModal(false)}>✕</button>
+            </div>
+            <div className={styles.titleSheetBody}>
+              <input className={styles.titleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
+              <input className={styles.titleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
+              <label className={styles.skipRow}>
+                <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
+                <span>Не указывать факультет</span>
+              </label>
+              {!skipFaculty && <input className={styles.titleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
+              <label className={styles.skipRow}>
+                <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
+                <span>Не указывать специализацию</span>
+              </label>
+              {!skipSpeciality && <input className={styles.titleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
+              <label className={styles.skipRow}>
+                <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
+                <span>Не указывать предмет</span>
+              </label>
+              {!skipDiscipline && <input className={styles.titleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
+              <input className={styles.titleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
+              <input className={styles.titleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
+              <input className={styles.titleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
+              <input className={styles.titleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
+              <button className={styles.updateDocBtn} onClick={() => { handleTitleUpdate(); setShowTitleModal(false); }} disabled={titleUpdating}>
+                {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
+              </button>
+              <label className={styles.saveProfileRow}>
+                <input type="checkbox" className={styles.saveProfileCheck} checked={saveProfile} onChange={e => setSaveProfile(e.target.checked)} />
+                <span>Запомнить данные</span>
+              </label>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </main>
   );

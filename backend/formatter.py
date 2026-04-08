@@ -177,7 +177,7 @@ _WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, инте
 
 # Ширина текстовой зоны для A4 с полями 3+1 см: 170мм = 9638 twips
 # Tab stop ставим чуть левее правого края чтобы число не обрезалось
-_TOC_TAB_POS = "9200"  # twips (~16.3 cm от левого поля)
+_TOC_TAB_POS = "7920"  # twips (14 cm от левого поля)
 
 
 def _count_words(text: str) -> int:
@@ -210,7 +210,7 @@ def _toc_line(doc, title: str, level: int, page_num: int):
 
     # Текст названия
     r1 = p.add_run(title)
-    set_run_font(r1, bold=(level == 1), size=14)
+    set_run_font(r1, bold=False, size=14)
     r1.font.color.rgb = RGBColor(0, 0, 0)
     # Символ табуляции (переход к номеру страницы)
     r1._r.append(OxmlElement("w:tab"))
@@ -280,10 +280,16 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
         r = p.add_run(text)
         set_run_font(r, bold=bold, size=14)
 
+    skip_faculty   = bool(profile.get("skipFaculty"))
+    skip_speciality = bool(profile.get("skipSpeciality"))
+    skip_discipline = bool(profile.get("skipDiscipline"))
+
     # ── БЛОК 1: Шапка ────────────────────────────────────────────────────────
-    cline(university  or "Название учебного заведения", bold=True)
-    cline(faculty     or "Направление (факультет)")
-    cline(speciality  or "Специализация")
+    cline(university or "Название учебного заведения", bold=True)
+    if not skip_faculty:
+        cline(faculty or "Направление (факультет)")
+    if not skip_speciality:
+        cline(speciality or "Специализация")
 
     # ── 4 пустые строки ──────────────────────────────────────────────────────
     for _ in range(4):
@@ -298,10 +304,11 @@ def add_title_page(doc, topic, profile: dict = {}, work_type: str = "Рефер�
     }
     cline(TITLE_LABELS.get(work_type, "Реферат"), bold=True)
 
-    if discipline and work_type != "ВКР":
-        cline(discipline)
-    else:
-        cline("Предмет")
+    if not skip_discipline:
+        if discipline and work_type != "ВКР":
+            cline(discipline)
+        else:
+            cline("Предмет")
 
     # "На тему:" обычный, само название жирное
     p = doc.add_paragraph()

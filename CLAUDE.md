@@ -8,7 +8,7 @@ Always respond in Russian. Всегда отвечай на русском яз�
 
 Сервис генерации учебных работ (рефераты, курсовые, ВКР, эссе, доклады, сочинения) с оформлением по ГОСТ, авторизацией, оплатой через ЮКассу и дополнительными материалами (презентация + текст выступления).
 
-**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (SQLite) | FastAPI + python-docx + python-pptx + Groq API (llama-3.3-70b-versatile)
+**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (SQLite) | FastAPI + python-docx + Claude API (claude-sonnet-4-5) | Node.js + pptxgenjs (генерация PPTX)
 
 ## Команды
 
@@ -43,7 +43,7 @@ npm run db:studio    # GUI Prisma Studio
 → POST /api/generate → проверяет Payment (status=succeeded, usedAt=null)
 → прокси на FastAPI POST /api/generate/referat → возвращает { jobId }
 → frontend поллит GET /api/generate/poll?jobId=X каждые 5с
-→ FastAPI генерирует в фоновом потоке: generator.py (Groq) → JSON
+→ FastAPI генерирует в фоновом потоке: generator.py (Claude API) → JSON
 → /api/generate/poll получает result → formatter.py (DOCX в памяти)
 → usedAt = now() → /api/generations сохраняет в Generation (+ slug)
 → API возвращает { ...result, _generationId: savedId }
@@ -81,7 +81,7 @@ npm run db:studio    # GUI Prisma Studio
 ### generator.py
 - `WORK_RULES` dict: лимиты страниц, флаги `has_title_page / has_toc / has_sources` для каждого типа
 - CrossRef ищет реальные источники (только если `has_sources=True`)
-- Groq генерирует структуру и каждый раздел отдельно через тип-специфичные prompt-функции: `get_structure_prompt`, `get_intro_prompt`, `get_section_prompt`, `get_conclusion_prompt`
+- Claude API генерирует структуру и каждый раздел отдельно через тип-специфичные prompt-функции: `get_structure_prompt`, `get_intro_prompt`, `get_section_prompt`, `get_conclusion_prompt`
 - `generate_referat = generate_work` — алиас для обратной совместимости
 
 ### formatter.py
@@ -90,19 +90,27 @@ npm run db:studio    # GUI Prisma Studio
 - Список литературы (`has_sources`)
 - Правое поле 1.5 см для коротких форматов (Эссе, Доклад, Сочинение), 1.0 см для остальных
 - Таблицы передаются как `[TABLE]{json}[/TABLE]` — парсятся во фронте и в DOCX
+- Титульный лист поддерживает флаги пропуска: `skip_faculty`, `skip_speciality`, `skip_discipline` (из профиля пользователя)
+- TOC: tab stop 7920 twips (14 см), все записи без bold
 
 ### presentation_generator.py
-- `_detect_color_scheme(topic)` — выбирает цветовую схему по ключевым словам темы (7 схем)
-- `_fetch_image(topic)` — скачивает фото по теме: Unsplash Source → Wikipedia API (ru/en) → None
-  - Временный файл в `/tmp/`, удаляется после `prs.save()`
-- Типы слайдов: `title`, `bullets`, `stats`, `columns`, `timeline`, `conclusion`, `sources`, `final`
-- `_slide_title(img_path=None)` — с фото: полноэкранное изображение + тёмный оверлей; без фото: solid-цвет + декоративные круги
-- `_slide_image_bullets(img_path=None)` — буллеты слева 58% + изображение справа 36% (первый bullets-слайд)
-- `generate_presentation` — скачивает изображение один раз, передаёт в title-слайд и первый bullets-слайд
+- `generate_presentation` — генерирует JSON-структуру слайдов через Claude API, затем вызывает `node pptx_builder.js` через subprocess
+- `_WORK_TYPE_PALETTE` — маппинг типа работы → палитра: ВКР/Курсовая→`dark_gold`, Реферат/Доклад→`blue_academic`, Эссе/Сочинение→`burgundy_warm`
+- `_build_slides_prompt()` — промпт для AI, генерирует JSON слайдов с полями `image_query`/`image_query2` (английский, для поиска картинок)
+- Курсовая/ВКР: до 12 разделов × 600 символов, max_tokens=3500; остальные: 7 × 400, max_tokens=2500
+- Типы слайдов: `TITLE`, `RELEVANCE`, `OVERVIEW`, `CONTENT`, `STATS`, `CONCLUSION`, `SOURCES`, `FINAL`
 - `generate_speech` — генерирует текст выступления 3-5 мин (450-600 слов) и сохраняет как DOCX
 
+### pptx_builder.js (Node.js, backend/)
+- CLI: `node pptx_builder.js <input.json> <output.pptx> [pixabay_key]`
+- 3 палитры: `dark_gold`, `blue_academic`, `burgundy_warm`
+- Иконки: react-icons/fa → SVG → sharp → PNG base64
+- Загрузка изображений: `looksLikeNamedEntity(q)` → Wikipedia первой (точнее для именных/исторических тем), иначе Pixabay → Wikipedia → плейсхолдер
+- Скоринг Pixabay: `scoreHit()` — стоп-слова + совпадения ключей в тегах, MIN_SCORE=2; blacklist (love, flower, cute, cartoon, abstract…)
+- Зависимости: `backend/package.json` — pptxgenjs, react, react-dom, react-icons, sharp
+
 ### github_proxy.py
-- Прокси через GitHub Actions для обхода блокировок Groq из РФ
+- Прокси через GitHub Actions для обхода блокировок Claude API из РФ
 - Запускается при старте FastAPI (`start_callback_server()`)
 
 ## Фронтенд (Next.js)
@@ -189,10 +197,14 @@ Extras: Презентация +199 ₽, Текст выступления +219 
 - Курсовая: 10 шагов (~220–260 с)
 - ВКР: 11 шагов (~350–420 с, включая «Оформляем приложения»)
 
-### Секция «Последние проекты»
-- `MOCK_RECENT` — 8 реалистичных работ (ВКР, Курсовая ×2, Реферат ×2, Эссе, Доклад, Сочинение)
-- API `/api/generations/recent` заменяет mock **только если** вернул ≥ 8 реальных записей (иначе тестовые данные из БД не перекрывают красивые заготовки)
-- Карточки: цветная левая полоска + emoji-иконка + цвет бейджа — по типу работы (`WORK_TYPE_COLORS`, `WORK_TYPE_ICONS`)
+### Секция «Последние проекты» + Social proof
+- `MOCK_WORKS_POOL` — 50 реалистичных работ, перемешиваются при маунте (Fisher-Yates), показываются 8
+- Ротация каждые 5 минут: новая карточка сверху с анимацией + бейдж «новая», список остаётся 8 штук
+- `getDailyGenCount()` — счётчик генераций за день (0→252), растёт по времени суток, обновляется каждые 37 с
+- Счётчик отображается под кнопкой «Сгенерировать» в hero (зелёная точка + число)
+- `timeAgo(minutesAgo)` — «только что» / «X мин. назад» / «X ч. назад»
+- Если `/api/generations/recent` вернул ≥ 8 реальных записей — моки отключаются, ротация останавливается
+- Карточки: цветная полоска слева через CSS `::before` + `--card-accent`, строгий минималистичный стиль
 
 ### Иконки скачивания (`/public/`)
 - `/docx-icon.png` — иконка Word для кнопок скачивания DOCX
@@ -227,7 +239,11 @@ Extras: Презентация +199 ₽, Текст выступления +219 
 
 **backend/.env:**
 ```
-GROQ_API_KEY=
+ANTHROPIC_API_KEY=   # Claude API
+PIXABAY_API_KEY=     # для поиска изображений в презентациях
+GITHUB_TOKEN=        # для GitHub Actions прокси
+GITHUB_REPO=         # owner/repo для прокси
+PROXY_SECRET=        # секрет прокси
 ```
 
 **frontend/.env.local:**
@@ -257,10 +273,14 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - ✅ Автогенерация после оплаты (sessionStorage + ?autoGenerate=1)
 - ✅ Восстановление прогресса при уходе со страницы (модульная переменная `_gen`)
 - ✅ Дополнительные материалы: Презентация (PPTX) + Текст выступления (DOCX)
-  - ✅ Изображения в презентации (Unsplash → Wikipedia → без фото)
-  - ✅ Тип-специфичные цветовые схемы (7 вариантов)
+  - ✅ Генерация PPTX через Node.js pptxgenjs (pptx_builder.js), вызов из Python subprocess
+  - ✅ 3 палитры по типу работы (dark_gold / blue_academic / burgundy_warm)
+  - ✅ Изображения: Wikipedia (именные сущности) → Pixabay со скорингом → плейсхолдер
+  - ✅ Скоринг Pixabay: стоп-слова + совпадения тегов, MIN_SCORE=2, blacklist нерелевантных тегов
   - ✅ Polling вне React lifecycle (модульная переменная `_extras`)
   - ✅ Сохранение job IDs в БД (поле `extras` у Generation)
+- ✅ Расширенный титульный лист: поля city, speciality, discipline + чекбоксы «не указывать» для faculty/speciality/discipline
+- ✅ Social proof на лендинге: живая лента 50 работ с ротацией, счётчик генераций за день
 - ✅ Публичные превью работ по slug (SEO, частичное содержимое для гостей)
 - ✅ Скачивание DOCX/PPTX по slug и из результата (иконки DOCX/PPTX/TXT)
 - ✅ Лендинг: «Почему Refai?», «Последние проекты», «Свежие отзывы», FAQ, PreFooter
