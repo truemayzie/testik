@@ -273,8 +273,8 @@ async function makePlaceholder(accent) {
 // ─── Заголовок слайда ─────────────────────────────────────────────────────────
 function addHeader(pres, s, title) {
   s.addShape(pres.shapes.RECTANGLE, { x:0, y:0, w:10, h:0.85, fill:{color:C.dark}, line:{color:C.dark} });
-  s.addShape(pres.shapes.RECTANGLE, { x:0, y:0.835, w:10, h:0.055, fill:{color:C.gold}, line:{color:C.gold} });
-  s.addText(title, { x:0.42, y:0, w:9.2, h:0.84, fontSize:23, bold:true, color:C.white, fontFace:"Calibri", valign:"middle", margin:0 });
+  s.addShape(pres.shapes.RECTANGLE, { x:0, y:0.83, w:10, h:0.07, fill:{color:C.gold}, line:{color:C.gold} });
+  s.addText(title, { x:0.42, y:0, w:9.2, h:0.84, fontSize:22, bold:true, color:C.white, fontFace:"Calibri Light", valign:"middle", margin:0 });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -326,12 +326,12 @@ async function renderRelevance(pres, slide) {
   s.addShape(pres.shapes.RECTANGLE, { x:6.38, y:1.02, w:3.35, h:2.0, fill:{color:C.dark}, line:{color:C.gold,width:1.5}, shadow:mkShS() });
   s.addText("Объект исследования", { x:6.5, y:1.1, w:3.1, h:0.42, fontSize:11.5, bold:true, color:C.gold, fontFace:"Calibri", margin:0 });
   s.addShape(pres.shapes.RECTANGLE, { x:6.5, y:1.54, w:3.05, h:0.03, fill:{color:C.panel}, line:{color:C.panel} });
-  s.addText(slide.object||"", { x:6.5, y:1.62, w:3.1, h:1.25, fontSize:12, color:C.white, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.3 });
+  s.addText(slide.object||"", { x:6.5, y:1.70, w:3.1, h:1.18, fontSize:11.5, color:C.white, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.3 });
 
   s.addShape(pres.shapes.RECTANGLE, { x:6.38, y:3.2, w:3.35, h:2.22, fill:{color:C.panel}, line:{color:C.mid}, shadow:mkShS() });
   s.addText("Предмет исследования", { x:6.5, y:3.28, w:3.1, h:0.42, fontSize:11.5, bold:true, color:C.gold, fontFace:"Calibri", margin:0 });
   s.addShape(pres.shapes.RECTANGLE, { x:6.5, y:3.72, w:3.05, h:0.03, fill:{color:C.mid}, line:{color:C.mid} });
-  s.addText(slide.subject||"", { x:6.5, y:3.82, w:3.1, h:1.45, fontSize:12, color:C.grayL, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.3 });
+  s.addText(slide.subject||"", { x:6.5, y:3.90, w:3.1, h:1.38, fontSize:11.5, color:C.grayL, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.3 });
 }
 
 async function renderOverview(pres, slide) {
@@ -343,14 +343,14 @@ async function renderOverview(pres, slide) {
   for (let i=0; i<cards.length; i++) {
     const c=cards[i], x=startX+i*(cW+gap), accent=c.accent||C.gold;
     s.addShape(pres.shapes.RECTANGLE, { x, y:1.02, w:cW, h:cH, fill:{color:C.white}, line:{color:"E2E8F0",width:1}, shadow:mkSh() });
-    s.addShape(pres.shapes.RECTANGLE, { x, y:1.02, w:cW, h:0.62, fill:{color:accent}, line:{color:accent} });
+    s.addShape(pres.shapes.RECTANGLE, { x, y:1.02, w:cW, h:0.72, fill:{color:accent}, line:{color:accent} });
     const ico = await renderIcon(c.icon||"FaStar","#FFFFFF");
-    s.addImage({ data:ico, x:x+cW/2-0.25, y:1.09, w:0.5, h:0.5 });
-    s.addText(c.title||"", { x, y:1.70, w:cW, h:0.4, fontSize:13.5, bold:true, color:C.text, fontFace:"Calibri", align:"center", margin:0 });
-    s.addShape(pres.shapes.RECTANGLE, { x:x+0.25, y:2.14, w:cW-0.5, h:0.025, fill:{color:"E2E8F0"}, line:{color:"E2E8F0"} });
+    s.addImage({ data:ico, x:x+cW/2-0.275, y:1.055, w:0.55, h:0.55 });
+    s.addText(c.title||"", { x, y:1.80, w:cW, h:0.4, fontSize:13.5, bold:true, color:C.text, fontFace:"Calibri", align:"center", margin:0 });
+    s.addShape(pres.shapes.RECTANGLE, { x:x+0.25, y:2.26, w:cW-0.5, h:0.025, fill:{color:"E2E8F0"}, line:{color:"E2E8F0"} });
     const pts=(c.points||[]).slice(0,5);
-    s.addText(pts.map((p,pi)=>({ text:p, options:{bullet:true, breakLine:pi<pts.length-1, color:C.muted, fontSize:11.5} })),
-      { x:x+0.15, y:2.22, w:cW-0.25, h:3.1, fontFace:"Calibri", margin:0, paraSpaceAfter:9, valign:"top" });
+    s.addText(pts.map((p,pi)=>({ text:p, options:{bullet:true, breakLine:pi<pts.length-1, color:C.muted, fontSize:11} })),
+      { x:x+0.15, y:2.34, w:cW-0.25, h:2.85, fontFace:"Calibri", margin:0, paraSpaceAfter:6, valign:"top" });
   }
 }
 
@@ -359,15 +359,15 @@ async function renderBulletsImage(pres, slide) {
   s.background = { color: C.light };
   addHeader(pres, s, slide.title||"");
   const img = await getImage(slide.image_query, slide.image_query2) || await makePlaceholder();
-  s.addImage({ data:img, x:5.62, y:0.92, w:4.18, h:4.5, sizing:{type:"cover",w:4.18,h:4.5} });
-  s.addShape(pres.shapes.RECTANGLE, { x:5.62, y:0.92, w:4.18, h:4.5, fill:{color:"FFFFFF",transparency:100}, line:{color:C.gold,width:1.2} });
-  const points=(slide.points||[]).slice(0,4);
+  s.addImage({ data:img, x:5.62, y:0.97, w:4.18, h:4.48, sizing:{type:"cover",w:4.18,h:4.48} });
+  s.addShape(pres.shapes.RECTANGLE, { x:5.62, y:0.97, w:4.18, h:4.48, fill:{color:"FFFFFF",transparency:100}, line:{color:C.gold,width:1.2} });
+  const points=(slide.points||[]).slice(0,3);
   points.forEach((p,i)=>{
-    const y=1.05+i*1.1;
-    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:5.1, h:0.96, fill:{color:C.white}, line:{color:"E2E8F0",width:1}, shadow:mkShS() });
-    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:0.055, h:0.96, fill:{color:C.gold}, line:{color:C.gold} });
-    s.addText(p.heading||"", { x:0.44, y:y+0.06, w:4.82, h:0.32, fontSize:12.5, bold:true, color:C.text, fontFace:"Calibri", margin:0 });
-    s.addText(p.text||"",    { x:0.44, y:y+0.38, w:4.82, h:0.5,  fontSize:11.5, color:C.muted, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.2 });
+    const y=1.10+i*1.42;
+    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:5.1, h:1.25, fill:{color:C.white}, line:{color:"E2E8F0",width:1}, shadow:mkShS() });
+    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:0.055, h:1.25, fill:{color:C.gold}, line:{color:C.gold} });
+    s.addText(p.heading||"", { x:0.44, y:y+0.09, w:4.82, h:0.36, fontSize:13, bold:true, color:C.text, fontFace:"Calibri", margin:0 });
+    s.addText(p.text||"",    { x:0.44, y:y+0.42, w:4.82, h:0.75, fontSize:12, color:C.muted, fontFace:"Calibri", margin:0, lineSpacingMultiple:1.2 });
   });
 }
 
@@ -446,13 +446,13 @@ async function renderStats(pres, slide) {
   s.addShape(pres.shapes.RECTANGLE, { x:5.0, y:0.92, w:4.85, h:4.5, fill:{color:C.dark,transparency:40}, line:{color:C.gold,width:1.2} });
   const stats=(slide.stats||[]).slice(0,3);
   for (let i=0; i<stats.length; i++) {
-    const st=stats[i], y=1.05+i*1.45;
+    const st=stats[i], y=1.08+i*1.5;
     s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:4.5, h:1.3, fill:{color:C.panel}, line:{color:C.mid}, shadow:mkShS() });
-    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:0.06, h:1.3, fill:{color:C.gold}, line:{color:C.gold} });
+    s.addShape(pres.shapes.RECTANGLE, { x:0.28, y, w:0.07, h:1.3, fill:{color:C.gold}, line:{color:C.gold} });
     const ico = await renderIcon(st.icon||"FaStar","#"+C.gold);
-    s.addImage({ data:ico, x:0.46, y:y+0.38, w:0.52, h:0.52 });
-    s.addText(st.value||"", { x:1.15, y:y+0.08, w:1.7, h:0.75, fontSize:42, bold:true, color:C.gold, fontFace:"Calibri", valign:"middle", margin:0 });
-    s.addText(st.label||"", { x:2.9, y:y+0.1, w:1.75, h:1.1, fontSize:12, color:C.grayL, fontFace:"Calibri", valign:"middle", margin:0, lineSpacingMultiple:1.2 });
+    s.addImage({ data:ico, x:0.46, y:y+0.42, w:0.54, h:0.54 });
+    s.addText(st.value||"", { x:1.22, y:y+0.08, w:1.7, h:0.75, fontSize:40, bold:true, color:C.gold, fontFace:"Calibri", valign:"middle", margin:0 });
+    s.addText(st.label||"", { x:3.0, y:y+0.1, w:1.65, h:1.0, fontSize:12.5, color:C.grayL, fontFace:"Calibri", valign:"middle", margin:0, lineSpacingMultiple:1.2 });
   }
 }
 
