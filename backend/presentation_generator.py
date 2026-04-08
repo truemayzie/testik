@@ -839,7 +839,7 @@ def _build_slides_prompt(topic: str, work_type: str, full_text: str,
     sources_hint = ""
     if real_sources:
         sl = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(real_sources[:5]))
-        sources_hint = f"\nИспользуй эти реальные источники для слайда sources:\n{sl}"
+        sources_hint = f"\nИспользуй эти реальные источники для слайда SOURCES:\n{sl}"
 
     return f"""На основе текста создай JSON-структуру презентации из 10-12 слайдов.
 Тема: {topic}
@@ -849,37 +849,110 @@ def _build_slides_prompt(topic: str, work_type: str, full_text: str,
 Фрагмент текста:
 {full_text}
 
-Верни ТОЛЬКО JSON без ```json и без пояснений:
+Верни ТОЛЬКО JSON без ```json и без пояснений. Строго соблюдай имена полей — рендерер использует именно эти ключи:
+
 {{
   "slides": [
-    {{"type": "TITLE", "title": "...", "subtitle": "...", "workType": "{work_type}", "image_query": "...", "image_query2": "..."}},
-    {{"type": "RELEVANCE", "title": "Актуальность", "points": ["...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "OVERVIEW", "title": "...", "items": ["...", "...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "CONTENT", "title": "...", "points": ["...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "STATS", "title": "...", "stats": [{{"num": "...", "label": "..."}}, {{"num": "...", "label": "..."}}]}},
-    {{"type": "CONTENT", "title": "...", "points": ["...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "CONTENT", "title": "...", "points": ["...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "CONCLUSION", "title": "Выводы", "points": ["...", "...", "..."], "image_query": "...", "image_query2": "..."}},
-    {{"type": "SOURCES", "title": "Список источников", "sources": ["...", "...", "..."]}},
-    {{"type": "FINAL", "title": "Спасибо за внимание!", "subtitle": "Вопросы?"}}
+    {{
+      "type": "TITLE",
+      "title": "Полное название темы",
+      "subtitle": "Аннотация в 1-2 предложения",
+      "meta": "{work_type}",
+      "image_query": "конкретные английские слова о теме",
+      "image_query2": "запасной английский запрос о теме"
+    }},
+    {{
+      "type": "RELEVANCE",
+      "title": "Актуальность и цели исследования",
+      "goal": "Цель работы — одно предложение",
+      "tasks": ["Задача 1", "Задача 2", "Задача 3", "Задача 4"],
+      "object": "Объект исследования — 1-2 предложения",
+      "subject": "Предмет исследования — 1-2 предложения"
+    }},
+    {{
+      "type": "OVERVIEW",
+      "title": "Структура работы",
+      "cards": [
+        {{"icon": "FaBookOpen",    "title": "Название раздела 1", "points": ["Ключевой аспект 1", "Ключевой аспект 2"], "accent": "C9963A"}},
+        {{"icon": "FaChartLine",   "title": "Название раздела 2", "points": ["Ключевой аспект 1", "Ключевой аспект 2"], "accent": "4A9EDB"}},
+        {{"icon": "FaCogs",        "title": "Название раздела 3", "points": ["Ключевой аспект 1", "Ключевой аспект 2"], "accent": "C0784A"}},
+        {{"icon": "FaCheckCircle", "title": "Название раздела 4", "points": ["Ключевой аспект 1", "Ключевой аспект 2"], "accent": "5B8A3C"}}
+      ]
+    }},
+    {{
+      "type": "CONTENT",
+      "title": "Заголовок контентного слайда",
+      "points": [
+        {{"heading": "Краткий заголовок тезиса", "text": "Развёрнутое пояснение в 1-2 предложения с фактами"}},
+        {{"heading": "Краткий заголовок тезиса", "text": "Развёрнутое пояснение в 1-2 предложения с фактами"}},
+        {{"heading": "Краткий заголовок тезиса", "text": "Развёрнутое пояснение в 1-2 предложения с фактами"}}
+      ],
+      "image_query": "English keywords about slide title",
+      "image_query2": "alternative English query"
+    }},
+    {{
+      "type": "STATS",
+      "title": "Ключевые показатели",
+      "stats": [
+        {{"value": "42%",  "label": "Описание показателя из текста", "icon": "FaChartLine"}},
+        {{"value": "2025", "label": "Описание показателя из текста", "icon": "FaCalendarAlt"}},
+        {{"value": "150+", "label": "Описание показателя из текста", "icon": "FaUsers"}}
+      ],
+      "image_query": "English keywords about the statistics topic"
+    }},
+    {{
+      "type": "CONTENT",
+      "title": "Заголовок второго контентного слайда",
+      "points": [
+        {{"heading": "Заголовок", "text": "Пояснение с данными из текста"}},
+        {{"heading": "Заголовок", "text": "Пояснение с данными из текста"}},
+        {{"heading": "Заголовок", "text": "Пояснение с данными из текста"}}
+      ],
+      "image_query": "...",
+      "image_query2": "..."
+    }},
+    {{
+      "type": "CONTENT",
+      "title": "Заголовок третьего контентного слайда",
+      "points": [
+        {{"heading": "Заголовок", "text": "Пояснение"}},
+        {{"heading": "Заголовок", "text": "Пояснение"}},
+        {{"heading": "Заголовок", "text": "Пояснение"}}
+      ],
+      "image_query": "...",
+      "image_query2": "..."
+    }},
+    {{
+      "type": "CONCLUSION",
+      "title": "Выводы",
+      "points": [
+        {{"label": "Краткий вывод 1", "text": "Развёрнутое пояснение вывода на основе текста"}},
+        {{"label": "Краткий вывод 2", "text": "Развёрнутое пояснение вывода на основе текста"}},
+        {{"label": "Краткий вывод 3", "text": "Развёрнутое пояснение вывода на основе текста"}}
+      ],
+      "quote": "Итоговая мысль или ключевой тезис работы"
+    }},
+    {{"type": "SOURCES", "title": "Список литературы", "sources": ["Источник 1", "Источник 2", "Источник 3"]}},
+    {{"type": "FINAL",   "title": "Спасибо за внимание!", "subtitle": "Готов(а) ответить на ваши вопросы"}}
   ]
 }}
 
 Правила по содержанию:
-— Используй реальные данные, факты и цифры из текста
-— Ровно 10-12 слайдов, типы разнообразны
-— Для STATS: конкретные числа из текста (даты, %, количества)
-— Для OVERVIEW: 4-6 пунктов структуры/плана работы
-— Для SOURCES: реальные источники если даны выше, иначе придумай 3-5 релевантных
+— Используй реальные факты, цифры и данные из фрагмента текста — не придумывай
+— Ровно 10-12 слайдов итого; CONTENT-слайды можно повторять
+— STATS: только конкретные числа из текста (%, годы, суммы, количества)
+— OVERVIEW: ровно 4 карточки с реальными разделами/главами работы
+  Иконки только из списка: FaBookOpen, FaChartLine, FaCogs, FaCheckCircle, FaBrain, FaSearch, FaUsers, FaGlobe, FaLightbulb, FaHistory, FaBalanceScale, FaShieldAlt, FaLandmark, FaRocket, FaIndustry
+— CONTENT: поле points ОБЯЗАТЕЛЬНО массив объектов {{heading, text}}, НЕ строки
+— CONCLUSION: поле points ОБЯЗАТЕЛЬНО массив объектов {{label, text}}, НЕ строки
+— SOURCES: реальные источники если даны выше, иначе придумай 3-5 релевантных
 
-Правила для image_query (ОЧЕНЬ ВАЖНО):
-— image_query и image_query2 — поисковые запросы на АНГЛИЙСКОМ для Pixabay
-— Для слайда TITLE: запрос СТРОГО по теме работы "{topic}", максимально точный. Пример для темы "Падение Римской империи" → "Roman Empire ruins ancient"
-— Для остальных слайдов: запрос СТРОГО по заголовку слайда (title), отражает именно этот слайд
-— image_query2 — запасной вариант, чуть шире по теме
-— Формат: 2-4 английских слова, конкретные существительные/прилагательные, без абстракций
-— Плохо: "history", "old times", "people" — Хорошо: "Soviet Union protest crowd", "Kremlin Moscow USSR"
-— Для STATS, SOURCES, FINAL поля image_query не нужны"""
+Правила для image_query (КРИТИЧНО для релевантных картинок):
+— Только АНГЛИЙСКИЙ язык, 2-4 слова, конкретные существительные
+— TITLE: строго о теме "{topic}" → пример "кибербезопасность" → "cybersecurity network hacker"
+— CONTENT/STATS: строго по заголовку слайда, отражает именно эту тему
+— Плохо: "concept people modern history" → Хорошо: "nuclear power plant reactor", "stock market crash trading"
+— RELEVANCE, OVERVIEW, SOURCES, FINAL: image_query не нужен"""
 
 
 # ── Основная генерация ────────────────────────────────────────────────────────
@@ -905,7 +978,7 @@ def generate_presentation(job_id: str, topic: str, work_type: str,
 
     # 1. Генерируем структуру слайдов через AI
     prompt = _build_slides_prompt(topic, work_type, full_text, real_sources)
-    max_tokens = 3500 if work_type in ("Курсовая", "ВКР") else 2500
+    max_tokens = 5000 if work_type in ("Курсовая", "ВКР") else 4000
     raw = _ask(prompt, max_tokens=max_tokens)
 
     match = re.search(r'\{[\s\S]*\}', raw)
@@ -915,6 +988,43 @@ def generate_presentation(job_id: str, topic: str, work_type: str,
     slides = slides_data.get("slides", [])
     if not slides:
         raise ValueError("Список слайдов пустой")
+
+    # Нормализация: конвертируем устаревший формат на случай если AI вернул строки
+    for sl in slides:
+        stype = sl.get("type", "")
+
+        # CONTENT.points: строки → {heading, text}
+        if stype == "CONTENT":
+            pts = sl.get("points", [])
+            sl["points"] = [
+                {"heading": p, "text": ""} if isinstance(p, str) else p
+                for p in pts
+            ]
+
+        # CONCLUSION.points: строки → {label, text}
+        elif stype == "CONCLUSION":
+            pts = sl.get("points", [])
+            sl["points"] = [
+                {"label": p, "text": ""} if isinstance(p, str) else p
+                for p in pts
+            ]
+
+        # STATS.stats: num → value, добавляем icon если нет
+        elif stype == "STATS":
+            for st in sl.get("stats", []):
+                if "num" in st and "value" not in st:
+                    st["value"] = st.pop("num")
+                st.setdefault("icon", "FaChartLine")
+
+        # OVERVIEW: items[] → cards[] совместимость со старым промптом
+        elif stype == "OVERVIEW" and "items" in sl and "cards" not in sl:
+            _icons   = ["FaBookOpen", "FaChartLine", "FaCogs", "FaCheckCircle"]
+            _accents = ["C9963A", "4A9EDB", "C0784A", "5B8A3C"]
+            sl["cards"] = [
+                {"icon": _icons[i % 4], "title": (it if isinstance(it, str) else str(it)),
+                 "points": [], "accent": _accents[i % 4]}
+                for i, it in enumerate(sl.pop("items"))
+            ]
 
     # Если real_sources есть — вставляем в слайд SOURCES
     if real_sources:
