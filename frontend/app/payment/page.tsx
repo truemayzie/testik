@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
-import { WORK_PRICES } from "@/lib/prices";
+import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
 import styles from "./payment.module.css";
 
 function PaymentPageContent() {
@@ -13,8 +13,16 @@ function PaymentPageContent() {
   const workType = searchParams.get("workType") || "Реферат";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [extrasItems, setExtrasItems] = useState<string[]>([]);
 
   const priceInfo = WORK_PRICES[workType];
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("pendingExtrasChoice");
+      if (raw) setExtrasItems(JSON.parse(raw));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -29,7 +37,7 @@ function PaymentPageContent() {
       const res = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workType }),
+        body: JSON.stringify({ workType, extras: extrasItems.length > 0 ? extrasItems : undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -76,7 +84,9 @@ function PaymentPageContent() {
         <p className={styles.pages}>{priceInfo.pages}</p>
 
         <div className={styles.priceBlock}>
-          <span className={styles.price}>{priceInfo.price} ₽</span>
+          <span className={styles.price}>
+            {priceInfo.price + extrasItems.reduce((s, i) => s + (EXTRAS_PRICES[i] ?? 0), 0)} ₽
+          </span>
           <span className={styles.priceNote}>разовая оплата</span>
         </div>
 
@@ -85,6 +95,8 @@ function PaymentPageContent() {
           <li>✓ Реальные источники 2020–2025</li>
           <li>✓ Скачивание в DOCX</li>
           <li>✓ Готово за 2–4 минуты</li>
+          {extrasItems.includes("presentation") && <li>✓ Презентация PPTX</li>}
+          {extrasItems.includes("speech") && <li>✓ Текст выступления DOCX</li>}
         </ul>
 
         {error && <p className={styles.error}>⚠ {error}</p>}
@@ -97,7 +109,7 @@ function PaymentPageContent() {
           {loading ? (
             <><span className={styles.btnSpinner} />Создаём платёж...</>
           ) : (
-            `⚡ Оплатить ${priceInfo.price} ₽`
+            `⚡ Оплатить ${priceInfo.price + extrasItems.reduce((s, i) => s + (EXTRAS_PRICES[i] ?? 0), 0)} ₽`
           )}
         </button>
 

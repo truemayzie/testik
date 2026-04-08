@@ -95,6 +95,8 @@ const _extras = (() => {
 let _extrasPollingStarted = false;
 // ID генерации (для записи extras в БД после завершения)
 let _extrasGenId: string | null = null;
+// Pending extras items от предварительного выбора в форме (до оплаты)
+let _pendingExtrasItems: string[] | null = null;
 
 // Сортировка по возрастанию страниц: Сочинение < Эссе < Доклад < Реферат < Курсовая < ВКР
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
@@ -331,8 +333,10 @@ export default function Home() {
   const [showResultModal, setShowResultModal] = useState(false);
   const [modalClosing, setModalClosing]       = useState(false);
   const { setModalOpen }                      = useModalContext();
-  const [presentationSel, setPresentationSel] = useState(false);
-  const [speechSel, setSpeechSel]             = useState(false);
+  const [wantPresentation, setWantPresentation] = useState(false);
+  const [wantSpeech, setWantSpeech]             = useState(false);
+  const [presentationSel, setPresentationSel]   = useState(false);
+  const [speechSel, setSpeechSel]               = useState(false);
   const [extrasJobId, setExtrasJobId]         = useState<string | null>(null);
   const [extrasGenerating, setExtrasGenerating] = useState(false);
   const [extrasReady, setExtrasReady]         = useState<string[]>([]);
@@ -388,6 +392,10 @@ export default function Home() {
     stepsRef.current = getProgressSteps(type);
     setResult(null);
     setError(null);
+    if (!["Доклад", "Реферат", "Курсовая", "ВКР"].includes(type)) {
+      setWantPresentation(false);
+      setWantSpeech(false);
+    }
   }
 
   function startProgress(elapsedOffset = 0) {
@@ -723,6 +731,13 @@ export default function Home() {
         setResult(resultData as ReferatResult);
         if (resultData.structure?.length > 0) setActiveSection(resultData.structure[0]);
         if (isYukassa) setTrialUsed(true);
+        // Автозапуск extras если были предварительно выбраны
+        if (_pendingExtrasItems && _pendingExtrasItems.length > 0) {
+          const items = [..._pendingExtrasItems];
+          _pendingExtrasItems = null;
+          setExtrasGenerating(true);
+          setTimeout(() => triggerExtrasGeneration(items, resultData as ReferatResult), 50);
+        }
       }
     } catch (err) {
       console.error('[Refai] Ошибка генерации:', err);
@@ -851,8 +866,14 @@ export default function Home() {
     e.preventDefault();
     if (!topic.trim()) return;
 
+    // Вычисляем items допматериалов
+    const formExtrasItems: string[] = [];
+    if (wantPresentation) formExtrasItems.push("presentation");
+    if (wantSpeech) formExtrasItems.push("speech");
+
     // Admin — генерация бесплатно
     if (isAdmin) {
+      if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
       runGeneration(topic, pages, workType);
       return;
     }
@@ -860,6 +881,7 @@ export default function Home() {
     // Тестовый аккаунт ЮКасса — минуем проверку оплаты
     if (isYukassa) {
       if (trialUsed) return;
+      if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
       runGeneration(topic, pages, workType);
       return;
     }
@@ -875,6 +897,9 @@ export default function Home() {
       if (!checkData.hasPaid) {
         console.log("[Refai] Оплата не найдена, переход на страницу оплаты:", workType);
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
+        if (formExtrasItems.length > 0) {
+          sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
+        }
         router.push(`/payment?workType=${encodeURIComponent(workType)}`);
         return;
       }
@@ -883,6 +908,7 @@ export default function Home() {
       return;
     }
 
+    if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
     runGeneration(topic, pages, workType);
   }
 
@@ -1075,6 +1101,14 @@ export default function Home() {
           const { topic: t, pages: p, workType: wt } = JSON.parse(raw);
           sessionStorage.removeItem("pendingGeneration");
           window.history.replaceState({}, "", "/");
+          // Восстанавливаем предварительно выбранные extras
+          try {
+            const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
+            if (extrasRaw) {
+              _pendingExtrasItems = JSON.parse(extrasRaw);
+              sessionStorage.removeItem("pendingExtrasChoice");
+            }
+          } catch {}
           // selectWorkType сбрасывает pages на дефолт → setPages(p) вызываем после
           selectWorkType(wt);
           setTopic(t);
@@ -1355,8 +1389,12 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f5Recovery]);
 
-  const price     = WORK_PRICES[workType]?.price ?? 199;
-  const pageRange = WORK_PAGES[workType];
+  const price         = WORK_PRICES[workType]?.price ?? 199;
+  const pageRange     = WORK_PAGES[workType];
+  const EXTRAS_TYPES  = ["Доклад", "Реферат", "Курсовая", "ВКР"];
+  const hasExtrasForm = EXTRAS_TYPES.includes(workType);
+  const extrasPrice   = (wantPresentation ? 199 : 0) + (wantSpeech ? 149 : 0);
+  const totalPrice    = price + extrasPrice;
 
   return (
     <main className={styles.main}>
@@ -1507,6 +1545,26 @@ export default function Home() {
               </div>
             </div>
 
+            {hasExtrasForm && (
+              <div className={styles.extrasFormSection}>
+                <span className={styles.extrasFormLabel}>Дополнительно:</span>
+                <div className={styles.extrasFormCards}>
+                  <label className={`${styles.extrasFormCard} ${wantPresentation ? styles.extrasFormCardActive : ""}`}>
+                    <input type="checkbox" className={styles.toggleInput} checked={wantPresentation} onChange={e => setWantPresentation(e.target.checked)} disabled={loading} />
+                    <span className={styles.extrasFormCardIcon}>📊</span>
+                    <span className={styles.extrasFormCardLabel}>Презентация</span>
+                    <span className={styles.extrasFormCardPrice}>+199 ₽</span>
+                  </label>
+                  <label className={`${styles.extrasFormCard} ${wantSpeech ? styles.extrasFormCardActive : ""}`}>
+                    <input type="checkbox" className={styles.toggleInput} checked={wantSpeech} onChange={e => setWantSpeech(e.target.checked)} disabled={loading} />
+                    <span className={styles.extrasFormCardIcon}>🎤</span>
+                    <span className={styles.extrasFormCardLabel}>Текст выступления</span>
+                    <span className={styles.extrasFormCardPrice}>+149 ₽</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className={styles.btnRow}>
               <button
                 type="submit"
@@ -1517,7 +1575,7 @@ export default function Home() {
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
                   : isYukassa
                     ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
-                    : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${price} ₽`}
+                    : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${totalPrice} ₽`}
               </button>
             </div>
           </form>
@@ -1825,7 +1883,7 @@ export default function Home() {
         const hasTitlePage = ["Реферат", "Курсовая", "ВКР", "Доклад"].includes(workType);
         const hasSources   = !["Эссе", "Сочинение"].includes(workType);
         const hasExtras    = !["Эссе", "Сочинение"].includes(workType);
-        const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 219 : 0);
+        const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 149 : 0);
         const closeModal   = () => { setModalClosing(true); setTimeout(() => { setShowResultModal(false); setModalClosing(false); }, 200); };
         const DownloadBtn  = () => (
           <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
@@ -1873,18 +1931,22 @@ export default function Home() {
           <div className={styles.extrasSection}>
             {!extrasGenerating && extrasReady.length === 0 && (
               <>
-                <label className={styles.toggleRow}>
-                  <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
-                  <span className={styles.toggleSlider} />
-                  <span className={styles.toggleLabel}>📊 Презентация</span>
-                  <span className={styles.togglePrice}>+199 ₽</span>
-                </label>
-                <label className={styles.toggleRow}>
-                  <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
-                  <span className={styles.toggleSlider} />
-                  <span className={styles.toggleLabel}>🎤 Текст выступления</span>
-                  <span className={styles.togglePrice}>+219 ₽</span>
-                </label>
+                {!wantPresentation && (
+                  <label className={styles.toggleRow}>
+                    <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
+                    <span className={styles.toggleSlider} />
+                    <span className={styles.toggleLabel}>📊 Презентация</span>
+                    <span className={styles.togglePrice}>+199 ₽</span>
+                  </label>
+                )}
+                {!wantSpeech && (
+                  <label className={styles.toggleRow}>
+                    <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
+                    <span className={styles.toggleSlider} />
+                    <span className={styles.toggleLabel}>🎤 Текст выступления</span>
+                    <span className={styles.togglePrice}>+149 ₽</span>
+                  </label>
+                )}
                 {extrasTotal > 0 && (
                   <button className={styles.payExtrasBtn} onClick={handleExtrasPayment}>
                     Оплатить {extrasTotal} ₽
@@ -2010,22 +2072,26 @@ export default function Home() {
                     ✏ Титульный лист
                   </button>
                 )}
-                {hasExtras && !extrasGenerating && extrasReady.length === 0 && (
+                {hasExtras && !extrasGenerating && extrasReady.length === 0 && (!wantPresentation || !wantSpeech) && (
                   <div className={styles.mobileToggles}>
-                    <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
-                      <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
-                      <span className={styles.mobileChipIcon}>📊</span>
-                      <span className={styles.mobileChipLabel}>Презентация</span>
-                      <span className={styles.mobileChipPrice}>+199 ₽</span>
-                      <span className={styles.mobileChipToggle}><span /></span>
-                    </label>
-                    <label className={`${styles.mobileToggleChip} ${speechSel ? styles.mobileToggleChipActive : ""}`}>
-                      <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
-                      <span className={styles.mobileChipIcon}>🎤</span>
-                      <span className={styles.mobileChipLabel}>Выступление</span>
-                      <span className={styles.mobileChipPrice}>+219 ₽</span>
-                      <span className={styles.mobileChipToggle}><span /></span>
-                    </label>
+                    {!wantPresentation && (
+                      <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
+                        <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
+                        <span className={styles.mobileChipIcon}>📊</span>
+                        <span className={styles.mobileChipLabel}>Презентация</span>
+                        <span className={styles.mobileChipPrice}>+199 ₽</span>
+                        <span className={styles.mobileChipToggle}><span /></span>
+                      </label>
+                    )}
+                    {!wantSpeech && (
+                      <label className={`${styles.mobileToggleChip} ${speechSel ? styles.mobileToggleChipActive : ""}`}>
+                        <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
+                        <span className={styles.mobileChipIcon}>🎤</span>
+                        <span className={styles.mobileChipLabel}>Выступление</span>
+                        <span className={styles.mobileChipPrice}>+149 ₽</span>
+                        <span className={styles.mobileChipToggle}><span /></span>
+                      </label>
+                    )}
                   </div>
                 )}
                 {hasExtras && !extrasGenerating && extrasReady.length === 0 && extrasTotal > 0 && (

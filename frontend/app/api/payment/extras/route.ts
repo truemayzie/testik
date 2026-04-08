@@ -6,7 +6,7 @@ import crypto from "crypto";
 
 const EXTRAS_PRICES: Record<string, number> = {
   presentation: 199,
-  speech: 219,
+  speech: 149,
 };
 
 export async function POST(request: NextRequest) {

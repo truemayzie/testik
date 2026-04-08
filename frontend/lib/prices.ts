@@ -1,3 +1,8 @@
+export const EXTRAS_PRICES: Record<string, number> = {
+  presentation: 199,
+  speech: 149,
+}
+
 export const WORK_PRICES: Record<string, { price: number; label: string; pages: string }> = {
   "Тест":      { price: 0,    label: "Тест",             pages: "1 стр."     },
   "Сочинение": { price: 99,   label: "Сочинение",       pages: "3-5 стр."   },

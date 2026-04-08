@@ -978,25 +978,33 @@ def generate_speech(job_id: str, topic: str, work_type: str, result: dict,
                     slide_titles=None) -> str:
     """Генерирует текст выступления и сохраняет в /tmp/speech_{job_id}.docx."""
 
+    _is_long = work_type in ("Курсовая", "ВКР")
+    _max_sections   = 12 if _is_long else 8
+    _chars_per_sect = 600 if _is_long else 400
+
     text_parts = []
     for section in result.get("structure", []):
         content = result.get("content", {}).get(section, "")
         content = re.sub(r'\[TABLE\].*?\[/TABLE\]', '', content, flags=re.DOTALL)
-        text_parts.append(f"## {section}\n{content[:400]}")
-    full_text = "\n\n".join(text_parts[:6])
+        text_parts.append(f"## {section}\n{content[:_chars_per_sect]}")
+    full_text = "\n\n".join(text_parts[:_max_sections])
+
+    n_slides = len(slide_titles) if slide_titles else 0
+    speech_max_tokens = 6000 if _is_long else (4000 if n_slides >= 8 else 2500)
 
     if slide_titles and len(slide_titles) >= 2:
         slides_block = "\n".join(
             f"  Слайд {i+1}: {t}" for i, t in enumerate(slide_titles)
         )
-        prompt = f"""Напиши текст выступления для защиты {work_type.lower()} на 3-5 минут (450-600 слов).
+        prompt = f"""Напиши текст выступления для защиты {work_type.lower()}.
 Тема: «{topic}»
 
 Структура презентации ({len(slide_titles)} слайдов):
 {slides_block}
 
-Требования:
-— Текст разбит по слайдам: каждый блок начинается с «Слайд N.» (N — номер)
+ОБЯЗАТЕЛЬНЫЕ требования:
+— Напиши текст для КАЖДОГО из {len(slide_titles)} слайдов без исключения — не обрывай на середине
+— Каждый блок начинается строго с «Слайд N.» (N — номер от 1 до {len(slide_titles)})
 — Каждый блок: 3-4 конкретных предложения, опираясь на содержание этого слайда
 — Переходы конкретные: называй заголовок следующего слайда
 — Используй конкретные факты, цифры и имена из текста работы
@@ -1014,7 +1022,7 @@ def generate_speech(job_id: str, topic: str, work_type: str, result: dict,
 Фрагмент работы:
 {full_text}"""
 
-    speech_text = _ask(prompt, max_tokens=1400)
+    speech_text = _ask(prompt, max_tokens=speech_max_tokens)
 
     doc = Document()
     sec = doc.sections[0]

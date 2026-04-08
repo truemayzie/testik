@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { WORK_PRICES } from "@/lib/prices";
+import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -12,11 +12,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { workType } = await request.json();
+  const { workType, extras } = await request.json() as { workType: string; extras?: string[] };
   const priceInfo = WORK_PRICES[workType];
   if (!priceInfo) {
     return NextResponse.json({ error: "Неизвестный тип работы" }, { status: 400 });
   }
+  const extrasAmount = (extras ?? []).reduce((sum, item) => sum + (EXTRAS_PRICES[item] ?? 0), 0);
+  const totalAmount = priceInfo.price + extrasAmount;
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUserId },
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         workType,
-        amount: priceInfo.price,
+        amount: totalAmount,
         status: "succeeded",
         yokassaId: `dev_${crypto.randomUUID()}`,
       },
@@ -48,6 +50,7 @@ export async function POST(request: NextRequest) {
   // Real YooKassa
   const idempotenceKey = crypto.randomUUID();
   const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
+  const extrasDesc = (extras ?? []).map(i => i === "presentation" ? "+ Презентация" : "+ Текст выступления").join(" ");
 
   const yokassaRes = await fetch("https://api.yookassa.ru/v3/payments", {
     method: "POST",
@@ -57,13 +60,13 @@ export async function POST(request: NextRequest) {
       "Idempotence-Key": idempotenceKey,
     },
     body: JSON.stringify({
-      amount: { value: priceInfo.price.toFixed(2), currency: "RUB" },
+      amount: { value: totalAmount.toFixed(2), currency: "RUB" },
       capture: true, // одностадийная оплата — деньги списываются сразу
       confirmation: {
         type: "redirect",
         return_url: `${appUrl}/payment/success`,
       },
-      description: `Генерация: ${workType}`,
+      description: `Генерация: ${workType}${extrasDesc ? " " + extrasDesc : ""}`,
       metadata: { userId: user.id, workType },
     }),
   });
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
     data: {
       userId: user.id,
       workType,
-      amount: priceInfo.price,
+      amount: totalAmount,
       status: "pending",
       yokassaId: yokassaData.id,
     },
