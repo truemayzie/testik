@@ -6,11 +6,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TypewriterInput from "./components/TypewriterInput";
+import PaymentWidget from "./components/PaymentWidget";
 import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
 import { useModalContext } from "./lib/ModalContext";
 import styles from "./page.module.css";
+import PresentationViewer, { type Slide } from "./components/PresentationViewer";;
 
 type ReferatResult = {
   title: string;
@@ -95,6 +97,8 @@ const _extras = (() => {
 let _extrasPollingStarted = false;
 // ID генерации (для записи extras в БД после завершения)
 let _extrasGenId: string | null = null;
+// JSON-структура слайдов (получена при поллинге extras)
+let _extrasSlides: { accent: string; slides: unknown[] } | null = null;
 // Pending extras items от предварительного выбора в форме (до оплаты)
 let _pendingExtrasItems: string[] | null = null;
 
@@ -344,6 +348,10 @@ export default function Home() {
   const [generationId, setGenerationId]       = useState<string | null>(null);
   const extrasProgressRef                     = useRef<number>(0);
   const [extrasProgress, setExtrasProgress]   = useState(0);
+  const [modalTab, setModalTab]               = useState<"work" | "presentation">("work");
+  const [slidesData, setSlidesData]           = useState<{ accent: string; slides: unknown[] } | null>(null);
+  const [presentationImages, setPresentationImages] = useState<Record<number, string>>({});
+  const [downloadingPptx, setDownloadingPptx] = useState(false);
   const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
   const [titleUpdating, setTitleUpdating]     = useState(false);
   const [saveProfile, setSaveProfile]         = useState(false);
@@ -366,6 +374,9 @@ export default function Home() {
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
   const [trialUsed, setTrialUsed]             = useState(false);
   const [f5Recovery, setF5Recovery]           = useState(false);
+  const [paymentLoading, setPaymentLoading]   = useState(false);
+  type PaymentWidgetData = { workType: string; extras: string[] };
+  const [paymentWidgetData, setPaymentWidgetData] = useState<PaymentWidgetData | null>(null);
 
   // Прогресс
   const [stepIndex, setStepIndex]       = useState(0);
@@ -528,6 +539,36 @@ export default function Home() {
     }
   }, [result]);
 
+  // Инициализируем slidesData когда презентация готова
+  useEffect(() => {
+    if (_extrasSlides && extrasReady.includes("presentation") && !slidesData) {
+      setSlidesData(_extrasSlides as { accent: string; slides: unknown[] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extrasReady]);
+
+  // Синхронизируем titleForm → TITLE слайд в slidesData
+  // Срабатывает при изменении любого поля формы И при переключении на таб презентации
+  useEffect(() => {
+    const data = slidesData ?? (_extrasSlides && extrasReady.includes("presentation") ? _extrasSlides as { accent: string; slides: unknown[] } : null);
+    if (!data) return;
+    const slides = data.slides as Slide[];
+    const idx = slides.findIndex((s: Slide) => s.type === "TITLE");
+    if (idx < 0) return;
+    const updated = slides.map((s: Slide, i: number) => i === idx ? {
+      ...s,
+      university:  titleForm.university  || "",
+      faculty:     titleForm.faculty     || "",
+      department:  titleForm.department  || "",
+      full_name:   titleForm.fullName    || "",
+      group:       titleForm.groupNumber || "",
+      teacher:     titleForm.teacherName || "",
+      city:        titleForm.city        || "",
+    } : s);
+    setSlidesData(() => ({ ...data, slides: updated }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleForm, modalTab, extrasReady]);
+
   const DOC_WIDTH = 816; // стандартная ширина A4-страницы в docx-preview
 
   // Применяет transform: scale к контейнеру и схлопывает лишнее пространство
@@ -675,6 +716,25 @@ export default function Home() {
     persistProfile();
     const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
     await renderPreview(updated);
+    // Синхронизируем TITLE слайд в презентации
+    setSlidesData(prev => {
+      const data = prev ?? (_extrasSlides as { accent: string; slides: unknown[] } | null);
+      if (!data) return prev;
+      const slides = data.slides as Slide[];
+      const idx = slides.findIndex((s: Slide) => s.type === "TITLE");
+      if (idx < 0) return prev;
+      const newSlides = slides.map((s: Slide, i: number) => i === idx ? {
+        ...s,
+        university: titleForm.university || "",
+        faculty:    titleForm.faculty    || "",
+        department: titleForm.department || "",
+        full_name:  titleForm.fullName   || "",
+        group:      titleForm.groupNumber|| "",
+        teacher:    titleForm.teacherName|| "",
+        city:       titleForm.city       || "",
+      } : s);
+      return { ...data, slides: newSlides };
+    });
     setTitleUpdating(false);
   }
 
@@ -835,17 +895,27 @@ export default function Home() {
   }
 
   async function downloadPresentation() {
-    if (!extrasJobId) return;
+    const data = slidesData || _extrasSlides;
+    if (!data) { alert("Слайды ещё не готовы"); return; }
+    setDownloadingPptx(true);
     try {
-      const res = await fetch(`/api/download/presentation/${extrasJobId}`);
-      if (!res.ok) { alert("Файл недоступен"); return; }
+      const res = await fetch("/api/generate/presentation/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, images: presentationImages }),
+      });
+      if (!res.ok) throw new Error("bad response");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "presentation.pptx";
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
-    } catch { alert("Не удалось скачать файл."); }
+    } catch {
+      alert("Ошибка скачивания, попробуйте снова");
+    } finally {
+      setDownloadingPptx(false);
+    }
   }
 
   async function downloadSpeech() {
@@ -895,12 +965,37 @@ export default function Home() {
       }
       const checkData = await checkRes.json();
       if (!checkData.hasPaid) {
-        console.log("[Refai] Оплата не найдена, переход на страницу оплаты:", workType);
+        console.log("[Refai] Оплата не найдена, открываем виджет оплаты:", workType);
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
         if (formExtrasItems.length > 0) {
           sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
         }
-        router.push(`/payment?workType=${encodeURIComponent(workType)}`);
+
+        // Dev-режим: YOKASSA_SHOP_ID не задан — создаём платёж сразу, без виджета
+        setPaymentLoading(true);
+        const devCheckRes = await fetch("/api/payment/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workType, extras: formExtrasItems.length > 0 ? formExtrasItems : undefined }),
+        }).catch(() => null);
+        setPaymentLoading(false);
+
+        if (devCheckRes) {
+          const devData = await devCheckRes.json();
+          if (devData.paymentUrl) {
+            // Dev-режим: платёж уже succeeded, сразу запускаем генерацию
+            sessionStorage.removeItem("pendingGeneration");
+            if (formExtrasItems.length > 0) {
+              _pendingExtrasItems = formExtrasItems;
+              sessionStorage.removeItem("pendingExtrasChoice");
+            }
+            runGeneration(topic, pages, workType);
+            return;
+          }
+        }
+
+        // Prod: показываем виджет с выбором метода оплаты
+        setPaymentWidgetData({ workType, extras: formExtrasItems });
         return;
       }
     } catch {
@@ -1314,14 +1409,18 @@ export default function Home() {
 
         if (data.status === "done") {
           const readyItems: string[] = data.ready ?? [];
+          // Сохраняем JSON-структуру слайдов для скачивания PPTX
+          if (data.slides) _extrasSlides = data.slides;
           _extras.resolve(readyItems, "");
           _extrasPollingStarted = false;
-          // Сохраняем extras job IDs в БД
+          // Сохраняем extras job IDs (и slides JSON) в БД
           try {
             const savedGenId = _extrasGenId;
             if (savedGenId && readyItems.length > 0) {
-              const extrasObj: Record<string, string> = {};
+              const extrasObj: Record<string, unknown> = {};
               readyItems.forEach(item => { extrasObj[item] = currentJobId; });
+              // Сохраняем slides JSON для возможности повторного скачивания PPTX
+              if (data.slides) extrasObj["presentationSlides"] = data.slides;
               fetch(`/api/generations/${savedGenId}/extras`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -1396,37 +1495,36 @@ export default function Home() {
   const extrasPrice   = (wantPresentation ? 199 : 0) + (wantSpeech ? 149 : 0);
   const totalPrice    = price + extrasPrice;
 
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.a,
+      },
+    })),
+  }
+
+  const websiteJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Refai',
+    url: 'https://ref-ai.ru',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://ref-ai.ru/?topic={search_term_string}',
+      'query-input': 'required name=search_term_string',
+    },
+  }
+
   return (
     <main className={styles.main}>
 
-      {/* ── Баннер профиля ── */}
-      {session?.user && !profileFilled && !bannerDismissed && (
-        <div className={styles.profileBanner}>
-          <div className={styles.profileBannerContent}>
-            <span className={styles.profileBannerIcon}>🎓</span>
-            <div>
-              <p className={styles.profileBannerTitle}>
-                Заполните профиль — данные будут в титульнике автоматически
-              </p>
-              <p className={styles.profileBannerSub}>
-                ФИО, ВУЗ, кафедра, группа — один раз и навсегда
-              </p>
-            </div>
-          </div>
-          <div className={styles.profileBannerActions}>
-            <Link href="/profile" className={styles.profileBannerBtn}>
-              Заполнить за 1 минуту →
-            </Link>
-            <button
-              className={styles.profileBannerClose}
-              onClick={() => {
-                localStorage.setItem("profileBannerDismissed", "1");
-                setBannerDismissed(true);
-              }}
-            >✕</button>
-          </div>
-        </div>
-      )}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
 
       {/* ── Hero ── */}
       <section ref={heroRef} className={styles.hero}>
@@ -1486,7 +1584,6 @@ export default function Home() {
             {isAdmin && (
               <button
                 key="Тест"
-                style={{ display: "none" }}
                 className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
                 onClick={() => selectWorkType("Тест")}
                 disabled={loading}
@@ -1551,13 +1648,13 @@ export default function Home() {
                 <div className={styles.extrasFormCards}>
                   <label className={`${styles.extrasFormCard} ${wantPresentation ? styles.extrasFormCardActive : ""}`}>
                     <input type="checkbox" className={styles.toggleInput} checked={wantPresentation} onChange={e => setWantPresentation(e.target.checked)} disabled={loading} />
-                    <span className={styles.extrasFormCardIcon}>📊</span>
+                    <img src="/pptx-icon.svg" alt="" className={styles.extrasFormCardIcon} />
                     <span className={styles.extrasFormCardLabel}>Презентация</span>
                     <span className={styles.extrasFormCardPrice}>+199 ₽</span>
                   </label>
                   <label className={`${styles.extrasFormCard} ${wantSpeech ? styles.extrasFormCardActive : ""}`}>
                     <input type="checkbox" className={styles.toggleInput} checked={wantSpeech} onChange={e => setWantSpeech(e.target.checked)} disabled={loading} />
-                    <span className={styles.extrasFormCardIcon}>🎤</span>
+                    <img src="/txt-icon.svg" alt="" className={styles.extrasFormCardIcon} />
                     <span className={styles.extrasFormCardLabel}>Текст выступления</span>
                     <span className={styles.extrasFormCardPrice}>+149 ₽</span>
                   </label>
@@ -1569,10 +1666,12 @@ export default function Home() {
               <button
                 type="submit"
                 className={styles.heroBtn}
-                disabled={loading || !topic.trim() || (isYukassa && trialUsed)}
+                disabled={loading || paymentLoading || !topic.trim() || (isYukassa && trialUsed)}
               >
                 {loading
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
+                  : paymentLoading
+                  ? <><span className={styles.btnSpinner}/> Создаём платёж...</>
                   : isYukassa
                     ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
                     : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${totalPrice} ₽`}
@@ -1885,7 +1984,15 @@ export default function Home() {
         const hasExtras    = !["Эссе", "Сочинение"].includes(workType);
         const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 149 : 0);
         const closeModal   = () => { setModalClosing(true); setTimeout(() => { setShowResultModal(false); setModalClosing(false); }, 200); };
-        const DownloadBtn  = () => (
+        const DownloadBtn  = () => modalTab === "presentation" && hasPres ? (
+          <button className={styles.downloadBtn} onClick={downloadPresentation} disabled={downloadingPptx}
+            style={{ background: downloadingPptx ? "#374151" : "#1E3A5F" }}>
+            {downloadingPptx
+              ? <span className={styles.buttonLoading}><span className={styles.spinner}/>Генерируем файл...</span>
+              : <><img src="/pptx-icon.svg" alt="" className={styles.downloadIcon} />Скачать PPTX</>
+            }
+          </button>
+        ) : (
           <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
             {downloading
               ? <span className={styles.buttonLoading}><span className={styles.spinner}/>Создаём файл...</span>
@@ -1910,12 +2017,7 @@ export default function Home() {
           );
           if (extrasReady.length > 0) return (
             <div className={styles.extrasDownloads}>
-              {extrasReady.includes("presentation") && (
-                <button className={styles.extrasDownloadBtn} onClick={downloadPresentation}>
-                  <img src="/pptx-icon.svg" alt="" className={styles.extrasDownloadIcon} />
-                  Скачать презентацию .pptx
-                </button>
-              )}
+              {/* PPTX скачивается через большую кнопку — здесь только выступление */}
               {extrasReady.includes("speech") && (
                 <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
                   <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
@@ -1935,7 +2037,7 @@ export default function Home() {
                   <label className={styles.toggleRow}>
                     <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
                     <span className={styles.toggleSlider} />
-                    <span className={styles.toggleLabel}>📊 Презентация</span>
+                    <span className={styles.toggleLabel}><img src="/pptx-icon.svg" alt="" className={styles.toggleLabelIcon} /> Презентация</span>
                     <span className={styles.togglePrice}>+199 ₽</span>
                   </label>
                 )}
@@ -1943,7 +2045,7 @@ export default function Home() {
                   <label className={styles.toggleRow}>
                     <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
                     <span className={styles.toggleSlider} />
-                    <span className={styles.toggleLabel}>🎤 Текст выступления</span>
+                    <span className={styles.toggleLabel}><img src="/txt-icon.svg" alt="" className={styles.toggleLabelIcon} /> Текст выступления</span>
                     <span className={styles.togglePrice}>+149 ₽</span>
                   </label>
                 )}
@@ -1957,6 +2059,10 @@ export default function Home() {
             <ExtrasStatus />
           </div>
         );
+        // Используем slidesData (state) или _extrasSlides (module var) если state ещё не обновился
+        const activeSlidesData = slidesData ?? (_extrasSlides && extrasReady.includes("presentation") ? _extrasSlides as { accent: string; slides: unknown[] } : null);
+        const hasPres = !!activeSlidesData;
+
         return (
           <div className={`${styles.modalOverlay} ${modalClosing ? styles.modalOverlayClosing : ""}`}>
             <div className={`${styles.modalBox} ${modalClosing ? styles.modalBoxClosing : ""}`}>
@@ -1976,17 +2082,61 @@ export default function Home() {
                 <button className={styles.mobileCloseBtn} onClick={closeModal}>✕</button>
               </div>
 
-              {/* Левый столбец — предпросмотр */}
-              <div className={styles.modalLeft}>
-                {previewLoading && (
-                  <div className={styles.previewSpinner}>
-                    <span className={styles.spinnerDark}/> Загружаем предпросмотр...
-                  </div>
-                )}
-                <div ref={previewContainerRef} className={styles.previewContainer} />
+              {/* Табы */}
+              <div className={styles.modalTabs}>
+                <button
+                  className={`${styles.modalTab} ${modalTab === "work" ? styles.modalTabActive : ""}`}
+                  onClick={() => setModalTab("work")}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/docx-icon.png" alt="" className={styles.modalTabIcon} />
+                  Работа
+                </button>
+                <button
+                  className={`${styles.modalTab} ${modalTab === "presentation" ? styles.modalTabActive : ""}`}
+                  onClick={() => setModalTab("presentation")}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/pptx-icon.svg" alt="" className={styles.modalTabIcon} />
+                  Презентация
+                </button>
               </div>
 
-              {/* Кнопки зума — вне скролла, прибиты к углу modalBox */}
+              <div className={styles.modalBody}>
+
+              {/* Левый столбец */}
+              <div className={styles.modalLeft} style={modalTab === "presentation" ? { background: "#1a1a2e" } : undefined}>
+                {/* DOCX preview — всегда в DOM, скрыт через CSS при табе Презентация */}
+                <div style={{ display: modalTab === "work" ? "block" : "none" }}>
+                  {previewLoading && (
+                    <div className={styles.previewSpinner}>
+                      <span className={styles.spinnerDark}/> Загружаем предпросмотр...
+                    </div>
+                  )}
+                  <div ref={previewContainerRef} className={styles.previewContainer} />
+                </div>
+                {/* PresentationViewer — всегда в DOM если данные есть, скрыт при табе Работа */}
+                {/* PresentationViewer — скрыт при табе Работа, но всегда в DOM если есть данные */}
+                <div style={{ display: modalTab === "presentation" ? "flex" : "none", height: "100%", flexDirection: "column" }}>
+                  <PresentationViewer
+                    slides={hasPres ? (activeSlidesData!.slides as Slide[]) : []}
+                    accent={activeSlidesData?.accent ?? "blue"}
+                    mode="embedded"
+                    images={presentationImages}
+                    onSlidesChange={slides => setSlidesData(prev => prev ? { ...prev, slides } : { ...activeSlidesData!, slides })}
+                    onImagesChange={setPresentationImages}
+                    onOrder={(!extrasGenerating && hasExtras) ? () => { setModalTab("work"); setPresentationSel(true); } : undefined}
+                  />
+                  {/* Генерируется — поверх PresentationViewer */}
+                  {extrasGenerating && (
+                    <div style={{ position: "absolute", inset: 0, background: "#1a1a2e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                      <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>Генерируем презентацию...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Кнопки зума — вне скролла, прибиты к углу modalBox (absolute) */}
               {!previewLoading && (
                 <div className={styles.zoomControls}>
                   <button className={styles.zoomBtn} onClick={() => applyZoom(0.1)} title="Увеличить">＋</button>
@@ -2016,7 +2166,8 @@ export default function Home() {
                   <>
                     <hr className={styles.modalDivider} />
                     <div className={styles.titleSection}>
-                      <p className={styles.titleSectionHeading}>Титульный лист</p>
+                      <p className={styles.titleSectionHeading}>Данные для документов</p>
+                      <p className={styles.titleSectionSub}>Подставляются в работу и презентацию</p>
                       <input className={styles.titleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
                       <input className={styles.titleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
                       <label className={styles.skipRow}>
@@ -2056,6 +2207,8 @@ export default function Home() {
                 <p className={styles.savedNote}>Работа сохранена в личном кабинете</p>
               </div>
 
+              </div>{/* /modalBody */}
+
               {/* Нижняя панель — только мобильный (sticky) */}
               <div className={styles.mobileBottom}>
                 {/* Зум-кнопки (мобиль) */}
@@ -2077,19 +2230,17 @@ export default function Home() {
                     {!wantPresentation && (
                       <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
                         <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
-                        <span className={styles.mobileChipIcon}>📊</span>
+                        <img src="/pptx-icon.svg" alt="" className={styles.mobileChipIcon} />
                         <span className={styles.mobileChipLabel}>Презентация</span>
                         <span className={styles.mobileChipPrice}>+199 ₽</span>
-                        <span className={styles.mobileChipToggle}><span /></span>
                       </label>
                     )}
                     {!wantSpeech && (
                       <label className={`${styles.mobileToggleChip} ${speechSel ? styles.mobileToggleChipActive : ""}`}>
                         <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
-                        <span className={styles.mobileChipIcon}>🎤</span>
+                        <img src="/txt-icon.svg" alt="" className={styles.mobileChipIcon} />
                         <span className={styles.mobileChipLabel}>Выступление</span>
                         <span className={styles.mobileChipPrice}>+149 ₽</span>
-                        <span className={styles.mobileChipToggle}><span /></span>
                       </label>
                     )}
                   </div>
@@ -2113,12 +2264,7 @@ export default function Home() {
                 {extrasError && <p className={styles.extrasErrorMsg}>{extrasError}</p>}
                 {extrasReady.length > 0 && (
                   <div className={styles.extrasDownloadsMobile}>
-                    {extrasReady.includes("presentation") && (
-                      <button className={styles.extrasDownloadBtn} onClick={downloadPresentation}>
-                        <img src="/pptx-icon.svg" alt="" className={styles.extrasDownloadIcon} />
-                        Презентация .pptx
-                      </button>
-                    )}
+                    {/* PPTX — через большую кнопку DownloadBtn выше, здесь только выступление */}
                     {extrasReady.includes("speech") && (
                       <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
                         <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
@@ -2175,6 +2321,32 @@ export default function Home() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Виджет оплаты ЮКассы */}
+      {paymentWidgetData && (
+        <PaymentWidget
+          workType={paymentWidgetData.workType}
+          extras={paymentWidgetData.extras}
+          returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/payment/success`}
+          onSuccess={() => {
+            setPaymentWidgetData(null);
+            const raw = sessionStorage.getItem("pendingGeneration");
+            if (raw) {
+              try {
+                const { topic: t, pages: p, workType: wt } = JSON.parse(raw);
+                sessionStorage.removeItem("pendingGeneration");
+                try {
+                  const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
+                  if (extrasRaw) { _pendingExtrasItems = JSON.parse(extrasRaw); sessionStorage.removeItem("pendingExtrasChoice"); }
+                } catch {}
+                selectWorkType(wt); setTopic(t); setPages(p);
+                setTimeout(() => runGeneration(t, p, wt), 0);
+              } catch {}
+            }
+          }}
+          onClose={() => setPaymentWidgetData(null)}
+        />
       )}
 
     </main>

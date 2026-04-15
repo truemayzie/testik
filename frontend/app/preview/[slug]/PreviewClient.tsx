@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { WORK_PRICES } from "@/lib/prices";
 import styles from "./preview.module.css";
 
 type PreviewData = {
@@ -255,7 +256,7 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
                 <span>✓ Антиплагиат 80%+</span>
               </div>
               <a href={paymentUrl} className={styles.ctaButton}>
-                ⬇ Скачать DOCX — 199 ₽
+                ⬇ Скачать DOCX — {WORK_PRICES[data.workType]?.price ?? 299} ₽
               </a>
               <p className={styles.ctaNote}>
                 или <Link href="/auth/signin">войдите</Link>, если уже оплачивали

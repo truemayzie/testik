@@ -18,6 +18,18 @@ export async function generateMetadata({ params }: { params: { workType: string;
     title: page.metaTitle,
     description: page.metaDescription,
     alternates: { canonical: `https://ref-ai.ru/${page.workType}/${page.slug}` },
+    openGraph: {
+      title: page.metaTitle,
+      description: page.metaDescription,
+      url: `https://ref-ai.ru/${page.workType}/${page.slug}`,
+      type: 'article',
+      siteName: 'Refai',
+    },
+    twitter: {
+      card: 'summary',
+      title: page.metaTitle,
+      description: page.metaDescription,
+    },
   }
 }
 
@@ -67,6 +79,12 @@ export default async function SeoPage({ params }: { params: { workType: string; 
     headline: page.title,
     description: page.metaDescription,
     url: `https://ref-ai.ru/${page.workType}/${page.slug}`,
+    datePublished: page.createdAt.toISOString(),
+    dateModified: page.updatedAt?.toISOString() ?? page.createdAt.toISOString(),
+    author: {
+      '@type': 'Organization',
+      name: 'Refai',
+    },
     publisher: {
       '@type': 'Organization',
       name: 'Refai',
@@ -99,6 +117,19 @@ export default async function SeoPage({ params }: { params: { workType: string; 
         <div className={styles.previewFade} />
       </div>
 
+      {/* Основной SEO-текст */}
+      {page.bodyText && (
+        <section className={styles.bodyTextSection}>
+          <hr className={styles.divider} />
+          <div className={styles.bodyTextCard}>
+            <h2 className={styles.bodyTextHeading}>Что важно знать об этой работе</h2>
+            {page.bodyText.split('\n\n').filter(Boolean).map((para, i) => (
+              <p key={i} className={styles.bodyTextPara}>{para}</p>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <div className={styles.cta}>
         <span className={styles.ctaIcon}>📄</span>
@@ -106,7 +137,7 @@ export default async function SeoPage({ params }: { params: { workType: string; 
         <p className={styles.ctaDesc}>
           Уникальный текст · Оформление по ГОСТ 7.32-2017 · Реальные источники 2020–2025
         </p>
-        <GenerateButton />
+        <GenerateButton workType={page.workType} title={page.title} />
         <p className={styles.ctaNote}>Готово за 2 минуты</p>
       </div>
 

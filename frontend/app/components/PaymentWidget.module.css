@@ -1,0 +1,323 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.18s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.closeBtn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.closeBtn:hover { background: #e5e7eb; color: #111; }
+
+.backBtn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.backBtn:hover { text-decoration: underline; }
+
+.title {
+  font-size: 19px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+  padding-right: 36px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 0 0 20px;
+}
+
+/* ── Методы оплаты ── */
+.methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.method {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  text-align: left;
+}
+.method:hover:not(:disabled) {
+  border-color: #6366f1;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.12);
+}
+.method:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.methodSbp {
+  border-color: #d1fae5;
+  background: #f0fdf4;
+}
+.methodSbp:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: #f0fdf4;
+  box-shadow: 0 2px 12px rgba(34, 197, 94, 0.12);
+}
+
+.methodLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.methodIcon {
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.methodName {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.methodDesc {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 1px;
+}
+
+.methodRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badgeBest {
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.methodSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  display: inline-block;
+}
+
+/* ── СБП QR ── */
+.sbpQrWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0 4px;
+}
+
+.qr {
+  border-radius: 12px;
+  border: 6px solid #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.sbpMobile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.sbpOpenBtn {
+  display: inline-block;
+  background: #22c55e;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 13px 28px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.sbpOpenBtn:hover { background: #16a34a; }
+
+.sbpMobileNote {
+  font-size: 12px;
+  color: #6b7280;
+  max-width: 280px;
+}
+
+.sbpHint {
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+  max-width: 280px;
+  margin: 0;
+}
+
+.sbpTimer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  margin: 16px 0 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.sbpTimerDot {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.sbpFootnote {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.cancelBtn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: 1.5px solid #fca5a5;
+  border-radius: 10px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cancelBtn:hover { background: #fef2f2; }
+
+/* ── Карта (виджет) ── */
+.spinnerWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 0;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinnerText {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.widgetContainer {
+  min-height: 60px;
+}
+
+/* ── Общее ── */
+.errorBanner {
+  color: #dc2626;
+  font-size: 13px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border-radius: 8px;
+  margin: 0 0 14px;
+}
+
+.footer {
+  margin-top: 4px;
+}
+
+.yookassaBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #9ca3af;
+  font-size: 12px;
+}

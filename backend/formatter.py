@@ -6,8 +6,8 @@ formatter.py — создание DOCX по ГОСТ 7.32-2017.
 import re
 import json as _json
 from docx import Document
-from docx.shared import Pt, Mm, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, Mm, Cm, Twips, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import copy, io
@@ -177,9 +177,6 @@ _WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, инте
 
 # Ширина текстовой зоны для A4 с полями 3+1 см: 170мм = 9638 twips
 # Tab stop ставим чуть левее правого края чтобы число не обрезалось
-_TOC_TAB_POS = "7920"  # twips (14 cm от левого поля)
-
-
 def _count_words(text: str) -> int:
     """Подсчёт слов в тексте (без таблиц)."""
     if not text:
@@ -188,8 +185,24 @@ def _count_words(text: str) -> int:
     return len(text.split())
 
 
+def _set_toc_tab(paragraph, pos_twips: int = 8640):
+    """Устанавливает tab stop с точками-лидерами через XML напрямую.
+    ВАЖНО: вызывать ПОСЛЕ добавления всех run-ов в параграф.
+    """
+    pPr = paragraph._p.get_or_add_pPr()
+    for old in pPr.findall(qn("w:tabs")):
+        pPr.remove(old)
+    tabs_el = OxmlElement("w:tabs")
+    tab = OxmlElement("w:tab")
+    tab.set(qn("w:val"), "right")
+    tab.set(qn("w:leader"), "dot")
+    tab.set(qn("w:pos"), str(pos_twips))
+    tabs_el.append(tab)
+    pPr.append(tabs_el)
+
+
 def _toc_line(doc, title: str, level: int, page_num: int):
-    """Одна строка оглавления: название + точки-заполнители + номер страницы."""
+    """Одна строка оглавления: название + tab-лидер с точками + номер страницы."""
     p = doc.add_paragraph()
     p.paragraph_format.space_before      = Pt(0)
     p.paragraph_format.space_after       = Pt(4)
@@ -198,27 +211,20 @@ def _toc_line(doc, title: str, level: int, page_num: int):
     if level == 2:
         p.paragraph_format.left_indent = Cm(1.25)
 
-    # Tab stop с точками-заполнителями на правом крае
-    pPr = p._element.get_or_add_pPr()
-    tabs_el = OxmlElement("w:tabs")
-    tab_stop = OxmlElement("w:tab")
-    tab_stop.set(qn("w:val"), "right")
-    tab_stop.set(qn("w:pos"), _TOC_TAB_POS)
-    tab_stop.set(qn("w:leader"), "dot")
-    tabs_el.append(tab_stop)
-    pPr.append(tabs_el)
-
-    # Текст названия
+    # Runs добавляем СНАЧАЛА — затем tab stop
     r1 = p.add_run(title)
     set_run_font(r1, bold=False, size=14)
     r1.font.color.rgb = RGBColor(0, 0, 0)
-    # Символ табуляции (переход к номеру страницы)
-    r1._r.append(OxmlElement("w:tab"))
 
-    # Номер страницы
+    r_tab = p.add_run("\t")
+    set_run_font(r_tab, bold=False, size=14)
+
     r2 = p.add_run(str(page_num))
     set_run_font(r2, bold=False, size=14)
     r2.font.color.rgb = RGBColor(0, 0, 0)
+
+    # Tab stop с точками — ПОСЛЕ runs
+    _set_toc_tab(p, 8640)
 
 
 def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ"):
@@ -233,7 +239,8 @@ def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ"):
     for entry_title, level, page_num in entries:
         _toc_line(doc, entry_title, level, page_num)
 
-    doc.add_page_break()
+    # Разрыв страницы не нужен — Heading 1 уже имеет pageBreakBefore,
+    # двойной разрыв давал пустую страницу между оглавлением и текстом.
 
 
 # ── Титульная страница ───────────────────────────────────────────────────────

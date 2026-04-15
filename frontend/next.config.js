@@ -3,6 +3,8 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     instrumentationHook: true,
+    workerThreads: false,
+    cpus: 1,
   },
   images: {
     remotePatterns: [

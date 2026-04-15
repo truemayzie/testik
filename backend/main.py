@@ -1,10 +1,15 @@
+import io
+import json
 import os
+import subprocess
 import threading
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
+from pptx import Presentation
+from pptx.util import Pt, Emu
 from generator import generate_work
 from github_proxy import start_callback_server
 
@@ -177,13 +182,15 @@ def create_extras(request: ExtrasRequest):
         try:
             from presentation_generator import generate_presentation, generate_speech
             if "presentation" in request.items:
-                _, slide_titles = generate_presentation(
+                slides_dict, slide_titles = generate_presentation(
                     extras_job_id,
                     request.topic,
                     request.work_type,
                     request.profile or {},
                     request.result,
                 )
+                with _extras_lock:
+                    _extras_jobs[extras_job_id]["slides"] = slides_dict
                 ready.append("presentation")
             if "speech" in request.items:
                 generate_speech(
@@ -195,12 +202,12 @@ def create_extras(request: ExtrasRequest):
                 )
                 ready.append("speech")
             with _extras_lock:
-                _extras_jobs[extras_job_id] = {"status": "done", "ready": ready, "error": None}
+                _extras_jobs[extras_job_id].update({"status": "done", "ready": ready, "error": None})
             print(f"[extras {extras_job_id}] Готово: {ready}")
         except Exception as exc:
             print(f"[extras {extras_job_id}] Ошибка: {exc}")
             with _extras_lock:
-                _extras_jobs[extras_job_id] = {"status": "error", "ready": ready, "error": str(exc)}
+                _extras_jobs[extras_job_id].update({"status": "error", "ready": ready, "error": str(exc)})
 
     threading.Thread(target=run, daemon=True).start()
     return {"extrasJobId": extras_job_id}
@@ -213,7 +220,12 @@ def get_extras_status(extras_job_id: str):
         job = _extras_jobs.get(extras_job_id)
     if not job:
         return {"status": "not_found", "ready": []}
-    return {"status": job["status"], "ready": job.get("ready", []), "error": job.get("error")}
+    return {
+        "status": job["status"],
+        "ready":  job.get("ready", []),
+        "error":  job.get("error"),
+        "slides": job.get("slides"),   # JSON слайдов после генерации презентации
+    }
 
 
 @app.get("/api/download/presentation/{job_id}")
@@ -243,4 +255,75 @@ def download_speech(job_id: str):
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": "attachment; filename=speech.docx"},
+    )
+
+
+# ── Генерация PPTX из JSON-слайдов через Puppeteer ───────────────────────────
+
+class PresentationDownloadRequest(BaseModel):
+    slides: list
+    accent: str = "blue"
+    images: dict = {}   # { "0": "data:image/...;base64,...", ... }
+
+
+_RENDER_SCRIPT = os.path.join(os.path.dirname(__file__), "render_slides.js")
+
+
+def _render_to_pptx(slides: list, accent: str, images: dict) -> io.BytesIO:
+    """Запускает render_slides.js и собирает PPTX. Возвращает BytesIO."""
+    import base64
+    payload = json.dumps({"accent": accent, "slides": slides, "images": images})
+    try:
+        proc = subprocess.run(
+            ["node", _RENDER_SCRIPT],
+            input=payload, capture_output=True, text=True, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Таймаут рендеринга слайдов")
+
+    if proc.returncode != 0:
+        print("[pptx] render_slides.js stderr:", proc.stderr[:500])
+        raise HTTPException(status_code=500, detail="Ошибка рендеринга слайдов")
+
+    try:
+        png_list = json.loads(proc.stdout)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Ошибка парсинга PNG: {exc}")
+
+    prs = Presentation()
+    prs.slide_width  = Emu(9144000)
+    prs.slide_height = Emu(5143500)
+    blank_layout = prs.slide_layouts[6]
+
+    for b64 in png_list:
+        slide = prs.slides.add_slide(blank_layout)
+        img_stream = io.BytesIO(base64.b64decode(b64))
+        slide.shapes.add_picture(img_stream, left=0, top=0,
+                                 width=prs.slide_width, height=prs.slide_height)
+    out = io.BytesIO()
+    prs.save(out)
+    out.seek(0)
+    return out
+
+
+@app.post("/api/presentation/download")
+def presentation_download(request: PresentationDownloadRequest):
+    """Принимает JSON-слайды → рендерит PNG → PPTX."""
+    pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
+    return StreamingResponse(
+        pptx_io,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": "attachment; filename=presentation.pptx"},
+    )
+
+
+@app.post("/api/presentation/rebuild")
+def presentation_rebuild(request: PresentationDownloadRequest):
+    """Пересборка PPTX из отредактированных слайдов + изображений."""
+    pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
+
+    return StreamingResponse(
+        pptx_io,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": "attachment; filename=presentation.pptx"},
     )

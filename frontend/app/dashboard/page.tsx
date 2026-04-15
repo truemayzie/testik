@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import styles from "./dashboard.module.css";
+import PresentationViewer, { type Slide } from "../components/PresentationViewer";
 
 type Generation = {
   id: string;
@@ -27,13 +28,21 @@ type ReferatResult = {
   profile?: Record<string, any>;
 };
 
+type PresentationSlides = { accent: string; slides: unknown[] };
+
+type ExtrasData = {
+  presentation?: string;
+  speech?: string;
+  presentationSlides?: PresentationSlides;
+};
+
 type ViewingGen = {
   id: string;
   topic: string;
   workType: string;
   pages: number;
   slug: string | null;
-  extras: Record<string, string> | null;
+  extras: ExtrasData | null;
   result: ReferatResult;
 };
 
@@ -65,6 +74,12 @@ export default function DashboardPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const baseScaleRef        = useRef<number>(1);
 
+  // Табы модального окна
+  const [modalTab, setModalTab]         = useState<"work" | "presentation">("work");
+  const [presImages, setPresImages]     = useState<Record<number, string>>({});
+  const [presSlides, setPresSlides]     = useState<Slide[] | null>(null);
+  const [downloadingPptx, setDownloadingPptx] = useState(false);
+
   // Титульный лист
   const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
   const [titleUpdating, setTitleUpdating] = useState(false);
@@ -72,6 +87,7 @@ export default function DashboardPage() {
   const [skipFaculty, setSkipFaculty]       = useState(false);
   const [skipSpeciality, setSkipSpeciality] = useState(false);
   const [skipDiscipline, setSkipDiscipline] = useState(false);
+  const [showMobileTitleForm, setShowMobileTitleForm] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
@@ -133,6 +149,7 @@ export default function DashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        cache: "no-store",
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
@@ -213,7 +230,7 @@ export default function DashboardPage() {
       const data = await res.json();
       const result: ReferatResult = data.result;
       const gen = generations.find(g => g.id === id);
-      let extrasObj: Record<string, string> | null = null;
+      let extrasObj: ExtrasData | null = null;
       if (gen?.extras) {
         try { extrasObj = JSON.parse(gen.extras); } catch {}
       }
@@ -226,6 +243,11 @@ export default function DashboardPage() {
         extras:  extrasObj,
         result,
       });
+      // Инициализируем слайды для вкладки Презентация
+      setModalTab("work");
+      setPresImages({});
+      const ps = extrasObj?.presentationSlides;
+      setPresSlides(ps ? (ps.slides as Slide[]) : null);
     } catch {
       alert("Не удалось загрузить работу");
     } finally {
@@ -290,22 +312,60 @@ export default function DashboardPage() {
     persistProfile();
     const updated = { ...viewingGen.result, profile: { ...(viewingGen.result.profile ?? {}), ...buildProfilePayload() } };
     await renderPreview(updated as typeof viewingGen.result);
+    // Синхронизируем TITLE-слайд в презентации
+    setPresSlides(prev => {
+      if (!prev) return prev;
+      const idx = prev.findIndex((s) => (s as { type?: string }).type === "TITLE");
+      if (idx < 0) return prev;
+      return prev.map((s, i) => i === idx ? {
+        ...s,
+        university: titleForm.university || "",
+        full_name:  titleForm.fullName    || "",
+        group:      titleForm.groupNumber || "",
+        teacher:    titleForm.teacherName || "",
+        city:       titleForm.city        || "",
+        faculty:    titleForm.faculty     || "",
+        department: titleForm.department  || "",
+      } : s);
+    });
     setTitleUpdating(false);
   }
 
   async function handleDownloadExtra(type: "presentation" | "speech") {
     if (!viewingGen?.extras) return;
-    const jobId = viewingGen.extras[type];
+    if (type === "presentation") {
+      const slidesPayload = presSlides
+        ? { slides: presSlides, accent: (viewingGen.extras.presentationSlides as { accent?: string } | undefined)?.accent || "blue", images: presImages }
+        : viewingGen.extras.presentationSlides;
+      if (!slidesPayload) { alert("Данные презентации недоступны. Перегенерируйте дополнительные материалы."); return; }
+      setDownloadingPptx(true);
+      try {
+        const res = await fetch("/api/presentation/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(slidesPayload),
+        });
+        if (!res.ok) throw new Error("bad response");
+        const blob = await res.blob();
+        const url  = window.URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = "presentation.pptx";
+        document.body.appendChild(a); a.click(); a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch { alert("Ошибка скачивания, попробуйте снова"); }
+        finally { setDownloadingPptx(false); }
+      return;
+    }
+    // Речь — скачиваем по jobId из /tmp
+    const jobId = viewingGen.extras.speech;
     if (!jobId) return;
-    const ext  = type === "presentation" ? "pptx" : "docx";
-    const name = type === "presentation" ? "presentation" : "speech";
     try {
-      const res = await fetch(`/api/download/${name}/${jobId}`);
+      const res = await fetch(`/api/download/speech/${jobId}`);
       if (!res.ok) { alert("Файл недоступен. Перегенерируйте дополнительные материалы."); return; }
       const blob = await res.blob();
       const url  = window.URL.createObjectURL(blob);
       const a    = document.createElement("a");
-      a.href = url; a.download = `${name}.${ext}`;
+      a.href = url; a.download = "speech.docx";
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
     } catch { alert("Не удалось скачать файл."); }
@@ -329,7 +389,7 @@ export default function DashboardPage() {
     });
   }
 
-  function parseExtras(raw: string | null): Record<string, string> | null {
+  function parseExtras(raw: string | null): ExtrasData | null {
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
   }
@@ -522,28 +582,52 @@ export default function DashboardPage() {
                 <div className={styles.docModalBadges}>
                   <span className={styles.docBadge}>{viewingGen.workType}</span>
                   <span className={styles.docBadge}>{viewingGen.pages} стр.</span>
-                  {viewingGen.extras?.presentation && (
-                    <span className={styles.docExtrasBadgePres}>Презентация</span>
-                  )}
-                  {viewingGen.extras?.speech && (
-                    <span className={styles.docExtrasBadgeSpeech}>Выступление</span>
-                  )}
                 </div>
               </div>
               <button className={styles.docMobileCloseBtn} onClick={closeViewer}>✕</button>
             </div>
 
-            {/* Левый столбец — предпросмотр */}
-            <div className={styles.docModalLeft}>
-              {previewLoading && (
-                <div className={styles.docPreviewSpinner}>
-                  <span className={styles.docSpinner} /> Загружаем предпросмотр...
-                </div>
-              )}
-              <div ref={previewContainerRef} className={styles.docPreviewContainer} />
+            {/* Табы */}
+            <div className={styles.docTabs}>
+              <button className={`${styles.docTab} ${modalTab === "work" ? styles.docTabActive : ""}`}
+                onClick={() => setModalTab("work")}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/docx-icon.png" alt="" className={styles.docTabIcon} />
+                Работа
+              </button>
+              <button className={`${styles.docTab} ${modalTab === "presentation" ? styles.docTabActive : ""}`}
+                onClick={() => setModalTab("presentation")}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/pptx-icon.svg" alt="" className={styles.docTabIcon} />
+                Презентация
+              </button>
             </div>
 
-            {/* Зум — убран, используется только в мобильной нижней панели */}
+            <div className={styles.docModalBody}>
+
+            {/* Левый столбец */}
+            <div className={styles.docModalLeft} style={modalTab === "presentation" ? { background: "#1a1a2e" } : undefined}>
+              {/* DOCX preview — всегда в DOM, скрыт через CSS при табе Презентация */}
+              <div style={{ display: modalTab === "work" ? "block" : "none" }}>
+                {previewLoading && (
+                  <div className={styles.docPreviewSpinner}>
+                    <span className={styles.docSpinner} /> Загружаем предпросмотр...
+                  </div>
+                )}
+                <div ref={previewContainerRef} className={styles.docPreviewContainer} />
+              </div>
+              {/* PresentationViewer — скрыт при табе Работа */}
+              <div style={{ display: modalTab === "presentation" ? "flex" : "none", height: "100%", flexDirection: "column" }}>
+                <PresentationViewer
+                  slides={presSlides ?? []}
+                  accent={(viewingGen.extras?.presentationSlides as { accent?: string } | undefined)?.accent || "blue"}
+                  mode="embedded"
+                  images={presImages}
+                  onSlidesChange={setPresSlides}
+                  onImagesChange={setPresImages}
+                />
+              </div>
+            </div>
 
             {/* Правый столбец — десктоп */}
             <div className={styles.docModalRight}>
@@ -554,41 +638,40 @@ export default function DashboardPage() {
               </div>
               <hr className={styles.docDivider} />
 
-              {/* Скачать DOCX */}
-              <button
-                className={styles.docDownloadBtn}
-                onClick={() => handleDownloadDocx(viewingGen)}
-                disabled={downloading === "viewer"}
-              >
-                {downloading === "viewer"
-                  ? <><span className={styles.docBtnSpinner} />Создаём...</>
-                  : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
-              </button>
+              {/* Скачать DOCX / PPTX в зависимости от таба */}
+              {modalTab === "presentation" && presSlides ? (
+                <button className={styles.docDownloadBtn} onClick={() => handleDownloadExtra("presentation")}
+                  disabled={downloadingPptx}
+                  style={{ background: downloadingPptx ? "#374151" : "#1E3A5F", color: "#fff" }}>
+                  {downloadingPptx
+                    ? <><span className={styles.docBtnSpinner} />Генерируем файл...</>
+                    : <><img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />Скачать PPTX</>}
+                </button>
+              ) : (
+                <button
+                  className={styles.docDownloadBtn}
+                  onClick={() => handleDownloadDocx()}
+                  disabled={downloading === "viewer"}
+                >
+                  {downloading === "viewer"
+                    ? <><span className={styles.docBtnSpinner} />Создаём...</>
+                    : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
+                </button>
+              )}
 
-              {/* Дополнительные материалы */}
-              {(viewingGen.extras?.presentation || viewingGen.extras?.speech) && (
+              {/* Дополнительные материалы — только выступление, PPTX скачивается большой кнопкой */}
+              {viewingGen.extras?.speech && (
                 <>
                   <hr className={styles.docDivider} />
                   <p className={styles.docExtrasHeading}>Дополнительные материалы</p>
                   <div className={styles.docExtrasDownloads}>
-                    {viewingGen.extras?.presentation && (
-                      <button
-                        className={styles.docExtrasDownloadBtn}
-                        onClick={() => handleDownloadExtra("presentation")}
-                      >
-                        <img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />
-                        Презентация .pptx
-                      </button>
-                    )}
-                    {viewingGen.extras?.speech && (
-                      <button
-                        className={styles.docExtrasDownloadBtn}
-                        onClick={() => handleDownloadExtra("speech")}
-                      >
-                        <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
-                        Выступление .txt
-                      </button>
-                    )}
+                    <button
+                      className={styles.docExtrasDownloadBtn}
+                      onClick={() => handleDownloadExtra("speech")}
+                    >
+                      <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
+                      Выступление .txt
+                    </button>
                   </div>
                 </>
               )}
@@ -611,7 +694,8 @@ export default function DashboardPage() {
                 <>
                   <hr className={styles.docDivider} />
                   <div className={styles.docTitleSection}>
-                    <p className={styles.docTitleHeading}>Титульный лист</p>
+                    <p className={styles.docTitleHeading}>Данные для документов</p>
+                    <p className={styles.docTitleSub}>Подставляются в работу и презентацию</p>
                     <input className={styles.docTitleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
                     <input className={styles.docTitleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
                     <label className={styles.docSkipRow}>
@@ -650,41 +734,96 @@ export default function DashboardPage() {
               )}
             </div>
 
+            </div>{/* /docModalBody */}
+
             {/* Мобильная нижняя панель */}
             <div className={styles.docMobileBottom}>
-              {!previewLoading && (
+              {!previewLoading && modalTab === "work" && (
                 <div className={styles.docMobileZoomRow}>
                   <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(0.1)}>＋</button>
                   <span className={styles.docMobileZoomLabel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
                   <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
                 </div>
               )}
-              <button
-                className={styles.docDownloadBtn}
-                onClick={() => handleDownloadDocx(viewingGen)}
-                disabled={downloading === "viewer"}
-              >
-                {downloading === "viewer"
-                  ? <><span className={styles.docBtnSpinner} />Создаём...</>
-                  : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
-              </button>
-              {(viewingGen.extras?.presentation || viewingGen.extras?.speech) && (
+              {modalTab === "presentation" && presSlides ? (
+                <button
+                  className={styles.docDownloadBtn}
+                  onClick={() => handleDownloadExtra("presentation")}
+                  disabled={downloadingPptx}
+                  style={{ background: downloadingPptx ? "#374151" : "#1E3A5F", color: "#fff" }}
+                >
+                  {downloadingPptx
+                    ? <><span className={styles.docBtnSpinner} />Генерируем файл...</>
+                    : <><img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />Скачать PPTX</>}
+                </button>
+              ) : (
+                <button
+                  className={styles.docDownloadBtn}
+                  onClick={() => handleDownloadDocx()}
+                  disabled={downloading === "viewer"}
+                >
+                  {downloading === "viewer"
+                    ? <><span className={styles.docBtnSpinner} />Создаём...</>
+                    : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
+                </button>
+              )}
+              {viewingGen.extras?.speech && (
                 <div className={styles.docExtrasDownloadsMobile}>
-                  {viewingGen.extras?.presentation && (
-                    <button className={styles.docExtrasDownloadBtnSmall} onClick={() => handleDownloadExtra("presentation")}>
-                      <img src="/pptx-icon.svg" alt="" className={styles.docDownloadIcon} />
-                      Презентация .pptx
-                    </button>
-                  )}
-                  {viewingGen.extras?.speech && (
-                    <button className={styles.docExtrasDownloadBtnSmall} onClick={() => handleDownloadExtra("speech")}>
-                      <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
-                      Выступление .txt
-                    </button>
-                  )}
+                  <button className={styles.docExtrasDownloadBtnSmall} onClick={() => handleDownloadExtra("speech")}>
+                    <img src="/txt-icon.svg" alt="" className={styles.docDownloadIcon} />
+                    Выступление .txt
+                  </button>
                 </div>
               )}
+              {TITLE_PAGE_TYPES.includes(viewingGen.workType) && (
+                <button className={styles.docMobileTitleBtn} onClick={() => setShowMobileTitleForm(true)}>
+                  Данные для документов
+                </button>
+              )}
             </div>
+
+          {/* Мобильная форма титульника — оверлей поверх модала */}
+          {showMobileTitleForm && TITLE_PAGE_TYPES.includes(viewingGen.workType) && (
+            <div className={styles.docMobileTitleOverlay}>
+              <div className={styles.docMobileTitleSheetHeader}>
+                <div>
+                  <p className={styles.docTitleHeading}>Данные для документов</p>
+                  <p className={styles.docTitleSub}>Подставляются в работу и презентацию</p>
+                </div>
+                <button className={styles.docMobileTitleSheetClose} onClick={() => setShowMobileTitleForm(false)}>✕</button>
+              </div>
+              <div className={styles.docMobileTitleSheetBody}>
+                <input className={styles.docTitleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
+                <input className={styles.docTitleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
+                <label className={styles.docSkipRow}>
+                  <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
+                  <span>Не указывать факультет</span>
+                </label>
+                {!skipFaculty && <input className={styles.docTitleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
+                <label className={styles.docSkipRow}>
+                  <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
+                  <span>Не указывать специализацию</span>
+                </label>
+                {!skipSpeciality && <input className={styles.docTitleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
+                <label className={styles.docSkipRow}>
+                  <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
+                  <span>Не указывать предмет</span>
+                </label>
+                {!skipDiscipline && <input className={styles.docTitleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
+                <input className={styles.docTitleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
+                <input className={styles.docTitleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
+                <input className={styles.docTitleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
+                <input className={styles.docTitleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
+                <button className={styles.docUpdateBtn} onClick={async () => { await handleTitleUpdate(); setShowMobileTitleForm(false); }} disabled={titleUpdating}>
+                  {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
+                </button>
+                <label className={styles.docSaveProfileRow}>
+                  <input type="checkbox" className={styles.docSaveProfileCheck} checked={saveProfile} onChange={e => setSaveProfile(e.target.checked)} />
+                  <span>Запомнить данные</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           </div>
         </div>

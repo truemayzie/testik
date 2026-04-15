@@ -12,7 +12,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { workType, extras } = await request.json() as { workType: string; extras?: string[] };
+  const { workType, extras, method } = await request.json() as {
+    workType: string;
+    extras?: string[];
+    method?: "sbp" | "card";
+  };
   const priceInfo = WORK_PRICES[workType];
   if (!priceInfo) {
     return NextResponse.json({ error: "Неизвестный тип работы" }, { status: 400 });
@@ -52,6 +56,8 @@ export async function POST(request: NextRequest) {
   const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
   const extrasDesc = (extras ?? []).map(i => i === "presentation" ? "+ Презентация" : "+ Текст выступления").join(" ");
 
+  const isSbp = method === "sbp";
+
   const yokassaRes = await fetch("https://api.yookassa.ru/v3/payments", {
     method: "POST",
     headers: {
@@ -61,11 +67,11 @@ export async function POST(request: NextRequest) {
     },
     body: JSON.stringify({
       amount: { value: totalAmount.toFixed(2), currency: "RUB" },
-      capture: true, // одностадийная оплата — деньги списываются сразу
-      confirmation: {
-        type: "redirect",
-        return_url: `${appUrl}/payment/success`,
-      },
+      capture: true,
+      ...(isSbp ? { payment_method_data: { type: "sbp" } } : {}),
+      confirmation: isSbp
+        ? { type: "redirect", return_url: `${appUrl}/payment/success` }
+        : { type: "embedded" },
       description: `Генерация: ${workType}${extrasDesc ? " " + extrasDesc : ""}`,
       metadata: { userId: user.id, workType },
     }),
@@ -88,8 +94,16 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  if (isSbp) {
+    return NextResponse.json({
+      confirmationUrl: yokassaData.confirmation.confirmation_url,
+      yokassaPaymentId: yokassaData.id,
+      paymentId: payment.id,
+    });
+  }
+
   return NextResponse.json({
-    paymentUrl: yokassaData.confirmation.confirmation_url,
+    confirmationToken: yokassaData.confirmation.confirmation_token,
     paymentId: payment.id,
   });
 }

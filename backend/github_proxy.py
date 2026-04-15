@@ -39,10 +39,16 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
         try:
             data = json.loads(body)
-            text = data["content"][0]["text"].strip()
+            if "content" in data:
+                text = data["content"][0]["text"].strip()
+            elif "error" in data:
+                err = data["error"]
+                text = f"ERROR: Claude API {err.get('type', 'error')}: {err.get('message', str(err))}"
+            else:
+                text = f"ERROR: Unexpected response keys: {list(data.keys())}"
             _responses[request_id] = text
         except Exception as e:
-            _responses[request_id] = f"ERROR: {e}"
+            _responses[request_id] = f"ERROR: parse failed: {e} | body: {body[:200]}"
 
         if request_id in _events:
             _events[request_id].set()

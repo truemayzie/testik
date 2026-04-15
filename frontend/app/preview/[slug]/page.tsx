@@ -19,6 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${data.workType} — ${data.topic} | Refai`,
     description: `Готовый ${data.workType.toLowerCase()} на тему «${data.topic}». ${data.pages} страниц, оформление по ГОСТ, уникальность 80%+`,
+    alternates: { canonical: `https://ref-ai.ru/preview/${params.slug}` },
     openGraph: {
       title: `${data.workType}: ${data.topic}`,
       description: `${data.pages} стр. · ГОСТ · Антиплагиат 80%+`,
@@ -50,12 +51,36 @@ export default async function PreviewPage({ params }: Props) {
     }
   }
 
+  const articleJsonLd = data ? {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: data.topic,
+    datePublished: data.createdAt,
+    author: {
+      '@type': 'Organization',
+      name: 'Refai',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Refai',
+      url: 'https://ref-ai.ru',
+    },
+  } : null;
+
   return (
-    <PreviewClient
-      data={data}
-      slug={params.slug}
-      fullContent={fullContent}
-      fullSources={fullSources}
-    />
+    <>
+      {articleJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+        />
+      )}
+      <PreviewClient
+        data={data}
+        slug={params.slug}
+        fullContent={fullContent}
+        fullSources={fullSources}
+      />
+    </>
   );
 }

@@ -131,7 +131,9 @@ model SeoPage {
   metaTitle       String   // для <title>
   metaDescription String   // для <meta description>
   previewText     String   // 300-500 символов тизерного текста
+  bodyText        String   @default("")  // SEO-текст 800-1000 символов, генерируется Claude
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 }
 
 // ── Платежи ──────────────────────────────────────────────────────

@@ -85,6 +85,41 @@
   pointer-events: none;
 }
 
+/* ── Основной SEO-текст ── */
+.bodyTextSection {
+  margin-bottom: 32px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0 0 28px;
+}
+
+.bodyTextCard {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.bodyTextHeading {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+.bodyTextPara {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #444;
+  margin: 0 0 16px;
+}
+
+.bodyTextPara:last-child {
+  margin-bottom: 0;
+}
+
 /* ── CTA блок ── */
 .cta {
   background: linear-gradient(135deg, #0D0B2E 0%, #2D1B6E 100%);

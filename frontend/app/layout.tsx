@@ -4,6 +4,7 @@ import Providers from "./providers";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import GenerationWidget from "./components/GenerationWidget";
+import TelegramSupport from "./components/TelegramSupport";
 
 export const metadata: Metadata = {
   title: "Refai — Генератор учебных работ на ИИ | Реферат за 2 минуты",
@@ -80,6 +81,7 @@ export default function RootLayout({
           {children}
           <Footer />
           <GenerationWidget />
+          <TelegramSupport />
         </Providers>
       </body>
     </html>
