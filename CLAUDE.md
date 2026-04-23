@@ -36,9 +36,9 @@ npm run db:studio    # GUI Prisma Studio
 ```
 Пользователь вводит тему + выбирает тип работы
 → handleSubmit → GET /api/payment/check?workType=X
-→ Нет платежа → sessionStorage.pendingGeneration → /payment?workType=X
-→ /payment → POST /api/payment/create → ЮКасса (или dev-succeeded)
-→ /payment/success → redirect /?autoGenerate=1
+→ Нет платежа → sessionStorage.pendingGeneration → открывается PaymentWidget (модальное окно)
+→ PaymentWidget → POST /api/payment/create → ЮКасса embedded checkout (или dev-succeeded)
+→ Успешная оплата → виджет закрывается → runGeneration() запускается напрямую
 → page.tsx читает pendingGeneration из sessionStorage → runGeneration()
 → POST /api/generate → проверяет Payment (status=succeeded, usedAt=null)
 → прокси на FastAPI POST /api/generate/referat → возвращает { jobId }
@@ -133,9 +133,11 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 **`app/page.tsx`** — главная страница
 - Hero с формой + выбором типа работы + TypewriterInput
-- Прогресс-бар (тёмная тема, shimmer) — шаги в `stepsRef` (ref, не state — избегает stale closure)
+- Прогресс-бар (тёмная тема, navy градиент `#061525 → #1B3A6B`, shimmer) — шаги в `stepsRef` (ref, не state — избегает stale closure)
+  - Дизайн: точки-шаги (pending/active с пульсацией/done), тема работы в кавычках, счётчик «Шаг N из M», анимированная смена подписи текущего шага (`key={stepIndex}` для ре-монтирования)
 - Результат с DOCX-превью (`docx-preview`) и extras-переключателями
-- Лендинг: «Почему Refai?», «Последние проекты», «Свежие отзывы», FAQ, PreFooter
+- Лендинг (снизу от hero): «Почему Refai?» (карточки с SVG-иконками), «Как это работает» (3 шага с иконками справа от номера), блок сравнения «Самостоятельно vs Refai» (6 строк), «Последние проекты», «Свежие отзывы», FAQ, PreFooter
+- Scroll-reveal анимации: `[data-reveal]` + `[data-visible="true"]` через IntersectionObserver (threshold 0.08); иконки шагов получают `stepIconPop` анимацию при появлении
 - Модальное окно результата через `createPortal(document.body)`
 - Две колонки на десктопе (превью + панель), bottom-sheet на мобиле
 
@@ -158,7 +160,13 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 **`app/components/PreFooter.tsx`** — CTA-секция с анимированными карточками документов (якорь `#generator`)
 
+**`app/components/PaymentWidget.tsx`** — модальное окно оплаты (embedded ЮКасса или dev-succeeded). Открывается из главной страницы вместо редиректа на /payment.
+
 **`app/components/AuthModal.tsx`** — модалка авторизации для неавторизованных пользователей
+
+**`app/[workType]/page.tsx`** — SEO-хаб по типу работы (`/referat`, `/kursovaya` и т.д.): список тем с фильтрами, ссылки на отдельные SEO-страницы
+
+**`app/[workType]/[slug]/page.tsx`** — SEO-страница конкретной работы: содержание (TOC), предпросмотр текста с блюром, список литературы (фрагмент), CTA с кнопкой генерации, SEO bodyText, breadcrumbs, JSON-LD (BreadcrumbList + Article)
 
 **`app/profile/page.tsx`** — профиль: поля титульника (университет, факультет, кафедра, специальность, дисциплина, курс, группа, ФИО, преподаватель, город). `GET/PATCH /api/profile`
 
@@ -201,10 +209,9 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - `MOCK_WORKS_POOL` — 50 реалистичных работ, перемешиваются при маунте (Fisher-Yates), показываются 8
 - Ротация каждые 5 минут: новая карточка сверху с анимацией + бейдж «новая», список остаётся 8 штук
 - `getDailyGenCount()` — счётчик генераций за день (0→252), растёт по времени суток, обновляется каждые 37 с
-- Счётчик отображается под кнопкой «Сгенерировать» в hero (зелёная точка + число)
 - `timeAgo(minutesAgo)` — «только что» / «X мин. назад» / «X ч. назад»
 - Если `/api/generations/recent` вернул ≥ 8 реальных записей — моки отключаются, ротация останавливается
-- Карточки: цветная полоска слева через CSS `::before` + `--card-accent`, строгий минималистичный стиль
+- Карточки: CSS `@keyframes cardFadeUp` + nth-child stagger (появление при добавлении в DOM), строгий минималистичный стиль без полоски слева
 
 ### Иконки скачивания (`/public/`)
 - `/docx-icon.png` — иконка Word для кнопок скачивания DOCX
@@ -212,9 +219,11 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - `/txt-icon.svg` — иконка TXT для кнопок текста выступления
 
 ### CSS-соглашения
-- CSS Modules рядом с компонентами. Глобальные переменные только в `globals.css` (`--accent: #6366F1`)
+- CSS Modules рядом с компонентами. Глобальные переменные только в `globals.css` (`--accent: #1B3A6B` — navy)
 - Глобальные селекторы (`*`, `:root`) нельзя в `.module.css`
-- Прогресс-карточка генерации — тёмный градиент (`#0D0B2E → #2D1B6E`) с shimmer-анимацией
+- Прогресс-карточка генерации — тёмный navy-градиент (`#061525 → #0F2645 → #1B3A6B`) с shimmer-анимацией
+- Scroll-reveal: `[data-reveal]` в глобальном globals.css, `data-visible="true"` через `setAttribute` (не `classList.add` — иначе React перезаписывает className при ре-рендере). Задержки через `data-delay="1..8"`
+- Анимации шагов: `[data-step-icon]` в globals.css, `stepIconPop` кейфрейм при появлении секции
 
 ## Модели Prisma (SQLite)
 
@@ -229,9 +238,9 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 ## Авторизация (lib/auth.ts)
 
 - Яндекс OAuth + Email magic link (Resend REST API, не SMTP)
-- VK OAuth закомментирован (нужен HTTPS для callback URL)
+- VK OAuth закомментирован (не планируется в ближайшее время)
 - Сессии в БД (`strategy: "database"`)
-- Callback URL Яндекс: `http://localhost:3000/api/auth/callback/yandex`
+- Callback URL Яндекс (prod): `https://ref-ai.ru/api/auth/callback/yandex`
 - ID пользователя добавляется в сессию через `callbacks.session`
 - Тестовый аккаунт ЮКасса: роль `yukassa_test`, bcrypt-пароль, особые условия оплаты
 
@@ -286,5 +295,9 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - ✅ Лендинг: «Почему Refai?», «Последние проекты», «Свежие отзывы», FAQ, PreFooter
 - ✅ Раздел «Последние проекты»: реалистичные mock-данные, цветные карточки по типу, замена реальными данными при ≥ 8 работ в БД
 - ✅ Админ-панель: статистика, управление пользователями/платежами/работами
-- ⏳ VK OAuth (нужен HTTPS домен)
-- ⏳ Деплой
+- ✅ SEO-инфраструктура: хаб-страницы по типу работы (`/referat` и т.д.) + детальные страницы (`/referat/[slug]`) с JSON-LD, breadcrumbs, предпросмотром, CTA
+- ✅ PaymentWidget: оплата через модальное окно (без редиректа на /payment), embedded ЮКасса checkout
+- ✅ Scroll-reveal анимации на лендинге: IntersectionObserver + data-reveal/data-visible, иконки шагов с анимацией pop
+- ✅ Блок сравнения «Самостоятельно vs Refai» на лендинге (6 строк: время/оформление/источники/уникальность/стоимость/формат)
+- ✅ Редизайн прогресс-бара: точки-шаги с пульсацией, тема работы, счётчик «Шаг N из M», анимированные подписи
+- ✅ Деплой на prod (pm2: backend + frontend, домен ref-ai.ru)
