@@ -134,15 +134,9 @@ export default function DashboardPage() {
     container.innerHTML = "";
     container.style.transform = "";
     container.style.marginBottom = "";
+    container.style.width = `${DOC_WIDTH}px`;
 
     const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
-    const isDesktop = targetWidth >= DOC_WIDTH;
-
-    if (isDesktop) {
-      container.style.width = "100%";
-    } else {
-      container.style.width = `${DOC_WIDTH}px`;
-    }
 
     setPreviewLoading(true);
     try {
@@ -156,33 +150,20 @@ export default function DashboardPage() {
       const blob = await response.blob();
       const { renderAsync } = await import("docx-preview");
 
-      if (isDesktop) {
-        await renderAsync(blob, container, undefined, {
-          className: "docx-viewer",
-          inWrapper: true,
-          ignoreWidth: true,
-          ignoreHeight: false,
-          experimental: true,
-        });
-        container.style.width = "100%";
-        baseScaleRef.current = 1;
-        setPreviewZoom(1);
-      } else {
-        await renderAsync(blob, container, undefined, {
-          className: "docx-preview",
-          inWrapper: true,
-          ignoreWidth: false,
-          ignoreHeight: false,
-          experimental: true,
-        });
-        const base = Math.min(1, targetWidth / DOC_WIDTH);
-        // experimental=true запускает refreshTabStops через setTimeout(500мс).
-        // Применяем scale только ПОСЛЕ него — иначе dot-leader расчёт ломается.
-        await new Promise<void>(r => setTimeout(r, 600));
-        baseScaleRef.current = base;
-        setPreviewZoom(1);
-        applyScale(container, base);
-      }
+      await renderAsync(blob, container, undefined, {
+        className: "docx-preview",
+        inWrapper: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        experimental: true,
+      });
+      // experimental=true запускает refreshTabStops через setTimeout(500мс).
+      // Применяем scale только ПОСЛЕ него — иначе dot-leader расчёт ломается.
+      await new Promise<void>(r => setTimeout(r, 600));
+      const base = Math.min(1, targetWidth / DOC_WIDTH);
+      baseScaleRef.current = base;
+      setPreviewZoom(1);
+      applyScale(container, base);
     } catch (e) {
       console.error("[DashPreview] Error:", e);
     } finally {

@@ -187,12 +187,54 @@ body.modal-open [class*="GenerationWidget_widget"] {
   border-width: max(1px, calc(1px / var(--docx-scale, 1))) !important;
 }
 
-/* DOCX-превью — tab-stop spans для dot leaders (experimental mode) */
+/* DOCX-превью — оглавление с dot-leader через flex.
+   docx-preview в experimental mode рисует каждую строку ОГЛ как:
+     <p> <span>Заголовок</span> <span><span class="...-tab-stop">&nbsp;</span></span> <span>4</span> </p>
+   JS пытается растянуть tab-stop через wordSpacing, но при длинных заголовках
+   результат отрицательный → число прилипает к тексту, точки пропадают.
+   Решение: делаем параграф flex-строкой. Заголовок сжимается, средний span
+   растягивается, tab-stop span рисует CSS-точки на всю ширину. */
+
+/* Параграф с tab-stop → flex-строка */
+.docx-viewer p:has(.docx-viewer-tab-stop),
+.docx-preview p:has(.docx-preview-tab-stop) {
+  display: flex !important;
+  flex-wrap: nowrap;
+  align-items: baseline;
+}
+
+/* Спан-заголовок (без tab-stop внутри): сжимается, переносится */
+.docx-viewer p:has(.docx-viewer-tab-stop) > span:not(:has(.docx-viewer-tab-stop)),
+.docx-preview p:has(.docx-preview-tab-stop) > span:not(:has(.docx-preview-tab-stop)) {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* Run-span с tab-stop: занимает всё свободное место, min 2ch */
+.docx-viewer p:has(.docx-viewer-tab-stop) > span:has(.docx-viewer-tab-stop),
+.docx-preview p:has(.docx-preview-tab-stop) > span:has(.docx-preview-tab-stop) {
+  flex: 1 0 2ch;
+  min-width: 2ch;
+  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+}
+
+/* Tab-stop span: CSS-точки на всю ширину */
 .docx-viewer-tab-stop,
 .docx-preview-tab-stop {
-  display: inline-block;
+  display: block !important;
+  flex: 1;
+  height: 1em;
   overflow: hidden;
-  white-space: nowrap;
+  word-spacing: normal !important;
+  text-decoration: none !important;
+  background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px);
+  background-size: 5px 100%;
+  background-repeat: repeat-x;
+  background-position: left 68%;
 }
 
 /* Когда модалка открыта — шапка уходит под оверлей */
