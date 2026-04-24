@@ -116,6 +116,7 @@ export default function DashboardPage() {
   }, [viewingGen]);
 
   function applyScale(container: HTMLElement, scale: number) {
+    container.style.setProperty("--docx-scale", String(scale));
     container.style.transform = scale < 1 ? `scale(${scale})` : "";
     container.style.transformOrigin = "top left";
     if (scale < 1) {
@@ -161,6 +162,7 @@ export default function DashboardPage() {
           inWrapper: true,
           ignoreWidth: true,
           ignoreHeight: false,
+          experimental: true,
         });
         container.style.width = "100%";
         baseScaleRef.current = 1;
@@ -171,8 +173,12 @@ export default function DashboardPage() {
           inWrapper: true,
           ignoreWidth: false,
           ignoreHeight: false,
+          experimental: true,
         });
         const base = Math.min(1, targetWidth / DOC_WIDTH);
+        // experimental=true запускает refreshTabStops через setTimeout(500мс).
+        // Применяем scale только ПОСЛЕ него — иначе dot-leader расчёт ломается.
+        await new Promise<void>(r => setTimeout(r, 600));
         baseScaleRef.current = base;
         setPreviewZoom(1);
         applyScale(container, base);

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TypewriterInput from "./components/TypewriterInput";
 import PaymentWidget from "./components/PaymentWidget";
+import ExamplesSection from "./components/ExamplesSection";
 import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
@@ -106,26 +107,58 @@ let _pendingExtrasItems: string[] | null = null;
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
 
 const WHY_FEATURES = [
-  { icon: "⚡", label: "Быстро",       desc: "Работа готова за 2–4 минуты" },
-  { icon: "✦",  label: "Качественно", desc: "ГОСТ 7.32-2017, список литературы" },
-  { icon: "🛡", label: "Уникально",   desc: "Антиплагиат 70–90%" },
-  { icon: "💎", label: "Доступно",    desc: "От 99 рублей за работу" },
-  { icon: "🎯", label: "Просто",      desc: "Только тема — всё остальное ИИ" },
+  { label: "Скорость",       value: "2–4 минуты",          note: "Готово быстрее, чем вы додумаете структуру сами" },
+  { label: "Простота",       value: "Только тема",          note: "Структуру и источники находит ИИ — вы просто ждёте" },
+  { label: "Цена",           value: "от 99 ₽",              note: "Без подписки — платите за каждую работу отдельно" },
+  { label: "Доп. материалы", value: "Презентация + доклад", note: "Добавьте слайды и текст выступления после генерации" },
+  { label: "Везде",          value: "Любой браузер",        note: "Со смартфона или компьютера, без установки" },
 ];
 
-const REVIEWS = [
-  { name: "Анастасия К.", workType: "Курсовая",  date: "янв 2026", stars: 5, text: "Сдала курсовую по маркетингу. Структура логичная, введение и заключение написаны нормально. Научный руководитель вопросов по оформлению не имел." },
-  { name: "Дмитрий С.",  workType: "Реферат",   date: "фев 2026", stars: 5, text: "Удивил список литературы — реальные источники с DOI, всё можно проверить. За 5 минут и 299 рублей честно, ожидал хуже." },
-  { name: "Марина Л.",   workType: "ВКР",        date: "янв 2026", stars: 4, text: "Взяла как черновик — переписывала примерно треть, но структура и источники реально сэкономили время. На нормо-контроле претензий к оформлению не было." },
-  { name: "Артём В.",    workType: "Эссе",       date: "мар 2026", stars: 5, text: "Эссе по философии сдал за день до дедлайна. Тема была нетривиальная, но аргументация выстроена последовательно. Доволен." },
-  { name: "Екатерина Н.", workType: "Реферат",  date: "фев 2026", stars: 5, text: "Уже третий раз пользуюсь. Каждый раз оформление сразу по ГОСТу — ничего лишнего, ничего не надо переделывать." },
-  { name: "Иван Т.",     workType: "Доклад",    date: "янв 2026", stars: 4, text: "Доклад на семинар по экономике. Быстро, по делу, без воды. Сэкономил пару часов точно." },
-  { name: "Полина Ж.",   workType: "Курсовая",  date: "мар 2026", stars: 5, text: "Курсовая по менеджменту прошла комиссию без замечаний. Научный руководитель сказал структура грамотная. Титульник и оглавление оформлены правильно." },
-  { name: "Максим Б.",   workType: "Сочинение", date: "фев 2026", stars: 5, text: "Сочинение по литературе. Тема — нравственный выбор в романе Достоевского. Есть цитаты, мысль прослеживается. Учитель поставил отлично." },
-  { name: "Светлана О.", workType: "Реферат",   date: "мар 2026", stars: 5, text: "Реферат по педагогике сдала в срок. Формат DOCX сразу открылся, оформление правильное — Times New Roman, поля, интервал. Ничего не пришлось переделывать." },
-  { name: "Никита Р.",   workType: "Доклад",    date: "фев 2026", stars: 4, text: "Удобно что платишь только за конкретную работу, без подписки. Доклад по социологии написан понятно, не академически сухо. Преподаватель одобрил." },
-  { name: "Юлия М.",     workType: "Курсовая",  date: "янв 2026", stars: 5, text: "Первый раз пробовала такой сервис — скептически относилась. Курсовая по психологии получилась нормальной: введение, три главы, заключение, источники. Сдала на хорошо." },
+// SVG-иконки для WHY_FEATURES (amber, 18×18)
+const WHY_ICONS: Record<string, React.ReactNode> = {
+  "Скорость": (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  "Простота": (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+    </svg>
+  ),
+  "Цена": (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+  ),
+  "Доп. материалы": (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+    </svg>
+  ),
+  "Везде": (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+    </svg>
+  ),
+};
+
+// SVG-иконки для шагов
+const STEP_ICONS = [
+  // 01: Ввести тему — карандаш
+  <svg key="edit" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>,
+  // 02: ИИ пишет — cpu/chip
+  <svg key="cpu" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+  </svg>,
+  // 03: Скачать — download
+  <svg key="download" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>,
 ];
+
 
 const FAQ = [
   {
@@ -272,10 +305,10 @@ const MOCK_RECENT = [
 ];
 
 const WORK_TYPE_COLORS: Record<string, string> = {
-  "Сочинение": "#7C3AED",
-  "Эссе":      "#4F46E5",
+  "Сочинение": "#1B3A6B",
+  "Эссе":      "#15305A",
   "Доклад":    "#0891B2",
-  "Реферат":   "#2563EB",
+  "Реферат":   "#1B3A6B",
   "Курсовая":  "#D97706",
   "ВКР":       "#DC2626",
 };
@@ -337,8 +370,8 @@ export default function Home() {
   const [showResultModal, setShowResultModal] = useState(false);
   const [modalClosing, setModalClosing]       = useState(false);
   const { setModalOpen }                      = useModalContext();
-  const [wantPresentation, setWantPresentation] = useState(false);
-  const [wantSpeech, setWantSpeech]             = useState(false);
+  const wantPresentation = false;
+  const wantSpeech       = false;
   const [presentationSel, setPresentationSel]   = useState(false);
   const [speechSel, setSpeechSel]               = useState(false);
   const [extrasJobId, setExtrasJobId]         = useState<string | null>(null);
@@ -370,7 +403,7 @@ export default function Home() {
   const [usingRealWorks, setUsingRealWorks]   = useState(false);
   const poolRef                               = useRef<typeof MOCK_WORKS_POOL>([]);
   const poolCursorRef                         = useRef(0);
-  const [dailyCount, setDailyCount]           = useState(0);
+  const [dailyCount, setDailyCount]           = useState(getDailyGenCount);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
   const [trialUsed, setTrialUsed]             = useState(false);
   const [f5Recovery, setF5Recovery]           = useState(false);
@@ -403,10 +436,6 @@ export default function Home() {
     stepsRef.current = getProgressSteps(type);
     setResult(null);
     setError(null);
-    if (!["Доклад", "Реферат", "Курсовая", "ВКР"].includes(type)) {
-      setWantPresentation(false);
-      setWantSpeech(false);
-    }
   }
 
   function startProgress(elapsedOffset = 0) {
@@ -432,7 +461,6 @@ export default function Home() {
     const tpInit  = rawInit * 90;
     setTotalProgress(tpInit);
     setStepIndex(currentStep);
-    console.log(`[Refai] Шаг: ${currentStep} - ${steps[currentStep]?.label} | ${Math.round(tpInit)}%`);
 
     let syncTick = 0;
     timerRef.current = setInterval(() => {
@@ -452,7 +480,6 @@ export default function Home() {
       if (stepElapsed >= step.duration) {
         const next = Math.min(currentStep + 1, steps.length - 1);
         if (next !== currentStep) {
-          console.log(`[Refai] Шаг:`, next, '-', steps[next]?.label, '|', Math.round(tp) + '%');
           currentStep = next;
           stepElapsed = 0;
           // Обновляем localStorage при смене шага
@@ -492,7 +519,6 @@ export default function Home() {
 
   async function handleDownload() {
     if (!result) return;
-    console.log('[Refai] Скачивание DOCX...');
     persistProfile();
     setDownloading(true);
     const downloadData = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
@@ -512,7 +538,6 @@ export default function Home() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      console.log('[Refai] DOCX скачан успешно');
     } catch {
       alert("Не удалось скачать файл.");
     } finally {
@@ -573,6 +598,9 @@ export default function Home() {
 
   // Применяет transform: scale к контейнеру и схлопывает лишнее пространство
   function applyScale(container: HTMLElement, scale: number) {
+    // CSS-переменная нужна для компенсации толщины бордеров таблиц:
+    // при scale 0.46 граница 1px → 0.46px и пропадает на мобилке.
+    container.style.setProperty("--docx-scale", String(scale));
     container.style.transform = scale < 1 ? `scale(${scale})` : "";
     container.style.transformOrigin = "top left";
     // transform не влияет на layout — компенсируем высоту через marginBottom
@@ -598,13 +626,10 @@ export default function Home() {
     const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
     const isDesktop = targetWidth >= DOC_WIDTH;
 
-    if (isDesktop) {
-      // Десктоп: растягиваем на всю ширину контейнера
-      container.style.width = "100%";
-    } else {
-      // Мобиль: фиксируем 816px чтобы ResizeObserver не сбрасывал наш scale
-      container.style.width = `${DOC_WIDTH}px`;
-    }
+    // ignoreWidth: false на всех устройствах — документ рендерится в нативной ширине
+    // (816px для A4 при 96dpi). Это единственный способ получить корректные
+    // tab stops и точки-лидеры в оглавлении. Затем масштабируем через CSS transform.
+    container.style.width = `${DOC_WIDTH}px`;
 
     setPreviewLoading(true);
     try {
@@ -617,30 +642,24 @@ export default function Home() {
       const blob = await response.blob();
       const { renderAsync } = await import("docx-preview");
 
-      if (isDesktop) {
-        // Десктоп: ignoreWidth растягивает документ на всю ширину контейнера
-        await renderAsync(blob, container, undefined, {
-          className: "docx-viewer",
-          inWrapper: true,
-          ignoreWidth: true,
-          ignoreHeight: false,
-        });
-        container.style.width = "100%";
-        baseScaleRef.current = 1;
-        setPreviewZoom(1);
-      } else {
-        // Мобиль: фиксированная ширина + transform scale
-        await renderAsync(blob, container, undefined, {
-          className: "docx-preview",
-          inWrapper: true,
-          ignoreWidth: false,
-          ignoreHeight: false,
-        });
-        const base = Math.min(1, targetWidth / DOC_WIDTH);
-        baseScaleRef.current = base;
-        setPreviewZoom(1);
-        applyScale(container, base);
+      await renderAsync(blob, container, undefined, {
+        className: "docx-viewer",
+        inWrapper: true,
+        ignoreWidth: false,   // нативная ширина → правильные tab stops
+        ignoreHeight: false,  // фиксированная высота страниц как в редакторе
+        experimental: true,   // включает расчёт dot leaders в оглавлении
+      });
+
+      // experimental=true запускает refreshTabStops через setTimeout(500мс).
+      // Применяем scale только ПОСЛЕ него, иначе getBoundingClientRect()
+      // возвращает масштабированные координаты и расчёт dot-leader ломается.
+      const base = Math.min(1, targetWidth / DOC_WIDTH);
+      if (base < 1) {
+        await new Promise<void>(r => setTimeout(r, 600));
       }
+      baseScaleRef.current = base;
+      setPreviewZoom(1);
+      applyScale(container, base);
     } catch (e) {
       console.error("[Preview] Error:", e);
     } finally {
@@ -739,7 +758,6 @@ export default function Home() {
   }
 
   async function runGeneration(t: string, p: number, wt: string) {
-    console.log('[Refai] Начало генерации:', { topic: t, workType: wt, pages: p });
     stepsRef.current = getProgressSteps(wt);
 
     // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
@@ -783,7 +801,6 @@ export default function Home() {
         _gen.resolve(null, errMsg);
         setError({ message: errMsg, status: response.status });
       } else {
-        console.log('[Refai] Генерация завершена. Разделов:', data.structure?.length, '| Источников:', data.sources?.length);
         // Извлекаем _generationId из ответа (не должен попасть в ReferatResult)
         const { _generationId, ...resultData } = data as ReferatResult & { _generationId?: string };
         if (_generationId) { setGenerationId(_generationId); _extrasGenId = _generationId; }
@@ -965,7 +982,6 @@ export default function Home() {
       }
       const checkData = await checkRes.json();
       if (!checkData.hasPaid) {
-        console.log("[Refai] Оплата не найдена, открываем виджет оплаты:", workType);
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
         if (formExtrasItems.length > 0) {
           sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
@@ -1104,7 +1120,7 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/generations/recent")
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data) && data.length >= 8) { setRecentWorks(data); setUsingRealWorks(true); } })
+      .then(data => { if (Array.isArray(data) && data.length >= 30) { setRecentWorks(data); setUsingRealWorks(true); } })
       .catch(() => {});
   }, []);
 
@@ -1114,7 +1130,6 @@ export default function Home() {
     poolRef.current = shuffled;
     poolCursorRef.current = 8; // первые 8 уже использованы в начальном списке
     setDisplayedWorks(buildInitialWorks(shuffled));
-    setDailyCount(getDailyGenCount());
   }, []);
 
   // Счётчик генераций — обновляем каждые 37 секунд
@@ -1208,7 +1223,6 @@ export default function Home() {
           selectWorkType(wt);
           setTopic(t);
           setPages(p);
-          console.log("[Refai] Автозапуск после оплаты:", { topic: t, workType: wt, pages: p });
           // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
           // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
           setTimeout(() => runGeneration(t, p, wt), 0);
@@ -1278,13 +1292,11 @@ export default function Home() {
               sessionStorage.removeItem("activeGeneration");
               setLoading(false);
             });
-            console.log("[Refai] Восстановление UI (клиентская навигация):", { topic: t, workType: wt });
             return;
           }
 
           // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен.
           // Возобновляем анимацию прогресса с нужного момента + запускаем поллинг статуса.
-          console.log("[Refai] Восстановление (F5): возобновление прогресса", { percent: savedPercent, elapsed, workType: wt });
           stepsRef.current = getProgressSteps(wt);
           f5InfoRef.current = { workType: wt, startedAt };
           setLoading(true);
@@ -1464,7 +1476,6 @@ export default function Home() {
           stopProgress();
           setF5Recovery(false);
           setLoading(false);
-          console.log("[Refai] F5-восстановление: генерация завершена, переход в Мои работы");
           router.push("/dashboard");
         } else if (data.status === "error" || data.status === "not_found") {
           clearInterval(pollRef.current!);
@@ -1478,7 +1489,6 @@ export default function Home() {
               : "Генерация завершилась с ошибкой. Проверьте «Мои работы».",
             status: 500,
           });
-          console.log("[Refai] F5-восстановление:", data.status);
         }
         // status === "running" | "idle" — продолжаем ждать
       } catch { /* сеть недоступна, повторим */ }
@@ -1487,6 +1497,25 @@ export default function Home() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f5Recovery]);
+
+  // Scroll-reveal: IntersectionObserver устанавливает data-visible="true" через setAttribute.
+  // Используем setAttribute вместо classList.add — React не затирает data-* атрибуты при ре-рендерах,
+  // тогда как className полностью перезаписывается React и сбрасывал бы is-visible при клике на FAQ.
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach(e => {
+        if (e.isIntersecting) {
+          (e.target as HTMLElement).setAttribute('data-visible', 'true');
+          obs.unobserve(e.target);
+        }
+      }),
+      { threshold: 0.08 }
+    );
+    const els = document.querySelectorAll('[data-reveal]:not([data-visible="true"])');
+    els.forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, displayedWorks.length, recentWorks.length]);
 
   const price         = WORK_PRICES[workType]?.price ?? 199;
   const pageRange     = WORK_PAGES[workType];
@@ -1642,25 +1671,6 @@ export default function Home() {
               </div>
             </div>
 
-            {hasExtrasForm && (
-              <div className={styles.extrasFormSection}>
-                <span className={styles.extrasFormLabel}>Дополнительно:</span>
-                <div className={styles.extrasFormCards}>
-                  <label className={`${styles.extrasFormCard} ${wantPresentation ? styles.extrasFormCardActive : ""}`}>
-                    <input type="checkbox" className={styles.toggleInput} checked={wantPresentation} onChange={e => setWantPresentation(e.target.checked)} disabled={loading} />
-                    <img src="/pptx-icon.svg" alt="" className={styles.extrasFormCardIcon} />
-                    <span className={styles.extrasFormCardLabel}>Презентация</span>
-                    <span className={styles.extrasFormCardPrice}>+199 ₽</span>
-                  </label>
-                  <label className={`${styles.extrasFormCard} ${wantSpeech ? styles.extrasFormCardActive : ""}`}>
-                    <input type="checkbox" className={styles.toggleInput} checked={wantSpeech} onChange={e => setWantSpeech(e.target.checked)} disabled={loading} />
-                    <img src="/txt-icon.svg" alt="" className={styles.extrasFormCardIcon} />
-                    <span className={styles.extrasFormCardLabel}>Текст выступления</span>
-                    <span className={styles.extrasFormCardPrice}>+149 ₽</span>
-                  </label>
-                </div>
-              </div>
-            )}
 
             <div className={styles.btnRow}>
               <button
@@ -1677,6 +1687,11 @@ export default function Home() {
                     : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${totalPrice} ₽`}
               </button>
             </div>
+            {hasExtrasForm && (
+              <p className={styles.extrasHint}>
+                После генерации — добавьте презентацию или текст выступления
+              </p>
+            )}
           </form>
 
           {dailyCount > 0 && (
@@ -1694,42 +1709,43 @@ export default function Home() {
         <section className={styles.progressSection}>
           <div className={styles.progressCard}>
 
-            {/* Заголовок: текущий шаг + процент */}
-            <div className={styles.progressHeader}>
-              <span className={styles.progressLabel}>
-                {stepsRef.current[stepIndex]?.label}
-                <span className={styles.progressDots}>{dots}</span>
+            {/* Верхняя строка: шаг N из M + процент */}
+            <div className={styles.progressTop}>
+              <span className={styles.progressStepCount}>
+                Шаг {stepIndex + 1} из {stepsRef.current.length}
               </span>
               <span className={styles.progressPercent}>{Math.round(totalProgress)}%</span>
             </div>
 
-            {/* Единый прогресс-бар */}
+            {/* Тема работы */}
+            {topic && (
+              <p className={styles.progressTopic}>«{topic}»</p>
+            )}
+
+            {/* Прогресс-бар */}
             <div className={styles.progressBar}>
-              <div className={styles.progressFill} style={{ width: `${totalProgress}%` }}/>
+              <div className={styles.progressFill} style={{ transform: `scaleX(${totalProgress / 100})` }} />
             </div>
 
-            {/* Хлебные крошки: предыдущий → текущий → следующий */}
-            <div className={styles.progressCrumb}>
-              {stepIndex > 0 && (
-                <>
-                  <span className={styles.crumbPrev}>
-                    {stepsRef.current[stepIndex - 1]?.label}
-                  </span>
-                  <span className={styles.crumbSep}>→</span>
-                </>
-              )}
-              <span className={styles.crumbCurrent}>
-                {stepsRef.current[stepIndex]?.label}
-              </span>
-              {stepIndex < stepsRef.current.length - 1 && (
-                <>
-                  <span className={styles.crumbSep}>→</span>
-                  <span className={styles.crumbNext}>
-                    {stepsRef.current[stepIndex + 1]?.label}
-                  </span>
-                </>
-              )}
+            {/* Точки-шаги */}
+            <div className={styles.progressDotRow}>
+              {stepsRef.current.map((_, i) => (
+                <span
+                  key={i}
+                  className={
+                    i < stepIndex  ? styles.progressDotDone :
+                    i === stepIndex ? styles.progressDotActive :
+                    styles.progressDotPending
+                  }
+                />
+              ))}
             </div>
+
+            {/* Текущий шаг — key вызывает re-mount → анимация каждый раз */}
+            <p key={stepIndex} className={styles.progressCurrentLabel}>
+              {stepsRef.current[stepIndex]?.label}
+              <span className={styles.progressDots}>{dots}</span>
+            </p>
 
             {f5Recovery ? (
               <div className={styles.f5RecoveryHint}>
@@ -1749,7 +1765,7 @@ export default function Home() {
 
           {/* Карточка с фактом */}
           <div className={styles.factCard} style={{ opacity: factVisible ? 1 : 0 }}>
-            <span className={styles.factBadge}>💡 Знаете ли вы?</span>
+            <span className={styles.factBadge}>Знаете ли вы?</span>
             <p className={styles.factText}>{FUN_FACTS[factIndex]}</p>
             <div className={styles.factFooter}>
               <div className={styles.factDots}>
@@ -1775,40 +1791,46 @@ export default function Home() {
               <p className={styles.errorTitle}>
                 {error.status === 429
                   ? "Генерация уже запущена"
-                  : "Генерация временно недоступна"}
+                  : "Что-то пошло не так"}
               </p>
-              <p className={styles.errorText}>
-                {error.message}
-                {error.status !== 429 && ". Попробуйте позже — обычно это занимает несколько минут."}
-              </p>
+              <p className={styles.errorText}>{error.message}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* ── Как это работает (показываем только пока нет результата) ── */}
-      {!result && !loading && (
+      {!loading && (
         <section className={styles.stepsSection}>
           <div className={styles.stepsSectionInner}>
             <h2 className={styles.sectionTitle}>Как это работает</h2>
             <p className={styles.sectionSub}>Три шага до готовой работы</p>
             <div className={styles.stepsGrid}>
-              <div className={styles.stepCard}>
-                <div className={styles.stepNum}>01</div>
+              <div className={styles.stepCard} data-reveal data-delay="1">
+                <div className={styles.stepNumRow}>
+                  <div className={styles.stepNum}>01</div>
+                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[0]}</div>
+                </div>
                 <div className={styles.stepTitle}>Вводишь тему</div>
                 <p className={styles.stepText}>
                   Напиши любую тему в поле выше — развёрнуто или кратко, главное суть
                 </p>
               </div>
-              <div className={styles.stepCard}>
-                <div className={styles.stepNum}>02</div>
+              <div className={styles.stepCard} data-reveal data-delay="2">
+                <div className={styles.stepNumRow}>
+                  <div className={styles.stepNum}>02</div>
+                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[1]}</div>
+                </div>
                 <div className={styles.stepTitle}>ИИ пишет работу</div>
                 <p className={styles.stepText}>
                   Алгоритм формирует структуру, введение, все главы, заключение и источники за 2–4 минуты
                 </p>
               </div>
-              <div className={styles.stepCard}>
-                <div className={styles.stepNum}>03</div>
+              <div className={styles.stepCard} data-reveal data-delay="3">
+                <div className={styles.stepNumRow}>
+                  <div className={styles.stepNum}>03</div>
+                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[2]}</div>
+                </div>
                 <div className={styles.stepTitle}>Скачиваешь DOCX</div>
                 <p className={styles.stepText}>
                   Готовый файл с оформлением по ГОСТ: шрифт, поля, интервалы, нумерация страниц
@@ -1834,27 +1856,36 @@ export default function Home() {
       )}
 
       {/* ── Почему мы ── */}
-      {!result && !loading && (
+      {!loading && (
         <section className={styles.whySection}>
           <div className={styles.whySectionInner}>
-            <h2 className={styles.whySectionTitle}>
-              Почему <span className={styles.whyAccent}>Refai?</span>
-            </h2>
-            <div className={styles.whyCards}>
-              {WHY_FEATURES.map(f => (
-                <div key={f.label} className={styles.whyCard}>
-                  <div className={styles.whyCardIcon}>{f.icon}</div>
-                  <span className={styles.whyCardLabel}>{f.label}</span>
-                  <span className={styles.whyCardDesc}>{f.desc}</span>
+            <div className={styles.whyHead}>
+              <p className={styles.whyEyebrow}>Почему Refai</p>
+              <h2 className={styles.whySectionTitle}>
+                Цифры, а <span className={styles.whyAccent}>не обещания</span>
+              </h2>
+            </div>
+            <dl className={styles.whyStrip}>
+              {WHY_FEATURES.map((f, i) => (
+                <div key={f.label} className={styles.whyItem} data-reveal data-delay={String(i + 1)}>
+                  <div className={styles.whyItemIcon}>{WHY_ICONS[f.label]}</div>
+                  <dt className={styles.whyItemLabel}>{f.label}</dt>
+                  <dd className={styles.whyItemValue}>{f.value}</dd>
+                  <dd className={styles.whyItemNote}>{f.note}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
           </div>
         </section>
       )}
 
+      {/* ── Примеры работ ── */}
+      {!loading && (
+        <ExamplesSection onSelectWorkType={selectWorkType} />
+      )}
+
       {/* ── Последние работы ── */}
-      {!result && !loading && (
+      {!loading && (
         <section className={styles.recentSection}>
           <div className={styles.recentInner}>
             <div className={styles.recentHeadRow}>
@@ -1871,30 +1902,29 @@ export default function Home() {
               {(usingRealWorks
                 ? (showAllWorks ? recentWorks : recentWorks.slice(0, 8))
                 : displayedWorks
-              ).map(w => {
+              ).map((w, _idx) => {
                 const workType  = (w as DisplayWork).workType ?? (w as typeof MOCK_RECENT[0]).workType;
                 const topic     = (w as DisplayWork).topic    ?? (w as typeof MOCK_RECENT[0]).topic;
                 const isNew     = (w as DisplayWork).isNew;
                 const minsAgo   = (w as DisplayWork).minutesAgo;
                 const createdAt = (w as typeof MOCK_RECENT[0]).createdAt;
-                const typeColor = WORK_TYPE_COLORS[workType] || "#6366F1";
+                const typeColor = WORK_TYPE_COLORS[workType] || "#1B3A6B";
                 const typeIcon  = WORK_TYPE_ICONS[workType]  || "📄";
                 return (
                   <div
                     key={(w as DisplayWork).id ?? (w as typeof MOCK_RECENT[0]).id}
                     className={`${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`}
-                    style={{ "--card-accent": typeColor } as React.CSSProperties}
                   >
-                    <div className={styles.recentBadgeRow2}>
-                      <span className={styles.recentBadge} style={{ color: typeColor }}>
-                        <span className={styles.recentBadgeIcon}>{typeIcon}</span>{workType}
+                    <div className={styles.recentCardTop}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className={styles.recentBadge} style={{ color: typeColor }}>{workType}</span>
+                        {isNew && <span className={styles.recentNewDot} />}
+                      </div>
+                      <span suppressHydrationWarning className={styles.recentDate}>
+                        {createdAt ? formatDate(createdAt) : timeAgo(minsAgo ?? 0)}
                       </span>
-                      {isNew && <span className={styles.recentNewBadge}>новая</span>}
                     </div>
                     <p className={styles.recentWorkTitle}>{topic}</p>
-                    <span suppressHydrationWarning className={styles.recentDate}>
-                      {createdAt ? formatDate(createdAt) : timeAgo(minsAgo ?? 0)}
-                    </span>
                   </div>
                 );
               })}
@@ -1908,40 +1938,44 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Отзывы ── */}
-      {!result && !loading && (
-        <section className={styles.reviewsSection}>
-          <div className={styles.reviewsInner}>
-            <div className={styles.reviewsTop}>
-              <h2 className={styles.reviewsHeading}>
-                Свежие <span className={styles.reviewsAccent}>отзывы</span>
+      {/* ── Comparison block ── */}
+      {!loading && (
+        <section className={styles.compareSection}>
+          <div className={styles.compareInner}>
+            <div className={styles.compareHead}>
+              <h2 className={styles.compareHeading}>
+                Самостоятельно vs <span className={styles.compareAccent}>Refai</span>
               </h2>
-              <div className={styles.reviewCta}>
-                <a
-                  href="mailto:support@ref-ai.ru?subject=Отзыв о Refai"
-                  className={styles.reviewBtn}
-                >
-                  ✉ Написать отзыв
-                </a>
-                <p className={styles.reviewCtaHint}>Отправьте нам — отмодерируем и опубликуем</p>
-              </div>
+              <p className={styles.compareSub}>Сравните и решите сами</p>
             </div>
-          </div>
-          <div className={styles.reviewsTrack}>
-            <div className={styles.reviewsScroll}>
-              {[...REVIEWS, ...REVIEWS].map((r, i) => (
-                <div key={i} className={styles.reviewCard}>
-                  <div className={styles.reviewCardTop}>
-                    <div>
-                      <p className={styles.reviewName}>{r.name}</p>
-                      <p className={styles.reviewDate}>{r.date}</p>
-                    </div>
-                    <div className={styles.reviewRight}>
-                      <span className={styles.reviewWorkBadge}>{r.workType}</span>
-                      <div className={styles.reviewStars}>{"★".repeat(r.stars)}</div>
-                    </div>
+            <div className={styles.compareTable}>
+              <div className={styles.compareHeader}>
+                <div className={styles.compareHeaderCell}>Критерий</div>
+                <div className={styles.compareHeaderCell}>Самостоятельно</div>
+                <div className={styles.compareHeaderCell}>Refai</div>
+              </div>
+              {[
+                { label: 'Время',             bad: '3–7 дней',           good: '2 минуты' },
+                { label: 'Оформление по ГОСТ', bad: 'Вручную',            good: 'Автоматически' },
+                { label: 'Источники',          bad: 'Поиск вручную',      good: 'Реальные, с DOI' },
+                { label: 'Уникальность',       bad: '< 50%',              good: '70–90%' },
+                { label: 'Стоимость',          bad: '500–3000 ₽ + время', good: 'от 99 ₽' },
+                { label: 'Формат',             bad: 'PDF или распечатка', good: 'DOCX, сразу в Word' },
+              ].map((row, i) => (
+                <div key={i} className={styles.compareRow} data-reveal data-delay={String(i + 1)}>
+                  <div className={styles.compareRowLabel}>{row.label}</div>
+                  <div className={styles.compareRowBad}>
+                    <svg className={styles.compareBadIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                    {row.bad}
                   </div>
-                  <p className={styles.reviewText}>{r.text}</p>
+                  <div className={styles.compareRowGood}>
+                    <svg className={styles.compareGoodIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    {row.good}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1950,28 +1984,43 @@ export default function Home() {
       )}
 
       {/* ── FAQ ── */}
-      {!result && !loading && (
+      {!loading && (
         <section className={styles.faqSection}>
           <div className={styles.faqInner}>
             <h2 className={styles.faqHeading}>
               Часто задаваемые <span className={styles.faqAccent}>вопросы</span>
             </h2>
             <div className={styles.faqGrid}>
-              {FAQ.map((item, i) => (
-                <div
-                  key={i}
-                  className={`${styles.faqItem} ${faqOpen === i ? styles.faqItemOpen : ""}`}
-                >
-                  <button
-                    className={styles.faqQ}
-                    onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+              {FAQ.map((item, i) => {
+                const isOpen = faqOpen === i;
+                return (
+                  <div
+                    key={i}
+                    className={`${styles.faqItem} ${isOpen ? styles.faqItemOpen : ""}`}
+                    data-reveal
+                    data-delay={String((i % 4) + 1)}
                   >
-                    <span>{item.q}</span>
-                    <span className={styles.faqIcon}>{faqOpen === i ? "−" : "+"}</span>
-                  </button>
-                  {faqOpen === i && <p className={styles.faqA}>{item.a}</p>}
-                </div>
-              ))}
+                    <button
+                      className={styles.faqQ}
+                      onClick={() => setFaqOpen(isOpen ? null : i)}
+                      aria-expanded={isOpen}
+                    >
+                      <span>{item.q}</span>
+                      <svg
+                        className={styles.faqIcon}
+                        width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+                      >
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+                    <div className={`${styles.faqBody} ${isOpen ? styles.faqBodyOpen : ''}`}>
+                      <p className={styles.faqA}>{item.a}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -2008,7 +2057,7 @@ export default function Home() {
                 <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
               </div>
               <div className={styles.extrasProgressBar}>
-                <div className={styles.extrasProgressFill} style={{ width: `${extrasProgress}%` }} />
+                <div className={styles.extrasProgressFill} style={{ transform: `scaleX(${extrasProgress / 100})` }} />
               </div>
             </div>
           );
@@ -2257,7 +2306,7 @@ export default function Home() {
                       <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
                     </div>
                     <div className={styles.extrasProgressBar}>
-                      <div className={styles.extrasProgressFill} style={{ width: `${extrasProgress}%` }} />
+                      <div className={styles.extrasProgressFill} style={{ transform: `scaleX(${extrasProgress / 100})` }} />
                     </div>
                   </div>
                 )}

@@ -124,6 +124,14 @@ export default function AdminWorks() {
                             Открыть →
                           </Link>
                         )}
+                        <a
+                          href={`/api/admin/works/${w.id}/download`}
+                          download
+                          className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}
+                          title="Скачать DOCX"
+                        >
+                          ↓ DOCX
+                        </a>
                         <button
                           className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
                           disabled={deleting === w.id}

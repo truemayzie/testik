@@ -175,8 +175,11 @@ def setup_heading_styles(doc):
 
 _WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, интервал 1.5, поля ГОСТ)
 
-# Ширина текстовой зоны для A4 с полями 3+1 см: 170мм = 9638 twips
-# Tab stop ставим чуть левее правого края чтобы число не обрезалось
+# Стандартный tab stop для оглавления: 8640 twips = 6 дюймов = 15.24 см
+# от левого поля страницы. Это значение совпадает с шаблонами ГОСТ-документов
+# в Word и обеспечивает правильное отображение точек и номеров страниц.
+TOC_TAB_TWIPS = 8640
+
 def _count_words(text: str) -> int:
     """Подсчёт слов в тексте (без таблиц)."""
     if not text:
@@ -185,9 +188,10 @@ def _count_words(text: str) -> int:
     return len(text.split())
 
 
-def _set_toc_tab(paragraph, pos_twips: int = 8640):
+def _set_toc_tab(paragraph, pos_twips: int):
     """Устанавливает tab stop с точками-лидерами через XML напрямую.
     ВАЖНО: вызывать ПОСЛЕ добавления всех run-ов в параграф.
+    pos_twips — позиция от левого поля параграфа в твипах.
     """
     pPr = paragraph._p.get_or_add_pPr()
     for old in pPr.findall(qn("w:tabs")):
@@ -201,15 +205,35 @@ def _set_toc_tab(paragraph, pos_twips: int = 8640):
     pPr.append(tabs_el)
 
 
-def _toc_line(doc, title: str, level: int, page_num: int):
-    """Одна строка оглавления: название + tab-лидер с точками + номер страницы."""
+_TOC_LEFT_L2 = 567  # отступ подглав в твипах (≈1.0 см)
+
+def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB_TWIPS):
+    """Одна строка оглавления: название + tab-лидер с точками + номер страницы.
+
+    В Word/OOXML позиция w:tab/w:pos отсчитывается от левого края параграфа
+    (включая w:ind/w:left), а НЕ от левого поля страницы.
+    Поэтому для подглав с w:left=567 задаём tab на (tab_pos - 567),
+    чтобы номера страниц визуально выровнялись с главами.
+    """
     p = doc.add_paragraph()
     p.paragraph_format.space_before      = Pt(0)
     p.paragraph_format.space_after       = Pt(4)
     p.paragraph_format.line_spacing      = Pt(21)
     p.paragraph_format.first_line_indent = Cm(0)
+
     if level == 2:
-        p.paragraph_format.left_indent = Cm(1.25)
+        # Отступ подглав: w:left=567, w:firstLine=0
+        pPr = p._p.get_or_add_pPr()
+        ind_el = pPr.find(qn("w:ind"))
+        if ind_el is None:
+            ind_el = OxmlElement("w:ind")
+            pPr.append(ind_el)
+        ind_el.set(qn("w:left"),     str(_TOC_LEFT_L2))
+        ind_el.set(qn("w:firstLine"), "0")
+        # Компенсируем: tab_pos считается от левого края параграфа
+        effective_tab = tab_pos - _TOC_LEFT_L2
+    else:
+        effective_tab = tab_pos
 
     # Runs добавляем СНАЧАЛА — затем tab stop
     r1 = p.add_run(title)
@@ -224,10 +248,10 @@ def _toc_line(doc, title: str, level: int, page_num: int):
     r2.font.color.rgb = RGBColor(0, 0, 0)
 
     # Tab stop с точками — ПОСЛЕ runs
-    _set_toc_tab(p, 8640)
+    _set_toc_tab(p, effective_tab)
 
 
-def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ"):
+def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ", tab_pos: int = TOC_TAB_TWIPS):
     """
     Программное оглавление: название по центру + строки с точками.
     entries — список (title, level, page_num).
@@ -237,7 +261,7 @@ def add_toc(doc, entries: list, title: str = "СОДЕРЖАНИЕ"):
     run(p, title, bold=True, size=14)
 
     for entry_title, level, page_num in entries:
-        _toc_line(doc, entry_title, level, page_num)
+        _toc_line(doc, entry_title, level, page_num, tab_pos=tab_pos)
 
     # Разрыв страницы не нужен — Heading 1 уже имеет pageBreakBefore,
     # двойной разрыв давал пустую страницу между оглавлением и текстом.
@@ -432,15 +456,6 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
     clean_desc = _re.sub(r'^[Тт]аблица\s+\d+\s*[—-]\s*', '', raw_caption).strip()
     caption = f"Таблица {n} — {clean_desc}" if clean_desc else f"Таблица {n}"
 
-    # Небольшой отступ сверху перед таблицей
-    spacer = doc.add_paragraph()
-    spacer.paragraph_format.space_before = Pt(6)
-    spacer.paragraph_format.space_after  = Pt(0)
-
-    # Создаём таблицу: строка-подпись + строка-заголовок + строки данных
-    table = doc.add_table(rows=2 + len(rows), cols=len(headers))
-    table.style = "Table Grid"
-
     from docx.oxml import OxmlElement as _OE
     from docx.oxml.ns import qn as _qn
 
@@ -450,37 +465,29 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
         tblHeader = _OE("w:tblHeader")
         trPr.append(tblHeader)
 
-    # ── Строка 0: подпись таблицы (слитая ячейка на всю ширину) ──
-    caption_row = table.rows[0]
-    mark_tbl_header(caption_row)
+    # ── Подпись таблицы — отдельный параграф ВНЕ таблицы (ГОСТ) ──────────────
+    # Это устраняет лишнюю верхнюю границу: подпись не является ячейкой.
+    spacer = doc.add_paragraph()
+    spacer.paragraph_format.space_before = Pt(6)
+    spacer.paragraph_format.space_after  = Pt(0)
+    spacer.paragraph_format.line_spacing = Pt(18)
 
-    # Объединяем все ячейки в одну
-    if len(headers) > 1:
-        caption_row.cells[0].merge(caption_row.cells[-1])
-
-    cap_cell = caption_row.cells[0]
-    cap_cell.text = ""
-    cp = cap_cell.paragraphs[0]
-    cp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    cp.paragraph_format.space_before = Pt(3)
-    cp.paragraph_format.space_after  = Pt(3)
-    r_cap = cp.add_run(caption)
+    cap_p = doc.add_paragraph()
+    cap_p.paragraph_format.space_before      = Pt(0)
+    cap_p.paragraph_format.space_after       = Pt(2)
+    cap_p.paragraph_format.line_spacing      = Pt(18)
+    cap_p.paragraph_format.first_line_indent = Cm(0)
+    cap_p.paragraph_format.left_indent       = Cm(0)
+    cap_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_cap = cap_p.add_run(caption)
     set_run_font(r_cap, bold=True, size=12)
 
-    # Убираем все рамки у ячейки подписи (чтобы не было лишней рамки сверху)
-    tc_pr = cap_cell._tc.get_or_add_tcPr()
-    tc_borders = _OE("w:tcBorders")
-    for side in ("top", "bottom", "left", "right", "insideH", "insideV"):
-        bdr = _OE(f"w:{side}")
-        bdr.set(_qn("w:val"), "none")
-        bdr.set(_qn("w:sz"), "0")
-        bdr.set(_qn("w:space"), "0")
-        bdr.set(_qn("w:color"), "auto")
-        tc_borders.append(bdr)
-    tc_pr.append(tc_borders)
+    # ── Таблица: строка-заголовок + строки данных ─────────────────────────────
+    table = doc.add_table(rows=1 + len(rows), cols=len(headers))
+    table.style = "Table Grid"
 
-    # ── Строка 1: заголовки столбцов ──
-    hdr_row = table.rows[1]
+    # ── Строка 0: заголовки столбцов ──
+    hdr_row = table.rows[0]
     mark_tbl_header(hdr_row)
 
     for i, header in enumerate(headers):
@@ -493,11 +500,10 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
         r = p.add_run(str(header))
         set_run_font(r, bold=True, size=12)
 
-    # Строки данных
+    # ── Строки данных ──
     for ri, row_data in enumerate(rows):
-        row = table.rows[ri + 2]
+        row = table.rows[ri + 1]
 
-        # Запрещаем разрыв строки между страницами
         trPr_data = row._tr.get_or_add_trPr()
         cantSplit = _OE("w:cantSplit")
         trPr_data.append(cantSplit)
@@ -557,7 +563,7 @@ def add_body(doc, text, table_counter: list):
 # ── Список литературы ────────────────────────────────────────────────────────
 
 def add_sources(doc, sources):
-    """По левому краю, висячий отступ, пустая строка между источниками."""
+    """По ширине, висячий отступ (ГОСТ). Отступ через XML: w:left=709 w:hanging=709."""
     add_service_heading(doc, "Список литературы")
 
     for src in sources:
@@ -565,11 +571,30 @@ def add_sources(doc, sources):
         if not src:
             continue
         p = doc.add_paragraph()
-        fmt(p, WD_ALIGN_PARAGRAPH.LEFT, None, 21, 0, 0)
-        p.paragraph_format.left_indent       = Cm(1.25)
-        p.paragraph_format.first_line_indent = Cm(-1.25)
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+        # Межстрочный интервал и отступы через pPr XML для точного соответствия ГОСТ
+        pPr = p._p.get_or_add_pPr()
+
+        # w:spacing: line=420 (1.5 pt×20=420 twips), after=80 (~4pt)
+        sp_el = pPr.find(qn("w:spacing"))
+        if sp_el is None:
+            sp_el = OxmlElement("w:spacing")
+            pPr.append(sp_el)
+        sp_el.set(qn("w:line"),      "420")
+        sp_el.set(qn("w:lineRule"),  "exact")
+        sp_el.set(qn("w:before"),    "0")
+        sp_el.set(qn("w:after"),     "80")
+
+        # w:ind: left=709 hanging=709 (1.25 см = 709 twips)
+        ind_el = pPr.find(qn("w:ind"))
+        if ind_el is None:
+            ind_el = OxmlElement("w:ind")
+            pPr.append(ind_el)
+        ind_el.set(qn("w:left"),    "709")
+        ind_el.set(qn("w:hanging"), "709")
+
         run(p, src, size=14)
-        blank(doc)  # пустая строка между источниками
 
 
 # ── Сочинение / Эссе — без титульника, оглавления, списка литературы ─────────
