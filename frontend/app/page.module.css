@@ -1815,6 +1815,8 @@
 @media (max-width: 768px) {
   .previewContainer {
     padding: 0;
+    overflow: hidden;
+    max-width: 100%;
   }
 }
 

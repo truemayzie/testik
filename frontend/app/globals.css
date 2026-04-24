@@ -231,10 +231,10 @@ body.modal-open [class*="GenerationWidget_widget"] {
   overflow: hidden;
   word-spacing: normal !important;
   text-decoration: none !important;
-  background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px);
-  background-size: 5px 100%;
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+  background-size: 6px 100%;
   background-repeat: repeat-x;
-  background-position: left 68%;
+  background-position: left 75%;
 }
 
 /* Когда модалка открыта — шапка уходит под оверлей */
@@ -298,4 +298,26 @@ body.modal-open header {
     scroll-behavior: auto !important;
   }
   [data-reveal] { opacity: 1 !important; transform: none !important; }
+}
+
+/* DOCX-превью — номер страницы в оглавлении не переносится */
+.docx-viewer p:has(.docx-viewer-tab-stop) > span:last-child,
+.docx-preview p:has(.docx-preview-tab-stop) > span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* DOCX-превью — мобилка: документ не выходит за экран */
+@media (max-width: 768px) {
+  .docx-viewer section,
+  .docx-preview section {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .docx-viewer,
+  .docx-preview {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
 }
