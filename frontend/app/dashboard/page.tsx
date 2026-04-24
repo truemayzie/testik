@@ -122,11 +122,9 @@ export default function DashboardPage() {
       container.style.transformOrigin = "top left";
       const h = container.scrollHeight;
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
-      container.style.marginRight  = `${Math.round(DOC_WIDTH * scale - DOC_WIDTH)}px`;
     } else {
       container.style.transform    = "";
       container.style.marginBottom = "";
-      container.style.marginRight  = "";
     }
   }
 
@@ -137,7 +135,6 @@ export default function DashboardPage() {
     container.innerHTML = "";
     container.style.transform    = "";
     container.style.marginBottom = "";
-    container.style.marginRight  = "";
     container.style.width = `${DOC_WIDTH}px`;
 
     const targetWidth = container.parentElement?.clientWidth

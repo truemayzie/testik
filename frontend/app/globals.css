@@ -239,7 +239,7 @@ body.modal-open [class*="GenerationWidget_widget"] {
   word-spacing: normal !important;
   text-decoration: none !important;
   background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
-  background-size: 6px 100%;
+  background-size: 0.45em 100%;
   background-repeat: repeat-x;
   background-position: left 75%;
 }

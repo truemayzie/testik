@@ -604,11 +604,9 @@ export default function Home() {
       container.style.transformOrigin = "top left";
       const h = container.scrollHeight;
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
-      container.style.marginRight  = `${Math.round(DOC_WIDTH * scale - DOC_WIDTH)}px`;
     } else {
       container.style.transform    = "";
       container.style.marginBottom = "";
-      container.style.marginRight  = "";
     }
   }
 
@@ -621,7 +619,6 @@ export default function Home() {
     container.innerHTML = "";
     container.style.transform    = "";
     container.style.marginBottom = "";
-    container.style.marginRight  = "";
 
     // Читаем целевую ширину ДО фиксации контейнера.
     // Math.min с window.innerWidth защищает от случаев когда parentElement.clientWidth
@@ -665,6 +662,18 @@ export default function Home() {
       baseScaleRef.current = base;
       setPreviewZoom(1);
       applyScale(container, base);
+      // Фиксируем ширину wrapper'а после масштабирования, чтобы документ
+      // не выходил за правый край экрана (layout-ширина остаётся DOC_WIDTH после scale)
+      const wrapper = container.parentElement;
+      if (wrapper && base < 1) {
+        wrapper.style.width    = Math.round(DOC_WIDTH * base) + "px";
+        wrapper.style.maxWidth = "100%";
+        wrapper.style.overflowX = "hidden";
+      } else if (wrapper) {
+        wrapper.style.width    = "";
+        wrapper.style.maxWidth = "";
+        wrapper.style.overflowX = "";
+      }
     } catch (e) {
       console.error("[Preview] Error:", e);
     } finally {
