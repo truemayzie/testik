@@ -598,17 +598,17 @@ export default function Home() {
 
   // Применяет transform: scale к контейнеру и схлопывает лишнее пространство
   function applyScale(container: HTMLElement, scale: number) {
-    // CSS-переменная нужна для компенсации толщины бордеров таблиц:
-    // при scale 0.46 граница 1px → 0.46px и пропадает на мобилке.
     container.style.setProperty("--docx-scale", String(scale));
-    container.style.transform = scale < 1 ? `scale(${scale})` : "";
-    container.style.transformOrigin = "top left";
-    // transform не влияет на layout — компенсируем высоту через marginBottom
     if (scale < 1) {
+      container.style.transform = `scale(${scale})`;
+      container.style.transformOrigin = "top left";
       const h = container.scrollHeight;
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+      container.style.marginRight  = `${Math.round(DOC_WIDTH * scale - DOC_WIDTH)}px`;
     } else {
+      container.style.transform    = "";
       container.style.marginBottom = "";
+      container.style.marginRight  = "";
     }
   }
 
@@ -619,11 +619,16 @@ export default function Home() {
 
     // Сбрасываем предыдущий рендер
     container.innerHTML = "";
-    container.style.transform = "";
+    container.style.transform    = "";
     container.style.marginBottom = "";
+    container.style.marginRight  = "";
 
-    // Читаем целевую ширину ДО фиксации контейнера
-    const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
+    // Читаем целевую ширину ДО фиксации контейнера.
+    // Math.min с window.innerWidth защищает от случаев когда parentElement.clientWidth
+    // шире viewport (скроллбар, overflow и т.п.) — особенно актуально на мобилке.
+    const targetWidth = container.parentElement?.clientWidth
+      ? Math.min(container.parentElement.clientWidth, window.innerWidth)
+      : window.innerWidth;
     const isDesktop = targetWidth >= DOC_WIDTH;
 
     // ignoreWidth: false на всех устройствах — документ рендерится в нативной ширине

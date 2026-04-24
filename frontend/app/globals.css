@@ -203,9 +203,9 @@ body.modal-open [class*="GenerationWidget_widget"] {
   align-items: baseline;
 }
 
-/* Спан-заголовок (без tab-stop внутри): сжимается, переносится */
-.docx-viewer p:has(.docx-viewer-tab-stop) > span:not(:has(.docx-viewer-tab-stop)),
-.docx-preview p:has(.docx-preview-tab-stop) > span:not(:has(.docx-preview-tab-stop)) {
+/* Спан-заголовок: первый дочерний span (текст главы) — сжимается и переносится */
+.docx-viewer p:has(.docx-viewer-tab-stop) > span:first-child,
+.docx-preview p:has(.docx-preview-tab-stop) > span:first-child {
   flex: 0 1 auto;
   min-width: 0;
   white-space: normal;
@@ -220,6 +220,13 @@ body.modal-open [class*="GenerationWidget_widget"] {
   overflow: hidden;
   display: flex;
   align-items: baseline;
+}
+
+/* Номер страницы (всё после tab-stop-run): не переносится */
+.docx-viewer p:has(.docx-viewer-tab-stop) > span:not(:has(.docx-viewer-tab-stop)):not(:first-child),
+.docx-preview p:has(.docx-preview-tab-stop) > span:not(:has(.docx-preview-tab-stop)):not(:first-child) {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Tab-stop span: CSS-точки на всю ширину */
@@ -300,12 +307,6 @@ body.modal-open header {
   [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
 
-/* DOCX-превью — номер страницы в оглавлении не переносится */
-.docx-viewer p:has(.docx-viewer-tab-stop) > span:last-child,
-.docx-preview p:has(.docx-preview-tab-stop) > span:last-child {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
 
 /* DOCX-превью — мобилка: документ не выходит за экран */
 @media (max-width: 768px) {

@@ -117,13 +117,16 @@ export default function DashboardPage() {
 
   function applyScale(container: HTMLElement, scale: number) {
     container.style.setProperty("--docx-scale", String(scale));
-    container.style.transform = scale < 1 ? `scale(${scale})` : "";
-    container.style.transformOrigin = "top left";
     if (scale < 1) {
+      container.style.transform = `scale(${scale})`;
+      container.style.transformOrigin = "top left";
       const h = container.scrollHeight;
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+      container.style.marginRight  = `${Math.round(DOC_WIDTH * scale - DOC_WIDTH)}px`;
     } else {
+      container.style.transform    = "";
       container.style.marginBottom = "";
+      container.style.marginRight  = "";
     }
   }
 
@@ -132,11 +135,14 @@ export default function DashboardPage() {
     if (!container) return;
 
     container.innerHTML = "";
-    container.style.transform = "";
+    container.style.transform    = "";
     container.style.marginBottom = "";
+    container.style.marginRight  = "";
     container.style.width = `${DOC_WIDTH}px`;
 
-    const targetWidth = container.parentElement?.clientWidth || window.innerWidth;
+    const targetWidth = container.parentElement?.clientWidth
+      ? Math.min(container.parentElement.clientWidth, window.innerWidth)
+      : window.innerWidth;
 
     setPreviewLoading(true);
     try {
