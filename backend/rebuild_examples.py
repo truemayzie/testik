@@ -5,6 +5,7 @@ rebuild_examples.py — пересобирает оглавление и спи�
 Запуск: python rebuild_examples.py
 """
 import sys
+import re
 import copy
 from pathlib import Path
 from docx import Document
@@ -61,11 +62,14 @@ def extract_toc_entries(paras, start_idx, end_idx):
 
 
 def extract_sources(paras, start_idx):
-    """Извлекает список источников начиная с start_idx (после заголовка)."""
+    """Извлекает список источников начиная с start_idx (после заголовка).
+    Срезает ведущий номер вида '1. ' — add_sources добавит его сам."""
     sources = []
     for i in range(start_idx, len(paras)):
         text = paras[i].text.strip()
         if text:
+            # Убираем "N. " в начале если есть
+            text = re.sub(r"^\d+\.\s+", "", text)
             sources.append(text)
     return sources
 
