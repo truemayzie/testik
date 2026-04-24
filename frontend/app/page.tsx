@@ -639,41 +639,27 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        cache: "no-store",
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const { renderAsync } = await import("docx-preview");
 
       await renderAsync(blob, container, undefined, {
-        className: "docx-viewer",
+        className: "docx-preview",
         inWrapper: true,
-        ignoreWidth: false,   // нативная ширина → правильные tab stops
-        ignoreHeight: false,  // фиксированная высота страниц как в редакторе
-        experimental: true,   // включает расчёт dot leaders в оглавлении
+        ignoreWidth: false,
+        ignoreHeight: false,
+        experimental: true,
       });
 
       // experimental=true запускает refreshTabStops через setTimeout(500мс).
-      // Применяем scale только ПОСЛЕ него, иначе getBoundingClientRect()
-      // возвращает масштабированные координаты и расчёт dot-leader ломается.
+      // Применяем scale только ПОСЛЕ него — иначе dot-leader расчёт ломается.
+      await new Promise<void>(r => setTimeout(r, 600));
       const base = Math.min(1, targetWidth / DOC_WIDTH);
-      if (base < 1) {
-        await new Promise<void>(r => setTimeout(r, 600));
-      }
       baseScaleRef.current = base;
       setPreviewZoom(1);
       applyScale(container, base);
-      // Фиксируем ширину wrapper'а после масштабирования, чтобы документ
-      // не выходил за правый край экрана (layout-ширина остаётся DOC_WIDTH после scale)
-      const wrapper = container.parentElement;
-      if (wrapper && base < 1) {
-        wrapper.style.width    = Math.round(DOC_WIDTH * base) + "px";
-        wrapper.style.maxWidth = "100%";
-        wrapper.style.overflowX = "hidden";
-      } else if (wrapper) {
-        wrapper.style.width    = "";
-        wrapper.style.maxWidth = "";
-        wrapper.style.overflowX = "";
-      }
     } catch (e) {
       console.error("[Preview] Error:", e);
     } finally {
