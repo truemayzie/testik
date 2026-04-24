@@ -91,7 +91,9 @@ npm run db:studio    # GUI Prisma Studio
 - Правое поле 1.5 см для коротких форматов (Эссе, Доклад, Сочинение), 1.0 см для остальных
 - Таблицы передаются как `[TABLE]{json}[/TABLE]` — парсятся во фронте и в DOCX
 - Титульный лист поддерживает флаги пропуска: `skip_faculty`, `skip_speciality`, `skip_discipline` (из профиля пользователя)
-- TOC: tab stop 7920 twips (14 см), все записи без bold
+- TOC: `TOC_TAB_TWIPS = 8640` (стандарт ГОСТ). Главы: `left=0, tab=8640`. Подглавы: `left=567, tab=8073` (8640−567) — так номера страниц выровнены, т.к. Word считает tab от левого края параграфа, а не от поля
+- Список литературы: `w:ind left=709 hanging=709`, `w:spacing after=80` (≈4pt), выравнивание JUSTIFY, без пустых строк между источниками
+- `rebuild_examples.py` — утилита хирургической пересборки TOC и библиографии в примерах DOCX без регенерации контента
 
 ### presentation_generator.py
 - `generate_presentation` — генерирует JSON-структуру слайдов через Claude API, затем вызывает `node pptx_builder.js` через subprocess
@@ -152,8 +154,8 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - Extras-бейджи: Презентация (красный `#EF4444`), Выступление (янтарный `#F59E0B`)
 - Модальное окно через `createPortal`: DOCX-превью слева + info-панель справа (десктоп), bottom-sheet (мобиль)
 - Кнопки скачивания с иконками: DOCX (`/docx-icon.png`), Презентация (`/pptx-icon.svg`), Выступление (`/txt-icon.svg`)
-- `renderPreview` использует `docx-preview` (renderAsync)
-- `applyZoom` / `applyScale` — зум для мобильного превью
+- `renderPreview` использует `docx-preview` (renderAsync, `experimental: true`)
+- `applyScale` — устанавливает `--docx-scale` CSS-переменную + `transform: scale()` + компенсирует `marginBottom`; зум через `applyZoom`
 
 **`app/components/TypewriterInput.tsx`** — анимированный placeholder
 - Анимация через CSS-оверлей (не pixel-calc), cursor всегда вплотную к тексту
@@ -210,7 +212,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - Ротация каждые 5 минут: новая карточка сверху с анимацией + бейдж «новая», список остаётся 8 штук
 - `getDailyGenCount()` — счётчик генераций за день (0→252), растёт по времени суток, обновляется каждые 37 с
 - `timeAgo(minutesAgo)` — «только что» / «X мин. назад» / «X ч. назад»
-- Если `/api/generations/recent` вернул ≥ 8 реальных записей — моки отключаются, ротация останавливается
+- Если `/api/generations/recent` вернул ≥ 30 реальных записей — моки отключаются, ротация останавливается
 - Карточки: CSS `@keyframes cardFadeUp` + nth-child stagger (появление при добавлении в DOM), строгий минималистичный стиль без полоски слева
 
 ### Иконки скачивания (`/public/`)
@@ -224,6 +226,8 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - Прогресс-карточка генерации — тёмный navy-градиент (`#061525 → #0F2645 → #1B3A6B`) с shimmer-анимацией
 - Scroll-reveal: `[data-reveal]` в глобальном globals.css, `data-visible="true"` через `setAttribute` (не `classList.add` — иначе React перезаписывает className при ре-рендере). Задержки через `data-delay="1..8"`
 - Анимации шагов: `[data-step-icon]` в globals.css, `stepIconPop` кейфрейм при появлении секции
+- DOCX-превью: `--docx-scale` устанавливается в JS через `container.style.setProperty`. В globals.css `border-width: max(1px, calc(1px / var(--docx-scale, 1)))` — компенсирует суб-пиксельные бордеры таблиц при `transform:scale` на мобилке
+- ExamplesSection: минимальный scale на мобилке 0.62 (не 0.46), `overflow-x: auto` в leftCol — оглавление читаемо
 
 ## Модели Prisma (SQLite)
 
