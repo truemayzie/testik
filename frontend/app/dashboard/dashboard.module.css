@@ -4,12 +4,12 @@
 .page {
   min-height: 100vh;
   background: #F0F2FF;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   color: #0F172A;
 
   /* Декоративный точечный фон */
   background-image:
-    radial-gradient(circle, #C7D2FE 1px, transparent 1px);
+    radial-gradient(circle, #BFCFE3 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
@@ -19,7 +19,7 @@
 .heroBanner {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(160deg, #0D0B2E 0%, #1A1654 55%, #2D1B6E 100%);
+  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
   padding: 52px 32px 60px;
   min-height: 240px;
   display: flex;
@@ -42,7 +42,7 @@
   position: absolute;
   width: 400px; height: 400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(167,139,250,0.18) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(27,58,107,0.2) 0%, transparent 70%);
   top: -120px; right: 10%;
   pointer-events: none;
 }
@@ -60,7 +60,7 @@
   position: absolute;
   width: 200px; height: 200px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(167,139,250,0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(27,58,107,0.12) 0%, transparent 70%);
   top: 20px; left: 30%;
   pointer-events: none;
 }
@@ -96,8 +96,8 @@
 .heroDocCard:nth-child(3) { transform: rotate(-1deg) translateY(12px); opacity: 0.7;  }
 
 .heroDocCardAlt {
-  background: rgba(167,139,250,0.15);
-  border-color: rgba(167,139,250,0.25);
+  background: rgba(217,119,6,0.12);
+  border-color: rgba(217,119,6,0.25);
 }
 
 .hdLine {
@@ -117,7 +117,7 @@
   font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: 0.07em;
-  color: #C4B5FD;
+  color: #FDE68A;
   text-transform: uppercase;
   margin-top: 4px;
 }
@@ -142,12 +142,12 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #A78BFA;
+  color: #D97706;
   margin-bottom: 10px;
 }
 
 .heroBannerTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #fff;
@@ -172,10 +172,10 @@
 
 .heroBannerStatNum {
   font-size: 1.3rem;
-  font-weight: 800;
+  font-weight: 700;
   color: #fff;
   line-height: 1;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
 }
 
 .heroBannerStatLabel {
@@ -198,10 +198,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #1E1B4B;
+  color: #1B3A6B;
   background: #fff;
   border-radius: 12px;
   padding: 14px 26px;
@@ -213,7 +213,7 @@
 }
 
 .newBtn:hover {
-  background: #EEF2FF;
+  background: #EFF6FF;
   transform: translateY(-2px);
   box-shadow: 0 8px 28px rgba(0,0,0,0.25);
 }
@@ -229,13 +229,13 @@
 
 /* ── Section ── */
 .sectionTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.2rem;
   font-weight: 700;
   color: #0F172A;
   margin-bottom: 16px;
   padding-bottom: 14px;
-  border-bottom: 2px solid #E0E7FF;
+  border-bottom: 2px solid #DBEAFE;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -246,7 +246,7 @@
   display: inline-block;
   width: 4px;
   height: 20px;
-  background: linear-gradient(180deg, #6366F1, #8B5CF6);
+  background: linear-gradient(180deg, #1B3A6B, #15305A);
   border-radius: 2px;
   flex-shrink: 0;
 }
@@ -263,8 +263,8 @@
 .loadingSpinner, .btnSpinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(99,102,241,0.15);
-  border-top-color: #6366F1;
+  border: 2px solid rgba(27,58,107,0.15);
+  border-top-color: #1B3A6B;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -292,9 +292,9 @@
   text-align: center;
   padding: 72px 24px;
   background: #fff;
-  border: 1px solid #E0E7FF;
+  border: 1px solid #DBEAFE;
   border-radius: 20px;
-  box-shadow: 0 2px 16px rgba(99,102,241,0.06);
+  box-shadow: 0 2px 16px rgba(27,58,107,0.06);
 }
 
 .emptyIcon {
@@ -312,21 +312,21 @@
 .emptyBtn {
   display: inline-flex;
   align-items: center;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   border-radius: 10px;
   padding: 12px 24px;
   text-decoration: none;
   transition: all 0.2s;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+  box-shadow: 0 4px 16px rgba(27,58,107,0.25);
 }
 
 .emptyBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(99,102,241,0.4);
+  box-shadow: 0 6px 24px rgba(27,58,107,0.35);
 }
 
 /* ── Cards ── */
@@ -341,17 +341,17 @@
   justify-content: space-between;
   align-items: center;
   background: #fff;
-  border: 1px solid #E0E7FF;
+  border: 1px solid #E2E8F0;
   border-radius: 14px;
   padding: 18px 22px;
   gap: 16px;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-  box-shadow: 0 1px 4px rgba(99,102,241,0.05);
+  box-shadow: 0 1px 4px rgba(27,58,107,0.05);
 }
 
 .card:hover {
-  border-color: #A5B4FC;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.12);
+  border-color: #93B5D9;
+  box-shadow: 0 4px 20px rgba(27,58,107,0.10);
   transform: translateY(-1px);
 }
 
@@ -361,15 +361,15 @@
   cursor: pointer;
 }
 
-.cardLeft:hover .cardTitle { color: #6366F1; }
+.cardLeft:hover .cardTitle { color: #1B3A6B; }
 
 .workType {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6366F1;
-  background: #EEF2FF;
+  color: #1B3A6B;
+  background: #EFF6FF;
   border-radius: 5px;
   padding: 2px 8px;
   display: inline-block;
@@ -407,9 +407,9 @@
 .openBtn {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #6366F1;
-  background: #EEF2FF;
-  border: 1px solid #C7D2FE;
+  color: #1B3A6B;
+  background: #EFF6FF;
+  border: 1px solid #93B5D9;
   border-radius: 8px;
   padding: 8px 16px;
   cursor: pointer;
@@ -420,9 +420,9 @@
 }
 
 .openBtn:hover:not(:disabled) {
-  background: #6366F1;
+  background: #1B3A6B;
   color: #fff;
-  border-color: #6366F1;
+  border-color: #1B3A6B;
 }
 
 .openBtn:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -446,7 +446,7 @@
   line-height: 1;
 }
 
-.shareBtn:hover { border-color: #C7D2FE; background: #F8FAFF; color: #6366F1; }
+.shareBtn:hover { border-color: #93B5D9; background: #EFF6FF; color: #1B3A6B; }
 
 .copiedTooltip {
   position: absolute;
@@ -483,7 +483,7 @@
   font-size: 0.82rem;
   font-weight: 600;
   color: #fff;
-  background: #6366F1;
+  background: #1B3A6B;
   border: none;
   border-radius: 8px;
   padding: 8px 16px;
@@ -494,7 +494,7 @@
   gap: 6px;
 }
 
-.downloadBtn:hover:not(:disabled) { background: #4F46E5; }
+.downloadBtn:hover:not(:disabled) { background: #15305A; }
 .downloadBtn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* Badges в карточке для extras */
@@ -580,7 +580,7 @@
   border-radius: 20px;
   width: 100%;
   max-width: 740px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.28);
+  box-shadow: 0 16px 56px rgba(0,0,0,0.20);
   animation: modalIn 0.25s ease;
   overflow: hidden;
 }
@@ -606,7 +606,7 @@
 .modalHeaderLeft { flex: 1; min-width: 0; }
 
 .modalTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.2rem;
   font-weight: 700;
   color: #0F172A;
@@ -624,7 +624,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: #fff;
-  background: #6366F1;
+  background: #1B3A6B;
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
@@ -636,7 +636,7 @@
   white-space: nowrap;
 }
 
-.modalDownloadBtn:hover:not(:disabled) { background: #4F46E5; }
+.modalDownloadBtn:hover:not(:disabled) { background: #15305A; }
 .modalDownloadBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .modalCloseBtn {
@@ -738,8 +738,8 @@
 .tocItem:hover { background: #F8FAFC; }
 
 .tocItemActive {
-  background: #EEF2FF;
-  color: #6366F1;
+  background: #EFF6FF;
+  color: #1B3A6B;
   font-weight: 600;
 }
 
@@ -768,7 +768,7 @@
   transition: border-color 0.2s;
 }
 
-.sectionOpen { border-color: #6366F1; }
+.sectionOpen { border-color: #1B3A6B; }
 
 .sectionToggle {
   width: 100%;
@@ -779,7 +779,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.92rem;
   font-weight: 600;
   color: #0F172A;
@@ -790,7 +790,7 @@
 .sectionToggle:hover { background: #F8FAFC; }
 
 .sectionOpen .sectionToggle {
-  background: #6366F1;
+  background: #1B3A6B;
   color: #fff;
 }
 
@@ -841,7 +841,7 @@
   position: absolute;
   left: 0; top: 8px;
   width: 4px; height: 4px;
-  background: #6366F1;
+  background: #1B3A6B;
   border-radius: 50%;
 }
 
@@ -1018,7 +1018,7 @@
   background: #F8FAFC;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.20);
   animation: docBoxIn 350ms ease-out forwards;
 }
 
@@ -1138,8 +1138,8 @@
 .docSpinner {
   display: inline-block;
   width: 18px; height: 18px;
-  border: 2px solid rgba(99,102,241,0.15);
-  border-top-color: #6366F1;
+  border: 2px solid rgba(27,58,107,0.15);
+  border-top-color: #1B3A6B;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -1159,7 +1159,7 @@
 }
 
 .docModalTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.35rem;
   font-weight: 700;
   color: #0F172A;
@@ -1178,8 +1178,8 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #6366F1;
-  background: #EEF2FF;
+  color: #1B3A6B;
+  background: #EFF6FF;
   border-radius: 5px;
   padding: 3px 9px;
 }
@@ -1215,21 +1215,21 @@
 }
 
 .docDownloadBtn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.9rem;
   font-weight: 700;
   padding: 12px 20px;
   border-radius: 12px;
   border: none;
   cursor: pointer;
-  background: linear-gradient(135deg, #6366F1, #4F46E5);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   transition: opacity 0.2s, transform 0.2s;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+  box-shadow: 0 4px 16px rgba(27,58,107,0.30);
 }
 .docDownloadBtn:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
 .docDownloadBtn:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -1266,7 +1266,7 @@
 }
 
 .docExtrasDownloadBtn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.85rem;
   font-weight: 600;
   padding: 10px 14px;
@@ -1282,13 +1282,13 @@
   text-align: left;
 }
 .docExtrasDownloadBtn:hover {
-  border-color: #6366F1;
-  background: #EEF2FF;
-  color: #4F46E5;
+  border-color: #1B3A6B;
+  background: #EFF6FF;
+  color: #15305A;
 }
 
 .docShareBtn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
   padding: 9px 14px;
@@ -1299,7 +1299,7 @@
   color: #64748B;
   transition: all 0.2s;
 }
-.docShareBtn:hover { border-color: #6366F1; color: #6366F1; background: #EEF2FF; }
+.docShareBtn:hover { border-color: #1B3A6B; color: #1B3A6B; background: #EFF6FF; }
 
 .docTitleSection {
   display: flex;
@@ -1307,7 +1307,7 @@
   gap: 8px;
 }
 .docTitleHeading {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.8rem;
   font-weight: 600;
   color: #64748B;
@@ -1316,13 +1316,13 @@
   margin-bottom: 0;
 }
 .docTitleSub {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.75rem;
   color: #9CA3AF;
   margin-bottom: 4px;
 }
 .docTitleInput {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.85rem;
   color: #0F172A;
   background: #F8FAFC;
@@ -1334,14 +1334,14 @@
   width: 100%;
   box-sizing: border-box;
 }
-.docTitleInput:focus { border-color: #6366F1; background: #fff; }
+.docTitleInput:focus { border-color: #1B3A6B; background: #fff; }
 .docTitleInput::placeholder { color: #94A3B8; }
 .docUpdateBtn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.88rem;
   font-weight: 600;
-  color: #6366F1;
-  background: #EEF2FF;
+  color: #1B3A6B;
+  background: #EFF6FF;
   border: none;
   border-radius: 8px;
   padding: 10px;
@@ -1349,13 +1349,13 @@
   transition: background 0.15s;
   margin-top: 4px;
 }
-.docUpdateBtn:hover:not(:disabled) { background: #E0E7FF; }
+.docUpdateBtn:hover:not(:disabled) { background: #DBEAFE; }
 .docUpdateBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 .docSaveProfileRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.82rem;
   color: #64748B;
   cursor: pointer;
@@ -1365,7 +1365,7 @@
 .docSaveProfileCheck {
   width: 15px;
   height: 15px;
-  accent-color: #6366F1;
+  accent-color: #1B3A6B;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -1374,7 +1374,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.78rem;
   color: #64748B;
   cursor: pointer;
@@ -1384,7 +1384,7 @@
 .docSkipRow input[type="checkbox"] {
   width: 13px;
   height: 13px;
-  accent-color: #6366F1;
+  accent-color: #1B3A6B;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -1446,7 +1446,7 @@
   justify-content: center;
   transition: all 0.15s;
 }
-.docMobileZoomBtn:hover { background: #EEF2FF; border-color: #6366F1; color: #6366F1; }
+.docMobileZoomBtn:hover { background: #EFF6FF; border-color: #1B3A6B; color: #1B3A6B; }
 
 .docMobileZoomLabel {
   font-size: 0.82rem;
@@ -1463,7 +1463,7 @@
 }
 
 .docExtrasDownloadBtnSmall {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
   padding: 9px 14px;
@@ -1478,7 +1478,7 @@
   align-items: center;
   gap: 7px;
 }
-.docExtrasDownloadBtnSmall:hover { border-color: #6366F1; background: #EEF2FF; color: #4F46E5; }
+.docExtrasDownloadBtnSmall:hover { border-color: #1B3A6B; background: #EFF6FF; color: #15305A; }
 
 /* Zoom buttons (inside modal on MOBILE only) */
 .docZoomBtn {
@@ -1496,7 +1496,7 @@
   transition: all 0.15s;
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
-.docZoomBtn:hover { background: #fff; border-color: #6366F1; color: #6366F1; }
+.docZoomBtn:hover { background: #fff; border-color: #1B3A6B; color: #1B3A6B; }
 
 .docZoomLevel {
   font-size: 0.72rem;
@@ -1509,7 +1509,7 @@
 
 /* ── Mobile title form button ── */
 .docMobileTitleBtn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.82rem;
   font-weight: 600;
   padding: 9px 14px;
@@ -1524,7 +1524,7 @@
   align-items: center;
   gap: 7px;
 }
-.docMobileTitleBtn:hover { border-color: #6366F1; background: #EEF2FF; color: #4F46E5; }
+.docMobileTitleBtn:hover { border-color: #1B3A6B; background: #EFF6FF; color: #15305A; }
 
 /* ── Mobile title form overlay ── */
 .docMobileTitleOverlay {
@@ -1580,6 +1580,9 @@
   .docModalOverlay {
     padding: 0;
     align-items: flex-end;
+    /* Блокируем случайные горизонтальные свайпы по фону */
+    touch-action: none;
+    overscroll-behavior: contain;
   }
 
   .docModalBox {
@@ -1587,8 +1590,9 @@
     grid-template-columns: 1fr;
     grid-template-rows: auto auto 1fr auto;
     width: 100%;
-    height: 92dvh;
-    border-radius: 20px 20px 0 0;
+    /* Полный экран на мобилке — максимум места для документа */
+    height: 100dvh;
+    border-radius: 0;
     overflow: hidden;
   }
 
@@ -1617,6 +1621,9 @@
     grid-row: 3;
     overflow-y: auto;
     overflow-x: hidden;
+    /* Только вертикальный скролл — блокируем горизонтальные свайпы */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
 

@@ -109,10 +109,31 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Блокировать скролл
+  // Блокировать скролл фона когда модалка открыта.
+  // position:fixed надёжнее overflow:hidden на iOS Safari — браузер не прокручивает фон.
   useEffect(() => {
-    document.body.style.overflow = viewingGen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    if (viewingGen) {
+      const y = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top      = `-${y}px`;
+      document.body.style.width    = "100%";
+      document.body.style.overflow = "hidden";
+    } else {
+      const y = parseInt(document.body.style.top || "0") * -1;
+      document.body.style.position = "";
+      document.body.style.top      = "";
+      document.body.style.width    = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, y);
+    }
+    return () => {
+      const y = parseInt(document.body.style.top || "0") * -1;
+      document.body.style.position = "";
+      document.body.style.top      = "";
+      document.body.style.width    = "";
+      document.body.style.overflow = "";
+      if (y) window.scrollTo(0, y);
+    };
   }, [viewingGen]);
 
   function applyScale(container: HTMLElement, scale: number) {

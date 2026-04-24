@@ -690,24 +690,39 @@ export default function Home() {
     applyScale(container, baseScaleRef.current * next);
   }
 
-  // Блокируем скролл и сигналим в контекст когда модал открыт
+  // Блокируем скролл фона когда модал открыт.
+  // position:fixed надёжнее overflow:hidden на iOS Safari.
   useEffect(() => {
     if (showResultModal) {
+      const y = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top      = `-${y}px`;
+      document.body.style.width    = "100%";
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
       document.body.classList.add("modal-open");
       setModalOpen(true);
     } else {
+      const y = parseInt(document.body.style.top || "0") * -1;
+      document.body.style.position = "";
+      document.body.style.top      = "";
+      document.body.style.width    = "";
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
       document.body.classList.remove("modal-open");
       setModalOpen(false);
+      if (y) window.scrollTo(0, y);
     }
     return () => {
+      const y = parseInt(document.body.style.top || "0") * -1;
+      document.body.style.position = "";
+      document.body.style.top      = "";
+      document.body.style.width    = "";
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
       document.body.classList.remove("modal-open");
       setModalOpen(false);
+      if (y) window.scrollTo(0, y);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResultModal]);
