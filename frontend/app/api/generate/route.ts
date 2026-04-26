@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { saveGeneration } from "@/lib/db";
 import type { ReferatResult } from "@/lib/db";
 import { activeJobs } from "@/app/lib/activeJobs";
+import { sendEmail, generationReadyHtml } from "@/lib/email";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
@@ -151,8 +152,8 @@ export async function POST(request: NextRequest) {
     if (!startRes.ok) {
       await revertPayment(paymentId);
       return NextResponse.json(
-        { error: "Не удалось запустить генерацию на backend" },
-        { status: startRes.status }
+        { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
+        { status: 503 }
       );
     }
 
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
     console.error("[generate] Не удалось запустить задание:", err);
     await revertPayment(paymentId);
     return NextResponse.json(
-      { error: "Сервер генерации недоступен. Запустите backend (uvicorn)." },
+      { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
       { status: 503 }
     );
   }
@@ -196,17 +197,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (status === "not_found") {
+      activeJobs.clear(user.id);
       await revertPayment(paymentId);
       return NextResponse.json(
-        { error: "Сервер был перезапущен во время генерации. Платёж возвращён — попробуйте снова. Запускайте backend командой: uvicorn main:app (без --reload)." },
+        { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
         { status: 503 }
       );
     }
 
     if (status === "error") {
+      activeJobs.clear(user.id);
       await revertPayment(paymentId);
+      console.error("[generate] Backend error:", jobError);
       return NextResponse.json(
-        { error: jobError || "Ошибка генерации на backend" },
+        { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
         { status: 500 }
       );
     }
@@ -231,12 +235,24 @@ export async function POST(request: NextRequest) {
         try {
           const saved = await saveGeneration(user.id, body.topic, body.pages, workType, data);
           savedId = saved.id;
+
+          // Отправляем письмо пользователю после успешной генерации
+          const userEmail = session.user?.email;
+          if (userEmail && savedId) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://ref-ai.ru";
+            sendEmail(
+              userEmail,
+              `Ваша работа готова: ${body.topic}`,
+              generationReadyHtml(body.topic, workType, savedId, appUrl)
+            ).catch(() => { /* не блокируем ответ при ошибке письма */ });
+          }
         } catch { /* не блокируем ответ */ }
 
         activeJobs.clear(user.id);
         return NextResponse.json({ ...data, _generationId: savedId });
       } catch (err) {
         console.error("[generate] Ошибка при получении результата:", err);
+        activeJobs.clear(user.id);
         await revertPayment(paymentId);
 
         const saved = await prisma.generation.findFirst({

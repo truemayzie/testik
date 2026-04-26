@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import styles from "./admin.module.css";
 
 const NAV = [
-  { href: "/admin",          icon: "📊", label: "Дашборд" },
-  { href: "/admin/users",    icon: "👥", label: "Пользователи" },
-  { href: "/admin/works",    icon: "📄", label: "Работы" },
-  { href: "/admin/payments", icon: "💳", label: "Платежи" },
-  { href: "/admin/health",   icon: "🟢", label: "Статус системы" },
+  { href: "/admin",           icon: "📊", label: "Дашборд" },
+  { href: "/admin/users",     icon: "👥", label: "Пользователи" },
+  { href: "/admin/works",     icon: "📄", label: "Работы" },
+  { href: "/admin/payments",  icon: "💳", label: "Платежи" },
+  { href: "/admin/feedback",  icon: "💬", label: "Отзывы" },
+  { href: "/admin/health",    icon: "🟢", label: "Статус системы" },
 ];
 
 export default function AdminSidebar() {

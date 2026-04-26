@@ -7,7 +7,7 @@ import styles from "../admin.module.css";
 type Work = {
   id: string; topic: string; workType: string;
   pages: number; status: string; createdAt: string;
-  slug: string | null; amount: number | null;
+  slug: string | null; amount: number | null; rating: number | null;
   user: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
@@ -105,7 +105,17 @@ export default function AdminWorks() {
                         </div>
                       </div>
                     </td>
-                    <td><div className={styles.topicCell} title={w.topic}>{w.topic}</div></td>
+                    <td>
+                      <div className={styles.topicCell} title={w.topic}>{w.topic}</div>
+                      {w.rating != null && (
+                        <span style={{
+                          display: "inline-block", marginTop: 3,
+                          color: "#C9962A", fontSize: "0.78rem", fontWeight: 700,
+                        }}>
+                          {"★".repeat(w.rating)} {w.rating}/5
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <span className={`${styles.badge} ${styles.badgeAdmin}`}>{w.workType}</span>
                     </td>

@@ -27,16 +27,42 @@ app.add_middleware(
 
 
 # ── In-memory хранилище заданий ──────────────────────────────────────────────
-# Каждая запись: {"status": "running"|"done"|"error", "result": dict|None, "error": str|None}
+# Каждая запись: {"status": "running"|"done"|"error", "result": dict|None, "error": str|None, "work_type": str}
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
-MAX_CONCURRENT_JOBS = 8
+# Вес каждого типа работы в слотах (отражает нагрузку на RAM и Claude API)
+WORK_SLOTS: dict[str, int] = {
+    "Сочинение": 1,
+    "Эссе":      1,
+    "Доклад":    2,
+    "Реферат":   2,
+    "Курсовая":  4,
+    "ВКР":       5,
+    "Тест":      1,
+}
+MAX_SLOTS = 8  # суммарный лимит слотов (2 Курсовых = 8, 1 ВКР + 1 Реферат = 7, итд)
 
 
-def _job_start(job_id: str):
+def _used_slots() -> int:
+    """Считает занятые слоты по всем активным заданиям."""
+    return sum(
+        WORK_SLOTS.get(j.get("work_type", "Реферат"), 2)
+        for j in _jobs.values()
+        if j["status"] == "running"
+    )
+
+
+def _available_types() -> list[str]:
+    """Возвращает типы работ, которые можно запустить прямо сейчас."""
+    used = _used_slots()
+    return [wt for wt, slots in WORK_SLOTS.items()
+            if wt != "Тест" and used + slots <= MAX_SLOTS]
+
+
+def _job_start(job_id: str, work_type: str = "Реферат"):
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "result": None, "error": None}
+        _jobs[job_id] = {"status": "running", "result": None, "error": None, "work_type": work_type}
 
 
 def _job_done(job_id: str, result: dict):
@@ -86,22 +112,37 @@ def root():
     return {"status": "ok", "service": "Academic Service"}
 
 
+@app.get("/api/slots")
+def get_slots():
+    """Возвращает доступные типы работ и занятость слотов."""
+    with _jobs_lock:
+        used = _used_slots()
+        available = _available_types()
+    return {
+        "used": used,
+        "max": MAX_SLOTS,
+        "available": available,
+    }
+
+
 @app.post("/api/generate/referat")
 def create_referat(request: ReferatRequest):
     """
     Запускает генерацию в фоновом потоке и сразу возвращает jobId.
     Next.js опрашивает /api/generate/status/{jobId} каждые 5 секунд.
     """
+    needed = WORK_SLOTS.get(request.work_type, 2)
     with _jobs_lock:
-        running = sum(1 for j in _jobs.values() if j["status"] == "running")
-        if running >= MAX_CONCURRENT_JOBS:
+        used = _used_slots()
+        if used + needed > MAX_SLOTS:
+            available = _available_types()
             raise HTTPException(
                 status_code=503,
-                detail="Сервер перегружен, попробуйте через минуту"
+                detail={"message": "Сервер перегружен", "available": available},
             )
 
     job_id = str(uuid.uuid4())
-    _job_start(job_id)
+    _job_start(job_id, request.work_type)
 
     def run():
         try:

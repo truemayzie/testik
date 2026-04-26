@@ -107,7 +107,22 @@ model Generation {
   // Дополнительные материалы (JSON: {"presentation":"job_id","speech":"job_id"})
   extras    String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Оценка пользователя (1–5, из письма-уведомления)
+  rating    Int?
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedbackComments FeedbackComment[]
+}
+
+// ── Обратная связь после генерации ──────────────────────────────────────────
+model FeedbackComment {
+  id           String   @id @default(cuid())
+  generationId String
+  issues       String   // JSON-массив: ["Структура","Объём", ...]
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
 }
 
 // ── Проверки состояния системы ───────────────────────────────────

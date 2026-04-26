@@ -175,9 +175,10 @@ def setup_heading_styles(doc):
 
 _WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, интервал 1.5, поля ГОСТ)
 
-# Стандартный tab stop для оглавления: 8640 twips = 6 дюймов = 15.24 см
-# от левого поля страницы. Это значение совпадает с шаблонами ГОСТ-документов
-# в Word и обеспечивает правильное отображение точек и номеров страниц.
+# Tab stop для оглавления: 8640 twips ≈ 15.24 см от левого поля параграфа.
+# Все уровни (главы и подглавы) используют одну позицию — номера страниц
+# выровнены одинаково. Подглавы не вычитают свой w:left, иначе при длинных
+# заголовках \t рисует слишком мало точек и номер прилипает к тексту.
 TOC_TAB_TWIPS = 8640
 
 def _count_words(text: str) -> int:
@@ -220,6 +221,13 @@ def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB
     p.paragraph_format.space_after       = Pt(4)
     p.paragraph_format.line_spacing      = Pt(21)
     p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.keep_together     = True
+
+    # keepLines — запрещает разрыв строк внутри параграфа.
+    # Это не даёт \t оказаться в начале новой строки при переносе длинного заголовка.
+    _pPr = p._p.get_or_add_pPr()
+    _kl = OxmlElement("w:keepLines")
+    _pPr.append(_kl)
 
     if level == 2:
         # Отступ подглав: w:left=567, w:firstLine=0
@@ -230,10 +238,11 @@ def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB
             pPr.append(ind_el)
         ind_el.set(qn("w:left"),     str(_TOC_LEFT_L2))
         ind_el.set(qn("w:firstLine"), "0")
-        # Компенсируем: tab_pos считается от левого края параграфа
-        effective_tab = tab_pos - _TOC_LEFT_L2
-    else:
-        effective_tab = tab_pos
+
+    # Все уровни используют одну позицию tab stop.
+    # Не вычитаем w:left для подглав: Word считает w:pos от левого поля страницы,
+    # а не от левого края параграфа — номера выровнены одинаково для всех уровней.
+    effective_tab = tab_pos
 
     # Runs добавляем СНАЧАЛА — затем tab stop
     r1 = p.add_run(title)
@@ -465,30 +474,62 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
         tblHeader = _OE("w:tblHeader")
         trPr.append(tblHeader)
 
-    # ── Подпись таблицы — отдельный параграф ВНЕ таблицы (ГОСТ) ──────────────
-    # Это устраняет лишнюю верхнюю границу: подпись не является ячейкой.
+    # ── Отступ перед таблицей ─────────────────────────────────────────────────
     spacer = doc.add_paragraph()
     spacer.paragraph_format.space_before = Pt(6)
     spacer.paragraph_format.space_after  = Pt(0)
     spacer.paragraph_format.line_spacing = Pt(18)
 
-    cap_p = doc.add_paragraph()
-    cap_p.paragraph_format.space_before      = Pt(0)
-    cap_p.paragraph_format.space_after       = Pt(2)
-    cap_p.paragraph_format.line_spacing      = Pt(18)
+    # ── Таблица: строка-подпись + строка-заголовок + строки данных ───────────
+    # rows[0] — "Таблица N — ..." (объединённая ячейка, tblHeader)
+    # rows[1] — заголовки столбцов (tblHeader)
+    # rows[2..] — данные
+    table = doc.add_table(rows=2 + len(rows), cols=len(headers))
+    table.style = "Table Grid"
+
+    # ── Строка 0: подпись таблицы (объединённые ячейки на всю ширину) ──
+    cap_row = table.rows[0]
+    mark_tbl_header(cap_row)
+    # Объединяем все ячейки строки в одну
+    cap_cell = cap_row.cells[0]
+    if len(headers) > 1:
+        cap_cell = cap_row.cells[0].merge(cap_row.cells[-1])
+    cap_cell.text = ""
+    cap_p = cap_cell.paragraphs[0]
+    cap_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    cap_p.paragraph_format.space_before      = Pt(3)
+    cap_p.paragraph_format.space_after       = Pt(3)
     cap_p.paragraph_format.first_line_indent = Cm(0)
     cap_p.paragraph_format.left_indent       = Cm(0)
-    cap_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     r_cap = cap_p.add_run(caption)
     set_run_font(r_cap, bold=True, size=12)
 
-    # ── Таблица: строка-заголовок + строки данных ─────────────────────────────
-    table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-    table.style = "Table Grid"
+    # Убираем все границы у ячеек строки-подписи
+    for cell in cap_row.cells:
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        tcBorders = _OE("w:tcBorders")
+        for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            border = _OE(f"w:{side}")
+            border.set(_qn("w:val"), "none")
+            border.set(_qn("w:sz"), "0")
+            border.set(_qn("w:space"), "0")
+            border.set(_qn("w:color"), "auto")
+            tcBorders.append(border)
+        tcPr.append(tcBorders)
 
-    # ── Строка 0: заголовки столбцов ──
-    hdr_row = table.rows[0]
+    # ── Строка 1: заголовки столбцов ──
+    hdr_row = table.rows[1]
     mark_tbl_header(hdr_row)
+
+    # tblLook с firstRow=1 активирует повторение заголовка в Word
+    tbl = table._tbl
+    tblPr = tbl.find(_qn("w:tblPr"))
+    if tblPr is not None:
+        tblLook = _OE("w:tblLook")
+        tblLook.set(_qn("w:firstRow"), "1")
+        tblLook.set(_qn("w:val"), "04A0")
+        tblPr.append(tblLook)
 
     for i, header in enumerate(headers):
         cell = hdr_row.cells[i]
@@ -502,7 +543,7 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
 
     # ── Строки данных ──
     for ri, row_data in enumerate(rows):
-        row = table.rows[ri + 1]
+        row = table.rows[ri + 2]
 
         trPr_data = row._tr.get_or_add_trPr()
         cantSplit = _OE("w:cantSplit")
@@ -563,38 +604,33 @@ def add_body(doc, text, table_counter: list):
 # ── Список литературы ────────────────────────────────────────────────────────
 
 def add_sources(doc, sources):
-    """По ширине, висячий отступ (ГОСТ). Отступ через XML: w:left=709 w:hanging=709."""
+    """Список литературы по ГОСТ: номер прямо в тексте, без висячего отступа."""
     add_service_heading(doc, "Список литературы")
 
-    for src in sources:
+    for i, src in enumerate(sources):
         src = src.strip()
         if not src:
             continue
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-        # Межстрочный интервал и отступы через pPr XML для точного соответствия ГОСТ
-        pPr = p._p.get_or_add_pPr()
-
-        # w:spacing: line=420 (1.5 pt×20=420 twips), after=80 (~4pt)
-        sp_el = pPr.find(qn("w:spacing"))
-        if sp_el is None:
-            sp_el = OxmlElement("w:spacing")
-            pPr.append(sp_el)
-        sp_el.set(qn("w:line"),      "420")
-        sp_el.set(qn("w:lineRule"),  "exact")
-        sp_el.set(qn("w:before"),    "0")
-        sp_el.set(qn("w:after"),     "80")
-
-        # w:ind: left=709 hanging=709 (1.25 см = 709 twips)
-        ind_el = pPr.find(qn("w:ind"))
-        if ind_el is None:
-            ind_el = OxmlElement("w:ind")
-            pPr.append(ind_el)
-        ind_el.set(qn("w:left"),    "709")
-        ind_el.set(qn("w:hanging"), "709")
-
-        run(p, src, size=14)
+        p.paragraph_format.first_line_indent = Cm(0)
+        p.paragraph_format.left_indent       = Cm(0)
+        p.paragraph_format.line_spacing      = Pt(21)
+        p.paragraph_format.space_before      = Pt(0)
+        p.paragraph_format.space_after       = Pt(6)
+        # Явный сброс w:ind через XML — перекрывает наследование от стиля Normal
+        _pPr = p._p.get_or_add_pPr()
+        _ind = _pPr.find(qn("w:ind"))
+        if _ind is None:
+            _ind = OxmlElement("w:ind")
+            _pPr.append(_ind)
+        _ind.set(qn("w:left"),      "0")
+        _ind.set(qn("w:firstLine"), "0")
+        _ind.set(qn("w:hanging"),   "0")
+        # Убираем уже существующий "N. " префикс если он есть в src
+        import re as _re
+        src_clean = _re.sub(r'^\d+\.\s+', '', src)
+        run(p, f"{i + 1}. {src_clean}", size=14)
 
 
 # ── Сочинение / Эссе — без титульника, оглавления, списка литературы ─────────

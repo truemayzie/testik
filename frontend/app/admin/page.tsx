@@ -8,6 +8,12 @@ type Stats = {
   generations: { today: number; month: number; all: number };
   revenue:     { today: number; month: number; all: number };
   chart: { date: string; count: number }[];
+  feedback: {
+    avgRating:    number | null;
+    ratedCount:   number;
+    feedbackWeek: number;
+    topIssues:    { issue: string; count: number }[];
+  } | null;
 };
 
 function fmt(n: number | undefined | null) {
@@ -33,7 +39,7 @@ function BarChart({ data }: { data: { date: string; count: number }[] }) {
           <g key={d.date}>
             <rect
               x={x} y={y} width={bw} height={bh}
-              fill={d.count > 0 ? "#6366F1" : "#E0E7FF"}
+              fill={d.count > 0 ? "#1B3A6B" : "#DBEAFE"}
               rx="2"
               opacity={d.count > 0 ? 0.9 : 0.5}
             >
@@ -45,7 +51,7 @@ function BarChart({ data }: { data: { date: string; count: number }[] }) {
                 textAnchor="middle"
                 fontSize="8"
                 fill="#94A3B8"
-                fontFamily="Inter, sans-serif"
+                fontFamily="Golos Text, sans-serif"
               >
                 {d.date.slice(5)}
               </text>
@@ -54,7 +60,7 @@ function BarChart({ data }: { data: { date: string; count: number }[] }) {
         );
       })}
       {/* Max label */}
-      <text x={pad.left} y={pad.top + 6} fontSize="8" fill="#CBD5E1" fontFamily="Inter, sans-serif">
+      <text x={pad.left} y={pad.top + 6} fontSize="8" fill="#CBD5E1" fontFamily="Golos Text, sans-serif">
         {max}
       </text>
     </svg>
@@ -118,6 +124,49 @@ export default function AdminDashboard() {
                 <div className={styles.statLabel}>Доход за всё время</div>
                 <div className={`${styles.statValue} ${styles.statGreen}`}>{fmt(stats.revenue.all)} ₽</div>
               </div>
+
+              {stats.feedback && (
+                <>
+                  <div className={styles.statCard}>
+                    <div className={styles.statLabel}>Средний рейтинг</div>
+                    <div className={styles.statValue} style={{ color: "#C9962A" }}>
+                      {stats.feedback.avgRating != null
+                        ? <>★ {stats.feedback.avgRating.toFixed(1)}</>
+                        : "—"}
+                    </div>
+                    <div className={styles.statSub}>{fmt(stats.feedback.ratedCount)} оценено</div>
+                  </div>
+
+                  <div className={styles.statCard}>
+                    <div className={styles.statLabel}>Отзывов за 7 дней</div>
+                    <div className={styles.statValue}>{fmt(stats.feedback.feedbackWeek)}</div>
+                  </div>
+
+                  {stats.feedback.topIssues.length > 0 && (
+                    <div className={styles.statCard} style={{ gridColumn: "span 2" }}>
+                      <div className={styles.statLabel}>Топ проблем</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+                        {stats.feedback.topIssues.map(({ issue, count }) => (
+                          <div key={issue} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{
+                              background: "rgba(239,68,68,0.12)", color: "#FCA5A5",
+                              borderRadius: 4, padding: "2px 8px", fontSize: "0.8rem", fontWeight: 600, flexShrink: 0,
+                            }}>{issue}</span>
+                            <div style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{
+                                height: "100%", borderRadius: 2,
+                                background: "#EF4444",
+                                width: `${Math.round((count / (stats.feedback!.topIssues[0]?.count || 1)) * 100)}%`,
+                              }}/>
+                            </div>
+                            <span style={{ color: "#94A3B8", fontSize: "0.8rem", flexShrink: 0 }}>{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* График */}

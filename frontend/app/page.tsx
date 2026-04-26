@@ -410,6 +410,7 @@ export default function Home() {
   const [paymentLoading, setPaymentLoading]   = useState(false);
   type PaymentWidgetData = { workType: string; extras: string[] };
   const [paymentWidgetData, setPaymentWidgetData] = useState<PaymentWidgetData | null>(null);
+  const [capacityError, setCapacityError]     = useState<string[] | null>(null); // null = нет ошибки, [] = всё занято, [...] = доступные типы
 
   // Прогресс
   const [stepIndex, setStepIndex]       = useState(0);
@@ -436,6 +437,7 @@ export default function Home() {
     stepsRef.current = getProgressSteps(type);
     setResult(null);
     setError(null);
+    setCapacityError(null);
   }
 
   function startProgress(elapsedOffset = 0) {
@@ -600,13 +602,22 @@ export default function Home() {
   function applyScale(container: HTMLElement, scale: number) {
     container.style.setProperty("--docx-scale", String(scale));
     if (scale < 1) {
-      container.style.transform = `scale(${scale})`;
-      container.style.transformOrigin = "top left";
+      const w = DOC_WIDTH;
       const h = container.scrollHeight;
+      container.style.transform = `scale(${scale})`;
+      container.style.transformOrigin = "top center";
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+      // Центрируем контейнер внутри родителя
+      container.style.position = "relative";
+      container.style.left = "50%";
+      container.style.marginLeft = `-${w / 2}px`;
     } else {
-      container.style.transform    = "";
+      container.style.transform = "";
+      container.style.transformOrigin = "";
       container.style.marginBottom = "";
+      container.style.position = "";
+      container.style.left = "";
+      container.style.marginLeft = "";
     }
   }
 
@@ -968,10 +979,26 @@ export default function Home() {
     e.preventDefault();
     if (!topic.trim()) return;
 
+    setCapacityError(null);
+
     // Вычисляем items допматериалов
     const formExtrasItems: string[] = [];
     if (wantPresentation) formExtrasItems.push("presentation");
     if (wantSpeech) formExtrasItems.push("speech");
+
+    // Проверяем доступность слотов на сервере
+    try {
+      const capRes = await fetch("/api/capacity");
+      if (capRes.ok) {
+        const capData = await capRes.json() as { used: number; max: number; available: string[] };
+        const SLOTS: Record<string, number> = { "Сочинение": 1, "Эссе": 1, "Доклад": 2, "Реферат": 2, "Курсовая": 4, "ВКР": 5 };
+        const needed = SLOTS[workType] ?? 2;
+        if (capData.used + needed > capData.max) {
+          setCapacityError(capData.available);
+          return;
+        }
+      }
+    } catch { /* при ошибке — пропускаем, бэкенд сам вернёт 503 */ }
 
     // Admin — генерация бесплатно
     if (isAdmin) {
@@ -1702,6 +1729,17 @@ export default function Home() {
                     : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${totalPrice} ₽`}
               </button>
             </div>
+            {capacityError !== null && (
+              <div className={styles.capacityError}>
+                <span className={styles.capacityErrorIcon}>⏳</span>
+                <span>
+                  {workType} сейчас недоступна — сервер занят.
+                  {capacityError.length > 0
+                    ? <> Доступно: <strong>{capacityError.join(", ")}</strong></>
+                    : <> Все слоты заняты, попробуйте через минуту.</>}
+                </span>
+              </div>
+            )}
             {hasExtrasForm && (
               <p className={styles.extrasHint}>
                 После генерации — добавьте презентацию или текст выступления

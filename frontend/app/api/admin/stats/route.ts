@@ -8,15 +8,19 @@ export async function GET() {
   }
 
   const now = new Date();
-  const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayStart    = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monthStart    = new Date(now.getFullYear(), now.getMonth(), 1);
   const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 29);
+  const sevenDaysAgo  = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
 
   const [
     totalUsers,
     genToday, genMonth, genAll,
     revToday, revMonth, revAll,
     recentGens,
+    avgRatingAgg,
+    feedbackWeek,
+    allFeedbackIssues,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.generation.count({ where: { createdAt: { gte: todayStart } } }),
@@ -29,9 +33,30 @@ export async function GET() {
       where: { createdAt: { gte: thirtyDaysAgo } },
       select: { createdAt: true },
     }),
+    prisma.generation.aggregate({
+      where:  { rating: { not: null } },
+      _avg:   { rating: true },
+      _count: { rating: true },
+    }),
+    prisma.feedbackComment.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    prisma.feedbackComment.findMany({ select: { issues: true } }),
   ]);
 
-  // Группируем по дням в JS
+  // Топ-3 проблемы из FeedbackComment
+  const issueCounts: Record<string, number> = {};
+  for (const f of allFeedbackIssues) {
+    let arr: string[] = [];
+    try { arr = JSON.parse(f.issues); } catch { /* skip */ }
+    for (const issue of arr) {
+      issueCounts[issue] = (issueCounts[issue] ?? 0) + 1;
+    }
+  }
+  const topIssues = Object.entries(issueCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([issue, count]) => ({ issue, count }));
+
+  // Группируем генерации по дням
   const grouped: Record<string, number> = {};
   for (const g of recentGens) {
     const day = g.createdAt.toISOString().slice(0, 10);
@@ -54,5 +79,11 @@ export async function GET() {
       all:   revAll._sum.amount  ?? 0,
     },
     chart,
+    feedback: {
+      avgRating:    avgRatingAgg._avg.rating ? Math.round(avgRatingAgg._avg.rating * 10) / 10 : null,
+      ratedCount:   avgRatingAgg._count.rating,
+      feedbackWeek,
+      topIssues,
+    },
   });
 }

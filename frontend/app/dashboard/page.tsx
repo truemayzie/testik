@@ -59,6 +59,16 @@ type TitleForm = {
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Feedback modal (?bad=1 из письма-оценки)
+  const FEEDBACK_ISSUES = ["Структура", "Объём", "Оформление", "Содержание", "Другое"] as const;
+  const [feedbackOpen, setFeedbackOpen]         = useState(false);
+  const [feedbackGenId, setFeedbackGenId]       = useState<string | null>(null);
+  const [feedbackIssues, setFeedbackIssues]     = useState<string[]>([]);
+  const [feedbackComment, setFeedbackComment]   = useState("");
+  const [feedbackSending, setFeedbackSending]   = useState(false);
+  const [feedbackDone, setFeedbackDone]         = useState(false);
+
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -92,6 +102,15 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
   }, [status, router]);
+
+  // Открываем feedback modal если пришли с ?bad=1 из письма
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("bad") === "1") {
+      setFeedbackGenId(params.get("generationId"));
+      setFeedbackOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -139,13 +158,21 @@ export default function DashboardPage() {
   function applyScale(container: HTMLElement, scale: number) {
     container.style.setProperty("--docx-scale", String(scale));
     if (scale < 1) {
-      container.style.transform = `scale(${scale})`;
-      container.style.transformOrigin = "top left";
+      const w = DOC_WIDTH;
       const h = container.scrollHeight;
+      container.style.transform = `scale(${scale})`;
+      container.style.transformOrigin = "top center";
       container.style.marginBottom = `${Math.round(h * scale - h)}px`;
+      container.style.position = "relative";
+      container.style.left = "50%";
+      container.style.marginLeft = `-${w / 2}px`;
     } else {
-      container.style.transform    = "";
+      container.style.transform = "";
+      container.style.transformOrigin = "";
       container.style.marginBottom = "";
+      container.style.position = "";
+      container.style.left = "";
+      container.style.marginLeft = "";
     }
   }
 
@@ -839,6 +866,142 @@ export default function DashboardPage() {
           </div>
         </div>
       ), document.body)}
+
+      {/* ── Feedback modal (bad rating from email) ──────────────────── */}
+      {feedbackOpen && createPortal(
+        <div
+          onClick={() => !feedbackDone && setFeedbackOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(6,21,37,0.85)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#0B1829", borderRadius: 16,
+              border: "1px solid rgba(255,255,255,0.08)",
+              padding: "36px 40px", maxWidth: 480, width: "100%",
+              position: "relative",
+            }}
+          >
+            {!feedbackDone ? (
+              <>
+                <button
+                  onClick={() => setFeedbackOpen(false)}
+                  style={{
+                    position: "absolute", top: 16, right: 16,
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "#64748B", fontSize: 20, lineHeight: 1, padding: 4,
+                  }}
+                  aria-label="Закрыть"
+                >✕</button>
+
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>
+                  Что пошло не так?
+                </h2>
+                <p style={{ color: "#64748B", fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+                  Расскажите — мы используем это для улучшения качества генерации.
+                </p>
+
+                {/* Чекбоксы */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                  {FEEDBACK_ISSUES.map(issue => (
+                    <label
+                      key={issue}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        cursor: "pointer", color: "#CBD5E1", fontSize: 15,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={feedbackIssues.includes(issue)}
+                        onChange={e => setFeedbackIssues(prev =>
+                          e.target.checked ? [...prev, issue] : prev.filter(i => i !== issue)
+                        )}
+                        style={{ width: 16, height: 16, accentColor: "#C9962A", cursor: "pointer" }}
+                      />
+                      {issue}
+                    </label>
+                  ))}
+                </div>
+
+                {/* Комментарий */}
+                <textarea
+                  placeholder="Дополнительный комментарий (необязательно)"
+                  value={feedbackComment}
+                  onChange={e => setFeedbackComment(e.target.value)}
+                  rows={3}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 10, color: "#CBD5E1", fontSize: 14,
+                    padding: "12px 14px", resize: "vertical", outline: "none",
+                    fontFamily: "inherit", marginBottom: 20,
+                  }}
+                />
+
+                <button
+                  disabled={feedbackSending}
+                  onClick={async () => {
+                    setFeedbackSending(true);
+                    try {
+                      await fetch("/api/feedback/comment", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          generationId: feedbackGenId,
+                          issues: feedbackIssues,
+                          comment: feedbackComment,
+                        }),
+                      });
+                    } finally {
+                      setFeedbackSending(false);
+                      setFeedbackDone(true);
+                    }
+                  }}
+                  style={{
+                    width: "100%", padding: "14px 0",
+                    background: "linear-gradient(135deg,#C9962A 0%,#B8851F 100%)",
+                    color: "#fff", border: "none", borderRadius: 12,
+                    fontSize: 15, fontWeight: 700, cursor: "pointer",
+                    opacity: feedbackSending ? 0.7 : 1,
+                  }}
+                >
+                  {feedbackSending ? "Отправляем..." : "Отправить отзыв"}
+                </button>
+              </>
+            ) : (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>
+                  Спасибо за отзыв!
+                </h2>
+                <p style={{ color: "#64748B", fontSize: 14, margin: "0 0 24px" }}>
+                  Мы учтём это при следующей генерации.
+                </p>
+                <button
+                  onClick={() => setFeedbackOpen(false)}
+                  style={{
+                    padding: "12px 32px",
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#CBD5E1", borderRadius: 10,
+                    fontSize: 15, cursor: "pointer",
+                  }}
+                >
+                  Закрыть
+                </button>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );
