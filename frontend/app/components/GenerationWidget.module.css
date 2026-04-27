@@ -6,12 +6,12 @@
   width: 230px;
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='1' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E") center/20px 20px,
-    linear-gradient(135deg, #0D0B2E 0%, #1A1654 60%, #2D1B6E 100%);
-  border: 1px solid rgba(167, 139, 250, 0.4);
+    linear-gradient(135deg, #061525 0%, #0F2645 60%, #1B3A6B 100%);
+  border: 1px solid rgba(27, 58, 107, 0.3);
   border-radius: 18px;
   padding: 14px 18px 12px;
   box-shadow:
-    0 8px 40px rgba(99, 102, 241, 0.4),
+    0 8px 40px rgba(11, 30, 60, 0.45),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   text-decoration: none;
   display: block;
@@ -28,7 +28,7 @@
 .widget:hover {
   transform: translateY(-3px);
   box-shadow:
-    0 16px 60px rgba(99, 102, 241, 0.5),
+    0 16px 60px rgba(11, 30, 60, 0.55),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
@@ -42,8 +42,8 @@
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(167, 139, 250, 0.3);
-  border-top-color: #A78BFA;
+  border: 2px solid rgba(27,58,107,0.25);
+  border-top-color: #D97706;
   border-radius: 50%;
   flex-shrink: 0;
   animation: spin 0.8s linear infinite;
@@ -52,7 +52,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .label {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
   color: #fff;
@@ -70,9 +70,13 @@
 
 .fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366F1 0%, #A78BFA 60%, #60A5FA 100%);
+  width: 100%;
+  background: linear-gradient(90deg, #1B3A6B 0%, #D97706 100%);
   border-radius: 99px;
-  transition: width 0.6s ease-out;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.6s ease-out;
+  will-change: transform;
   position: relative;
   overflow: hidden;
 }
@@ -91,7 +95,7 @@
 @keyframes shimmer { to { left: 160%; } }
 
 .step {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.4);
   margin: 0;
@@ -110,8 +114,8 @@
     border-radius: 14px;
     padding: 12px 16px 10px;
     box-shadow:
-      0 -4px 30px rgba(99, 102, 241, 0.3),
-      0 8px 40px rgba(99, 102, 241, 0.3),
+      0 -4px 30px rgba(11, 30, 60, 0.3),
+      0 8px 40px rgba(11, 30, 60, 0.35),
       0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   }
 }

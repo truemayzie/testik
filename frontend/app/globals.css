@@ -167,24 +167,61 @@ body.modal-open [class*="GenerationWidget_widget"] {
 .docx-preview section {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   margin: 8px auto !important;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-/* DOCX-превью — таблицы.
-   border-collapse убирает двойные линии.
-   На мобиле с transform:scale границы 0.5pt (~0.67px) скукоживаются до
-   суб-пиксельных и пропадают — форсируем минимум 1px только для ячеек
-   у которых docx-preview уже проставил border через inline-стиль.
-   --docx-scale устанавливается в JS при масштабировании: calc(1px / var)
-   гарантирует, что после transform:scale бордер остаётся не менее 1px. */
+/* DOCX-превью — таблицы */
 .docx-viewer table,
 .docx-preview table {
   border-collapse: collapse !important;
 }
-.docx-viewer td[style*="border"],
-.docx-viewer th[style*="border"],
-.docx-preview td[style*="border"],
-.docx-preview th[style*="border"] {
-  border-width: max(1px, calc(1px / var(--docx-scale, 1))) !important;
+
+.docx-viewer td:not([colspan]),
+.docx-viewer th:not([colspan]),
+.docx-preview td:not([colspan]),
+.docx-preview th:not([colspan]) {
+  outline: max(0.75px, calc(0.75px / var(--docx-scale, 1))) solid rgba(0,0,0,0.5);
+  outline-offset: calc(-0.75px / var(--docx-scale, 1));
+}
+
+/* Убираем outline с параграфов которые являются подписями таблиц */
+.docx-viewer p,
+.docx-preview p {
+  outline: none !important;
+}
+
+.docx-viewer table caption,
+.docx-preview table caption,
+.docx-viewer table p,
+.docx-preview table p {
+  outline: none !important;
+}
+
+.docx-viewer tr:first-child th,
+.docx-viewer tr:first-child td,
+.docx-preview tr:first-child th,
+.docx-preview tr:first-child td,
+.docx-viewer thead th,
+.docx-viewer thead td,
+.docx-preview thead th,
+.docx-preview thead td {
+  outline: none !important;
+}
+
+.docx-viewer tr:first-child,
+.docx-preview tr:first-child {
+  outline: none !important;
+}
+
+.docx-viewer tr:first-child *,
+.docx-preview tr:first-child * {
+  outline: none !important;
+}
+
+.docx-viewer table.first-row tr:first-child td,
+.docx-preview table.first-row tr:first-child td {
+  outline: none !important;
 }
 
 /* DOCX-превью — оглавление с dot-leader через flex.
@@ -239,9 +276,16 @@ body.modal-open [class*="GenerationWidget_widget"] {
   word-spacing: normal !important;
   text-decoration: none !important;
   background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
-  background-size: 0.45em 100%;
+  background-size: 6px 100%;
   background-repeat: repeat-x;
   background-position: left 75%;
+}
+
+/* Выравниваем высоту строк в оглавлении */
+.docx-viewer p:has(.docx-viewer-tab-stop),
+.docx-preview p:has(.docx-preview-tab-stop) {
+  line-height: 1.5 !important;
+  align-items: center;
 }
 
 /* Когда модалка открыта — шапка уходит под оверлей */
@@ -321,4 +365,26 @@ body.modal-open header {
     max-width: 100% !important;
     overflow-x: hidden !important;
   }
+}
+
+/* Убираем серый фон wrapper'а но оставляем белые страницы */
+.docx-viewer-wrapper,
+.docx-preview-wrapper {
+  background: transparent !important;
+  padding: 8px !important;
+}
+
+.docx-viewer section,
+.docx-preview section {
+  background: #ffffff !important;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  margin: 8px auto !important;
+}
+
+.docx-wrapper section,
+.docx section {
+  border-radius: 4px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }

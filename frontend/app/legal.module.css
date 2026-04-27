@@ -2,7 +2,7 @@
    LEGAL PAGES — shared styles
 ══════════════════════════════════════════ */
 .hero {
-  background: linear-gradient(160deg, #0D0B2E 0%, #1A1654 55%, #2D1B6E 100%);
+  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
   padding: 52px 24px 56px;
   text-align: center;
 }
@@ -13,16 +13,16 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #A5B4FC;
-  background: rgba(99,102,241,0.15);
-  border: 1px solid rgba(99,102,241,0.3);
+  color: #93B5D9;
+  background: rgba(27,58,107,0.2);
+  border: 1px solid rgba(147,181,217,0.3);
   border-radius: 100px;
   padding: 4px 14px;
   margin-bottom: 18px;
 }
 
 .heroTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.6rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #fff;
@@ -54,15 +54,15 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6366F1;
-  background: #EEF2FF;
+  color: #1B3A6B;
+  background: #EFF6FF;
   border-radius: 5px;
   padding: 2px 8px;
   margin-bottom: 10px;
 }
 
 .sectionTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -99,14 +99,14 @@
   content: "—";
   position: absolute;
   left: 0;
-  color: #6366F1;
+  color: #1B3A6B;
   font-weight: 700;
 }
 
 /* ── Info block ── */
 .infoBlock {
-  background: #F5F3FF;
-  border: 1px solid #DDD6FE;
+  background: #EFF6FF;
+  border: 1px solid #BFCFE3;
   border-radius: 12px;
   padding: 20px 24px;
   margin: 20px 0;
@@ -115,14 +115,14 @@
 .infoBlock p {
   font-size: 0.88rem;
   line-height: 1.7;
-  color: #3730A3;
+  color: #15305A;
   margin: 0 0 6px;
 }
 
 .infoBlock p:last-child { margin-bottom: 0; }
 
 .infoBlock strong {
-  color: #4338CA;
+  color: #1B3A6B;
 }
 
 /* ── Warning block ── */
@@ -183,7 +183,7 @@
   gap: 6px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6366F1;
+  color: #1B3A6B;
   text-decoration: none;
   margin-bottom: 36px;
 }

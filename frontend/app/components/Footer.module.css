@@ -25,7 +25,7 @@
 }
 
 .footerLogo {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.2rem;
   font-weight: 800;
   color: #fff;
@@ -41,16 +41,13 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 6px rgba(129,140,248,0.5));
+  filter: drop-shadow(0 1px 6px rgba(251,191,36,0.4));
 }
 
 .footerLogoWord { color: rgba(255,255,255,0.9); }
 
 .footerLogoAi {
-  background: linear-gradient(135deg, #818CF8, #60A5FA);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #FBBF24;
 }
 
 .footerTagline {
@@ -67,7 +64,7 @@
 }
 
 .footerContact a {
-  color: #818CF8;
+  color: #93B5D9;
   text-decoration: none;
 }
 
@@ -135,19 +132,19 @@
   transition: color 0.2s;
 }
 
-.footerLinks a:hover { color: #C7D2FE; }
+.footerLinks a:hover { color: #93B5D9; }
 
 .footerMailLink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 0.88rem;
-  color: #818CF8 !important;
+  color: #93B5D9 !important;
   text-decoration: none;
   transition: color 0.2s;
 }
 
-.footerMailLink:hover { color: #C7D2FE !important; }
+.footerMailLink:hover { color: #CBD5E1 !important; }
 
 .footerMailIcon {
   font-size: 0.9rem;

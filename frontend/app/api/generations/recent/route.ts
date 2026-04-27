@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const generations = await prisma.generation.findMany({
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: 30,
       select: { id: true, topic: true, workType: true, createdAt: true },
     });
     return NextResponse.json(generations);

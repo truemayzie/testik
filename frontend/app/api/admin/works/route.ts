@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     take: 200,
     select: {
       id: true, topic: true, workType: true, pages: true,
-      status: true, createdAt: true, slug: true,
+      status: true, createdAt: true, slug: true, rating: true,
       user: { select: { id: true, name: true, email: true, image: true } },
     },
   });

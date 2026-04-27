@@ -1,6 +1,3 @@
-// Схема базы данных для Academic Service
-// SQLite — для старта, потом переедем на PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,48 +7,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Пользователь ─────────────────────────────────────────────────
 model User {
-  id            String    @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?      @unique
   emailVerified DateTime?
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Связи NextAuth
-  accounts  Account[]
-  sessions  Session[]
-
-  // Профиль для титульника
-  university  String?
-  faculty     String?
-  department  String?
-  speciality  String?
-  discipline  String?
-  course      String?
-  groupNumber String?
-  fullName    String?
-  teacherName String?
-  city        String?
-
-  // Роль и статус
-  role     String  @default("user")  // "user" | "admin" | "yukassa_test"
-  banned   Boolean @default(false)
-  password String?                   // bcrypt-хэш, только для тестовых аккаунтов
-
-  // Наши данные
-  generations Generation[]
-  payments    Payment[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  university    String?
+  faculty       String?
+  department    String?
+  speciality    String?
+  discipline    String?
+  course        String?
+  groupNumber   String?
+  fullName      String?
+  teacherName   String?
+  city          String?
+  role          String       @default("user")
+  banned        Boolean      @default(false)
+  password      String?
+  accounts      Account[]
+  generations   Generation[]
+  payments      Payment[]
+  sessions      Session[]
 }
 
-// ── OAuth аккаунты (Яндекс, VK) ─────────────────────────────────
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
-  provider          String  // "yandex", "vk", "email"
+  provider          String
   providerAccountId String
   refresh_token     String?
   access_token      String?
@@ -60,23 +47,19 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
 
-// ── Сессии ───────────────────────────────────────────────────────
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ── Токены для входа по email ────────────────────────────────────
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -85,47 +68,32 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ── Генерации рефератов ──────────────────────────────────────────
 model Generation {
-  id        String   @id @default(cuid())
-  userId    String
-  createdAt DateTime @default(now())
-
-  // Данные реферата
-  topic     String   // Тема
-  pages     Int      // Объём
-  workType  String   @default("Реферат") // Тип работы
-  status    String   @default("completed") // completed, failed
-
-  // Сохранённый результат (JSON)
-  result    String   // JSON со всем содержимым
-
-  // Публичный предпросмотр
-  isPublic  Boolean  @default(true)
-  slug      String?  @unique
-
-  // Дополнительные материалы (JSON: {"presentation":"job_id","speech":"job_id"})
-  extras    String?
-
-  // Оценка пользователя (1–5, из письма-уведомления)
-  rating    Int?
-
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String            @id @default(cuid())
+  userId           String
+  createdAt        DateTime          @default(now())
+  topic            String
+  pages            Int
+  workType         String            @default("Реферат")
+  status           String            @default("completed")
+  result           String
+  isPublic         Boolean           @default(true)
+  slug             String?           @unique
+  extras           String?
+  rating           Int?
   feedbackComments FeedbackComment[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ── Обратная связь после генерации ──────────────────────────────────────────
 model FeedbackComment {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   generationId String
-  issues       String   // JSON-массив: ["Структура","Объём", ...]
+  issues       String
   comment      String?
-  createdAt    DateTime @default(now())
-
-  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
 }
 
-// ── Проверки состояния системы ───────────────────────────────────
 model HealthCheck {
   id        String   @id @default(cuid())
   checkedAt DateTime @default(now())
@@ -133,33 +101,31 @@ model HealthCheck {
   backend   Boolean
   database  Boolean
   groq      Boolean
-  details   String?  // JSON: { backend?: string, database?: string, groq?: string }
+  details   String?
 }
 
-// ── SEO страницы ─────────────────────────────────────────────────
 model SeoPage {
   id              Int      @id @default(autoincrement())
   slug            String   @unique
-  workType        String   // referat | kursovaya | esse | doklad | vkr | sochinenie
-  subject         String   // История, Биология, Экономика и т.д.
-  title           String   // "Реферат по истории Второй мировой войны"
-  metaTitle       String   // для <title>
-  metaDescription String   // для <meta description>
-  previewText     String   // 300-500 символов тизерного текста
-  bodyText        String   @default("")  // SEO-текст 800-1000 символов, генерируется Claude
+  workType        String
+  subject         String
+  title           String
+  metaTitle       String
+  metaDescription String
+  previewText     String
+  bodyText        String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 }
 
-// ── Платежи ──────────────────────────────────────────────────────
 model Payment {
-  id          String    @id @default(cuid())
-  userId      String
-  workType    String
-  amount      Int
-  status      String    @default("pending")
-  yokassaId   String?
-  createdAt   DateTime  @default(now())
-  usedAt      DateTime?
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  workType  String
+  amount    Int
+  status    String    @default("pending")
+  yokassaId String?
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

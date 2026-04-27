@@ -24,7 +24,7 @@
 
 /* ── H1 ── */
 .h1 {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.5rem);
   font-weight: 700;
   color: var(--ink);
@@ -46,39 +46,43 @@
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  background: rgba(99, 102, 241, 0.07);
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: rgba(27, 58, 107, 0.07);
+  border: 1px solid rgba(27, 58, 107, 0.15);
   border-radius: 20px;
   padding: 5px 14px;
   margin-bottom: 40px;
 }
-.statNum   { font-size: 1rem; font-weight: 700; color: var(--accent); }
+.statNum   { font-size: 1rem; font-weight: 700; color: #1B3A6B; }
 .statLabel { font-size: 0.82rem; color: var(--ink-muted); }
 
 /* ── Секции по предмету ── */
 .subjects {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 48px;
   margin-bottom: 56px;
 }
 
-.subjectBlock {}
+.subjectBlock {
+  padding-top: 4px;
+}
 
 .subjectTitle {
-  font-size: 1.05rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--ink);
-  margin: 0 0 14px;
-  padding-bottom: 8px;
+  color: #1B3A6B;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
 
 /* ── Сетка карточек ── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
 }
 
 .card {
@@ -86,7 +90,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 11px 14px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -94,22 +98,22 @@
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 .card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.1);
+  border-color: #1B3A6B;
+  box-shadow: 0 2px 12px rgba(27, 58, 107, 0.1);
   transform: translateY(-1px);
 }
 
 .cardTitle {
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   color: var(--ink);
   line-height: 1.4;
   flex: 1;
 }
 
 .cardArrow {
-  font-size: 0.9rem;
-  color: var(--accent);
-  opacity: 0;
+  font-size: 0.85rem;
+  color: #1B3A6B;
+  opacity: 0.25;
   transition: opacity 0.15s;
   flex-shrink: 0;
 }
@@ -117,7 +121,7 @@
 
 /* ── CTA ── */
 .cta {
-  background: linear-gradient(135deg, #0D0B2E 0%, #2D1B6E 100%);
+  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
   border-radius: 20px;
   padding: 48px 32px;
   text-align: center;
@@ -134,8 +138,8 @@
 
 .ctaIcon {
   display: block;
-  font-size: 1.8rem;
-  margin-bottom: 12px;
+  line-height: 0;
+  margin-bottom: 16px;
   position: relative;
   z-index: 1;
 }
@@ -160,7 +164,7 @@
 }
 .ctaBtn {
   display: inline-block;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   color: #fff;
   font-weight: 600;
   font-size: 1rem;
@@ -170,7 +174,7 @@
   transition: opacity 0.15s, transform 0.15s;
   position: relative;
   z-index: 1;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  box-shadow: 0 4px 20px rgba(27,58,107,0.35);
 }
 .ctaBtn:hover { opacity: 0.9; transform: translateY(-1px); }
 

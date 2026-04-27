@@ -1,7 +1,7 @@
 .page {
   min-height: 100vh;
   background: #F8FAFC;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
 }
 
 /* ── Not found ── */
@@ -21,7 +21,7 @@
 .notFoundIcon { font-size: 4rem; display: block; margin-bottom: 20px; }
 
 .notFoundInner h1 {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.8rem;
   color: #0F172A;
   margin: 0 0 12px;
@@ -31,7 +31,7 @@
 
 .notFoundBtn {
   display: inline-block;
-  background: #6366F1;
+  background: #1B3A6B;
   color: #fff;
   padding: 12px 28px;
   border-radius: 10px;
@@ -42,7 +42,7 @@
 
 /* ── Hero ── */
 .heroSection {
-  background: linear-gradient(160deg, #0D0B2E 0%, #1A1654 55%, #2D1B6E 100%);
+  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
   padding: 60px 24px 64px;
   text-align: center;
 }
@@ -53,9 +53,9 @@
   display: inline-block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #C4B5FD;
-  background: rgba(167,139,250,0.18);
-  border: 1px solid rgba(167,139,250,0.3);
+  color: #93B5D9;
+  background: rgba(27,58,107,0.25);
+  border: 1px solid rgba(147,181,217,0.3);
   border-radius: 20px;
   padding: 5px 16px;
   letter-spacing: 0.06em;
@@ -64,7 +64,7 @@
 }
 
 .heroTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.6rem);
   font-weight: 700;
   color: #fff;
@@ -108,9 +108,9 @@
   transition: box-shadow 0.2s;
 }
 
-.benefitCard:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.1); }
+.benefitCard:hover { box-shadow: 0 4px 16px rgba(27,58,107,0.1); }
 
-.benefitIcon { font-size: 1.6rem; display: block; margin-bottom: 8px; }
+.benefitIcon { line-height: 0; display: flex; justify-content: center; margin-bottom: 10px; }
 
 .benefitTitle {
   font-size: 0.9rem;
@@ -167,7 +167,7 @@
 .previewSections { margin-bottom: 32px; }
 
 .sectionHeading {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -184,7 +184,7 @@
 }
 
 .previewSectionTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1rem;
   font-weight: 700;
   color: #0F172A;
@@ -232,7 +232,7 @@
   margin-top: 16px;
 }
 
-.lockIcon { font-size: 1.2rem; flex-shrink: 0; }
+.lockIcon { line-height: 0; flex-shrink: 0; }
 
 .lockBanner p {
   font-size: 0.9rem;
@@ -272,7 +272,7 @@
   position: absolute;
   left: 0; top: 8px;
   width: 4px; height: 4px;
-  background: #6366F1;
+  background: #1B3A6B;
   border-radius: 50%;
 }
 
@@ -288,7 +288,7 @@
 
 /* ── CTA ── */
 .ctaBlock {
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
   border-radius: 20px;
   padding: 48px 32px;
   text-align: center;
@@ -296,10 +296,10 @@
 
 .ctaInner { max-width: 480px; margin: 0 auto; }
 
-.ctaLockIcon { font-size: 2.5rem; margin-bottom: 16px; display: block; }
+.ctaLockIcon { line-height: 0; margin-bottom: 20px; display: block; }
 
 .ctaTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.7rem;
   font-weight: 700;
   color: #fff;
@@ -323,7 +323,7 @@
 
 .ctaFeatures span {
   font-size: 0.85rem;
-  color: #86EFAC;
+  color: rgba(255, 255, 255, 0.65);
   font-weight: 500;
 }
 
@@ -331,23 +331,23 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.05rem;
   font-weight: 700;
-  color: #0F172A;
-  background: #fff;
+  color: #fff;
+  background: #D97706;
   border-radius: 14px;
   padding: 16px 36px;
   text-decoration: none;
   transition: all 0.2s;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 20px rgba(217, 119, 6, 0.35);
   margin-bottom: 16px;
 }
 
 .ctaButton:hover {
-  background: #EEF2FF;
+  background: #B45309;
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  box-shadow: 0 8px 32px rgba(217, 119, 6, 0.45);
 }
 
 .ctaNote {
@@ -369,10 +369,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  color: #1E1B4B;
+  color: #1B3A6B;
   background: #fff;
   border: none;
   border-radius: 12px;
@@ -383,7 +383,7 @@
 }
 
 .heroDownloadBtn:hover:not(:disabled) {
-  background: #EEF2FF;
+  background: #EFF6FF;
   transform: translateY(-2px);
 }
 
@@ -404,7 +404,7 @@
   transition: border-color 0.2s;
 }
 
-.accordionOpen { border-color: #6366F1; }
+.accordionOpen { border-color: #1B3A6B; }
 
 .accordionToggle {
   width: 100%;
@@ -415,7 +415,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   color: #0F172A;
@@ -424,7 +424,7 @@
 }
 
 .accordionToggle:hover { background: #F8FAFC; }
-.accordionOpen .accordionToggle { background: #6366F1; color: #fff; }
+.accordionOpen .accordionToggle { background: #1B3A6B; color: #fff; }
 
 .chevron { font-size: 0.65rem; opacity: 0.6; flex-shrink: 0; }
 
@@ -487,22 +487,22 @@
 }
 
 .ownerDownloadBtn {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   border: none;
   border-radius: 12px;
   padding: 14px 32px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  box-shadow: 0 4px 14px rgba(27,58,107,0.35);
 }
 
 .ownerDownloadBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+  box-shadow: 0 6px 20px rgba(27,58,107,0.45);
 }
 
 .ownerDownloadBtn:disabled { opacity: 0.6; cursor: not-allowed; }

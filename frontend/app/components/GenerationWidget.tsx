@@ -46,7 +46,7 @@ export default function GenerationWidget() {
         </span>
       </div>
       <div className={styles.bar}>
-        <div className={styles.fill} style={{ width: `${Math.max(pct, 2)}%` }} />
+        <div className={styles.fill} style={{ transform: `scaleX(${Math.max(pct, 2) / 100})` }} />
       </div>
       {computed.stepLabel && (
         <p className={styles.step}>{computed.stepLabel}</p>

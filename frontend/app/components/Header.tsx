@@ -10,13 +10,7 @@ import { useModalContext } from "@/app/lib/ModalContext";
 const LogoInner = () => (
   <>
     <svg className={styles.logoSpark} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="url(#headerGrad)"/>
-      <defs>
-        <linearGradient id="headerGrad" x1="1" y1="1" x2="19" y2="19" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366F1"/>
-          <stop offset="1" stopColor="#60A5FA"/>
-        </linearGradient>
-      </defs>
+      <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="#D97706"/>
     </svg>
     <div className={styles.logoTexts}>
       <span className={styles.logoWord}>Ref<span className={styles.logoAi}>ai</span></span>

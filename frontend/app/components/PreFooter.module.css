@@ -24,12 +24,12 @@
 }
 
 .prefooterAccent {
-  color: #6366F1;
+  color: #1B3A6B;
   font-weight: 800;
 }
 
 .prefooterTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.7rem, 4vw, 2.4rem);
   font-weight: 700;
   color: #0F172A;
@@ -48,11 +48,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   border-radius: 14px;
   padding: 16px 32px;
   text-decoration: none;
@@ -110,8 +110,8 @@
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #6366F1;
-  background: #EEF2FF;
+  color: #1B3A6B;
+  background: #DBEAFE;
   border-radius: 4px;
   padding: 2px 6px;
   align-self: flex-start;

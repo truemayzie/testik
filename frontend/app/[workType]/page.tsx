@@ -155,7 +155,11 @@ export default async function HubPage({ params }: { params: { workType: string }
 
       {/* CTA */}
       <div className={styles.cta}>
-        <span className={styles.ctaIcon}>✦</span>
+        <span className={styles.ctaIcon}>
+          <svg width="32" height="32" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="#D97706"/>
+          </svg>
+        </span>
         <h2 className={styles.ctaTitle}>Не нашли нужную тему?</h2>
         <p className={styles.ctaDesc}>
           Введите свою тему — ИИ напишет работу за 2–4 минуты.

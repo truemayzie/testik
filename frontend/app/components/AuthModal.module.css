@@ -67,7 +67,7 @@
 }
 
 .title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.5rem;
   font-weight: 700;
   color: #0F172A;
@@ -83,7 +83,7 @@
 }
 
 .sub strong {
-  color: #6366F1;
+  color: #1B3A6B;
   font-weight: 700;
 }
 
@@ -99,7 +99,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
@@ -123,12 +123,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
-  color: #6366F1;
-  background: #EEF2FF;
-  border: 1.5px solid #C7D2FE;
+  color: #1B3A6B;
+  background: #EFF6FF;
+  border: 1.5px solid #93B5D9;
   border-radius: 12px;
   padding: 14px 24px;
   text-decoration: none;
@@ -137,8 +137,8 @@
 }
 
 .emailBtn:hover {
-  background: #E0E7FF;
-  border-color: #A5B4FC;
+  background: #DBEAFE;
+  border-color: #1B3A6B;
 }
 
 .hint {

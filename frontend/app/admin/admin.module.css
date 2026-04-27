@@ -10,7 +10,7 @@
 .sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #0D0B2E 0%, #1A1654 100%);
+  background: linear-gradient(180deg, #061525 0%, #0F2645 100%);
   display: flex;
   flex-direction: column;
   padding: 24px 0 32px;
@@ -35,7 +35,7 @@
   align-items: center;
   justify-content: center;
   width: 28px; height: 28px;
-  background: linear-gradient(135deg, #6366F1, #818CF8);
+  background: linear-gradient(135deg, #1B3A6B, #93B5D9);
   border-radius: 7px;
   font-size: 0.9rem;
   font-weight: 800;
@@ -114,12 +114,12 @@
    PAGE SHARED
 ═══════════════════════════════════════════ */
 .pageHeader {
-  background: linear-gradient(160deg, #0D0B2E 0%, #1A1654 55%, #2D1B6E 100%);
+  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
   padding: 32px 36px 36px;
 }
 
 .pageTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 700;
   color: #fff;
@@ -166,7 +166,7 @@
 }
 
 .statValue {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.7rem;
   font-weight: 700;
   color: #0F172A;
@@ -179,7 +179,7 @@
   color: #94A3B8;
 }
 
-.statAccent { color: #6366F1; }
+.statAccent { color: #1B3A6B; }
 .statGreen  { color: #22C55E; }
 
 /* ═══════════════════════════════════════════
@@ -232,7 +232,7 @@
 .searchInput {
   width: 100%;
   padding: 9px 12px 9px 34px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.88rem;
   color: #0F172A;
   background: #fff;
@@ -242,11 +242,11 @@
   transition: border-color 0.2s;
 }
 
-.searchInput:focus { border-color: #6366F1; }
+.searchInput:focus { border-color: #1B3A6B; }
 
 .filterInput {
   padding: 9px 12px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Golos Text', sans-serif;
   font-size: 0.85rem;
   color: #0F172A;
   background: #fff;
@@ -257,7 +257,7 @@
   cursor: pointer;
 }
 
-.filterInput:focus { border-color: #6366F1; }
+.filterInput:focus { border-color: #1B3A6B; }
 
 .toolbarCount {
   font-size: 0.82rem;
@@ -296,7 +296,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #6366F1;
+  color: #1B3A6B;
   text-align: left;
   white-space: nowrap;
 }
@@ -330,7 +330,7 @@
 .userAvatarPlaceholder {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366F1, #818CF8);
+  background: linear-gradient(135deg, #1B3A6B, #93B5D9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,7 +366,7 @@
   white-space: nowrap;
 }
 
-.badgeAdmin   { background: #EEF2FF; color: #6366F1; }
+.badgeAdmin   { background: #EEF2FF; color: #1B3A6B; }
 .badgeUser    { background: #F1F5F9; color: #64748B; }
 .badgeActive  { background: #DCFCE7; color: #15803D; }
 .badgeBanned  { background: #FEE2E2; color: #DC2626; }
@@ -395,7 +395,7 @@
 .actionBtnDanger:hover { background: #FEE2E2; }
 
 .actionBtnPrimary {
-  color: #6366F1;
+  color: #1B3A6B;
   background: #EEF2FF;
   border: 1px solid #C7D2FE;
 }
@@ -409,6 +409,17 @@
 }
 
 .actionBtnWarning:hover { background: #FEF3C7; }
+
+.actionBtnSecondary {
+  color: #059669;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.actionBtnSecondary:hover { background: #D1FAE5; }
 
 .actionBtnGhost {
   color: #64748B;
@@ -448,7 +459,7 @@
 .spinner {
   width: 20px; height: 20px;
   border: 2px solid rgba(99,102,241,0.15);
-  border-top-color: #6366F1;
+  border-top-color: #1B3A6B;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -475,7 +486,7 @@
 
 /* ── Link ── */
 .tableLink {
-  color: #6366F1;
+  color: #1B3A6B;
   text-decoration: none;
   font-weight: 600;
   font-size: 0.82rem;
@@ -531,7 +542,7 @@
     left: 0;
     right: 0;
     z-index: 100;
-    background: #0D0B2E;
+    background: #061525;
     border-top: 1px solid rgba(255,255,255,0.08);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -578,7 +589,7 @@
   padding: 24px 20px;
   gap: 12px;
   text-align: center;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   background: #faf9f7;
 }
 
@@ -601,7 +612,7 @@
 
 .noAccessLink {
   margin-top: 8px;
-  color: #6366F1;
+  color: #1B3A6B;
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;

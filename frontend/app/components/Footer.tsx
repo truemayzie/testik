@@ -24,8 +24,8 @@ export default function Footer() {
                 <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="url(#footerGrad)"/>
                 <defs>
                   <linearGradient id="footerGrad" x1="1" y1="1" x2="19" y2="19" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#818CF8"/>
-                    <stop offset="1" stopColor="#60A5FA"/>
+                    <stop stopColor="#D97706"/>
+                    <stop offset="1" stopColor="#FBBF24"/>
                   </linearGradient>
                 </defs>
               </svg>
@@ -43,6 +43,17 @@ export default function Footer() {
           {/* Колонки */}
           <div className={styles.footerCols}>
             <div className={styles.footerCol}>
+              <h4 className={styles.footerColTitle}>Работы</h4>
+              <ul className={styles.footerLinks}>
+                <li><Link href="/referat">Рефераты</Link></li>
+                <li><Link href="/kursovaya">Курсовые работы</Link></li>
+                <li><Link href="/esse">Эссе</Link></li>
+                <li><Link href="/doklad">Доклады</Link></li>
+                <li><Link href="/vkr">ВКР</Link></li>
+                <li><Link href="/sochinenie">Сочинения</Link></li>
+              </ul>
+            </div>
+            <div className={styles.footerCol}>
               <h4 className={styles.footerColTitle}>Поддержка</h4>
               <ul className={styles.footerLinks}>
                 <li>
@@ -53,17 +64,6 @@ export default function Footer() {
                 </li>
                 {authed && <li><Link href="/dashboard">Мои работы</Link></li>}
                 {!authed && <li><Link href="/auth/signin">Войти</Link></li>}
-              </ul>
-            </div>
-            <div className={styles.footerCol}>
-              <h4 className={styles.footerColTitle}>Написать работу</h4>
-              <ul className={styles.footerLinks}>
-                <li><a href="/?workType=Сочинение">Написать сочинение</a></li>
-                <li><a href="/?workType=Эссе">Написать эссе</a></li>
-                <li><a href="/?workType=Доклад">Написать доклад</a></li>
-                <li><a href="/?workType=Реферат">Написать реферат</a></li>
-                <li><a href="/?workType=Курсовая">Написать курсовую</a></li>
-                <li><a href="/?workType=ВКР">Написать ВКР</a></li>
               </ul>
             </div>
             <div className={styles.footerCol}>

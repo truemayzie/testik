@@ -1,11 +1,11 @@
 .page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #0D0B2E 0%, #1A1654 55%, #2D1B6E 100%);
+  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
 }
 
 .card {
@@ -27,7 +27,7 @@
 .icon { font-size: 3rem; margin-bottom: 16px; }
 
 .title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.8rem;
   font-weight: 700;
   color: #0F172A;
@@ -51,8 +51,8 @@
 .price {
   font-size: 3rem;
   font-weight: 800;
-  color: #6366F1;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  color: #1B3A6B;
+  font-family: 'PT Serif', Georgia, serif;
   line-height: 1;
 }
 
@@ -94,17 +94,17 @@
 
 .payBtn {
   width: 100%;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.05rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   border: none;
   border-radius: 14px;
   padding: 18px 32px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  box-shadow: 0 4px 20px rgba(27,58,107,0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -114,7 +114,7 @@
 
 .payBtn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(99,102,241,0.5);
+  box-shadow: 0 8px 32px rgba(27,58,107,0.45);
 }
 
 .payBtn:disabled {
@@ -143,7 +143,7 @@
   transition: color 0.2s;
 }
 
-.backLink:hover { color: #6366F1; }
+.backLink:hover { color: #1B3A6B; }
 
 .secure {
   font-size: 0.78rem;

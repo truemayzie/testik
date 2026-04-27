@@ -14,7 +14,7 @@
 }
 
 .logo {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.5rem;
   font-weight: 800;
   color: #0F172A;
@@ -26,18 +26,18 @@
   transition: opacity 0.2s;
 }
 
-.logo:hover { opacity: 0.8; }
+.logo:hover { opacity: 1; }
 
 .logoSpark {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 4px rgba(99,102,241,0.4));
+  filter: drop-shadow(0 1px 4px rgba(217,119,6,0.35));
   transition: transform 0.3s ease;
 }
 
 .logo:hover .logoSpark {
-  transform: rotate(20deg) scale(1.1);
+  transform: scale(1.12);
 }
 
 .logoTexts {
@@ -68,10 +68,7 @@
 }
 
 .logoAi {
-  background: linear-gradient(135deg, #6366F1, #60A5FA);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #D97706;
 }
 
 /* ── Desktop nav ── */
@@ -118,7 +115,7 @@
   font-size: 0.88rem;
   font-weight: 600;
   color: #fff;
-  background: #6366F1;
+  background: #1B3A6B;
   border-radius: 8px;
   padding: 8px 18px;
   text-decoration: none;
@@ -126,7 +123,7 @@
 }
 
 .signInBtn:hover {
-  background: #4F46E5;
+  background: #15305A;
   transform: translateY(-1px);
 }
 
@@ -249,8 +246,8 @@
 }
 
 .mobileLink:hover {
-  background: #F5F3FF;
-  color: #6366F1;
+  background: #EFF6FF;
+  color: #1B3A6B;
 }
 
 .mobileDivider {

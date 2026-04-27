@@ -90,9 +90,16 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
     const container = previewRef.current;
     container.innerHTML = "";
     container.style.transform = "";
+    container.style.transformOrigin = "";
     container.style.marginBottom = "";
+    container.style.position = "";
+    container.style.left = "";
+    container.style.marginLeft = "";
 
-    const parentW = container.parentElement?.clientWidth || window.innerWidth;
+    const targetWidth = Math.min(
+      container.parentElement?.clientWidth ?? window.innerWidth,
+      window.innerWidth
+    ) - 16;
 
     // ignoreWidth: false — нативная ширина документа, правильные tab stops и точки
     container.style.width = `${DOC_WIDTH}px`;
@@ -109,12 +116,11 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
         ignoreHeight: false,  // фиксированная высота страниц как в редакторе
         experimental: true,   // включает расчёт dot leaders в оглавлении
       }).then(() => {
-        // На мобилке ставим минимальный масштаб 0.62 — иначе 14pt текст
-        // становится нечитаемым (6pt при scale 0.46). Overflow уйдёт в скролл.
-        const isMobile = parentW < 600;
-        const MIN_MOBILE = 0.62;
-        const raw = parentW / DOC_WIDTH;
-        const base = Math.min(1, isMobile ? Math.max(MIN_MOBILE, raw) : raw);
+        // scale = targetWidth / DOC_WIDTH, но не больше 1.
+        // MIN_MOBILE убран: с центрированием top center + left:50% горизонтального
+        // overflow нет даже при малом scale — нет смысла искусственно завышать масштаб.
+        const raw = targetWidth / DOC_WIDTH;
+        const base = Math.min(1, raw);
         baseScaleRef.current = base;
 
         // Сохраняем масштаб как CSS-переменную — используется для компенсации
@@ -128,10 +134,14 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
         setTimeout(() => {
           // refreshTabStops отработал (t+500мс) — теперь применяем scale
           if (base < 1) {
-            container.style.transform = `scale(${base})`;
-            container.style.transformOrigin = "top left";
+            const w = DOC_WIDTH;
             const h = container.scrollHeight;
+            container.style.transform = `scale(${base})`;
+            container.style.transformOrigin = "top center";
             container.style.marginBottom = `${Math.round(h * base - h)}px`;
+            container.style.position = "relative";
+            container.style.left = "50%";
+            container.style.marginLeft = `-${w / 2}px`;
           }
           setPrevLoading(false);
         }, 600);

@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   position: relative;
   overflow: hidden;
 }
@@ -18,7 +18,7 @@
   position: absolute;
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(27,58,107,0.15) 0%, transparent 70%);
   top: -100px;
   right: -100px;
   pointer-events: none;
@@ -29,7 +29,7 @@
   position: absolute;
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(27,58,107,0.08) 0%, transparent 70%);
   bottom: -80px;
   left: -80px;
   pointer-events: none;
@@ -65,18 +65,18 @@
 .logoIconWrap {
   width: 42px;
   height: 42px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(96,165,250,0.15));
-  border: 1px solid rgba(129,140,248,0.35);
+  background: linear-gradient(135deg, rgba(27,58,107,0.35), rgba(21,48,90,0.2));
+  border: 1px solid rgba(147,181,217,0.3);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 0 24px rgba(99,102,241,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 0 24px rgba(27,58,107,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 
 .logoText {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.7rem;
   font-weight: 800;
   color: #fff;
@@ -84,14 +84,11 @@
 }
 
 .logoAi {
-  background: linear-gradient(135deg, #818CF8, #60A5FA);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #FBBF24;
 }
 
 .title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.75rem;
   font-weight: 700;
   color: #fff;
@@ -124,7 +121,7 @@
   padding: 13px 20px;
   border: none;
   border-radius: 12px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -223,7 +220,7 @@
 }
 
 .input {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   color: #fff;
   background: rgba(255,255,255,0.06);
@@ -238,16 +235,16 @@
 
 .input::placeholder { color: rgba(255,255,255,0.25); }
 .input:focus {
-  border-color: #6366F1;
-  background: rgba(99,102,241,0.08);
+  border-color: #1B3A6B;
+  background: rgba(27,58,107,0.08);
 }
 
 .emailBtn {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  background: linear-gradient(135deg, #1B3A6B 0%, #15305A 100%);
   border: none;
   border-radius: 12px;
   padding: 13px 20px;
@@ -257,12 +254,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  box-shadow: 0 4px 14px rgba(27,58,107,0.35);
 }
 
 .emailBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(99,102,241,0.45);
+  box-shadow: 0 8px 20px rgba(27,58,107,0.45);
 }
 .emailBtn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
@@ -316,7 +313,7 @@
 }
 
 .terms a {
-  color: #818CF8;
+  color: #93B5D9;
   text-decoration: none;
 }
 
@@ -330,7 +327,7 @@
   gap: 7px;
   margin-top: 20px;
   padding: 11px 20px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.88rem;
   font-weight: 500;
   color: rgba(255,255,255,0.5);
@@ -357,7 +354,7 @@
 .testLoginToggle {
   background: none;
   border: none;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.72rem;
   color: rgba(255,255,255,0.2);
   cursor: pointer;
@@ -375,7 +372,7 @@
 }
 
 .testInput {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.88rem;
   color: rgba(255,255,255,0.7);
   background: rgba(255,255,255,0.04);
@@ -398,7 +395,7 @@
 }
 
 .testSubmit {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.85rem;
   font-weight: 500;
   color: rgba(255,255,255,0.6);

@@ -1,7 +1,7 @@
 .page {
   min-height: 100vh;
   background: #F8FAFC;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
 }
 
 /* Шапка профиля */
@@ -48,9 +48,9 @@
   height: 130px;
   border-radius: 50%;
   padding: 3px;
-  background: linear-gradient(135deg, #6366F1 0%, #A78BFA 50%, #60A5FA 100%);
+  background: linear-gradient(135deg, #1B3A6B 0%, #D97706 50%, #60A5FA 100%);
   flex-shrink: 0;
-  box-shadow: 0 0 40px rgba(99,102,241,0.6), 0 10px 28px rgba(0,0,0,0.45);
+  box-shadow: 0 0 32px rgba(27,58,107,0.4), 0 10px 28px rgba(0,0,0,0.45);
 }
 
 .avatar {
@@ -74,7 +74,7 @@
   font-size: 2.8rem;
   font-weight: 700;
   color: #fff;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   border: 2px solid #0f172a;
   box-sizing: border-box;
 }
@@ -84,7 +84,7 @@
 }
 
 .heroName {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 2.1rem;
   font-weight: 700;
   color: #fff;
@@ -122,7 +122,7 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   line-height: 1.1;
 }
 
@@ -161,7 +161,7 @@
 }
 
 .bannerTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
@@ -215,7 +215,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -229,7 +229,7 @@
 }
 
 .bannerSuccessTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
@@ -247,11 +247,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.92rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
   border: none;
   border-radius: 10px;
   padding: 12px 22px;
@@ -259,12 +259,12 @@
   text-decoration: none;
   white-space: nowrap;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.4);
+  box-shadow: 0 4px 14px rgba(27,58,107,0.35);
 }
 
 .bannerSuccessBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99,102,241,0.5);
+  box-shadow: 0 6px 20px rgba(27,58,107,0.45);
 }
 
 /* Контент */
@@ -301,7 +301,7 @@
 }
 
 .blockTitle {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'PT Serif', Georgia, serif;
   font-size: 1.05rem;
   font-weight: 700;
   color: #0F172A;
@@ -343,7 +343,7 @@
 
 .input,
 .select {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.92rem;
   color: #0F172A;
   background: #F8FAFC;
@@ -359,7 +359,7 @@
 .input::placeholder { color: #94A3B8; }
 .input:focus,
 .select:focus {
-  border-color: #6366F1;
+  border-color: #1B3A6B;
   background: #fff;
 }
 
@@ -372,17 +372,17 @@
 
 /* Кнопка сохранить */
 .saveBtn {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  background: linear-gradient(135deg, #1B3A6B 0%, #15305A 100%);
   border: none;
   border-radius: 12px;
   padding: 14px 32px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.3);
+  box-shadow: 0 4px 14px rgba(27,58,107,0.3);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -390,7 +390,7 @@
 
 .saveBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+  box-shadow: 0 6px 20px rgba(27,58,107,0.4);
 }
 
 .saveBtn:disabled {

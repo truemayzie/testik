@@ -105,7 +105,7 @@ export default function HealthPage() {
             disabled={running}
             style={{
               padding: "9px 20px", borderRadius: 10, border: "none",
-              background: "linear-gradient(135deg,#6366F1,#8B5CF6)",
+              background: "#1B3A6B",
               color: "#fff", fontWeight: 600, fontSize: "0.9rem",
               cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.7 : 1,
             }}

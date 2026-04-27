@@ -37,8 +37,8 @@ export default function SignInPage() {
               <path d="M12 1L14.2 9.8L23 12L14.2 14.2L12 23L9.8 14.2L1 12L9.8 9.8Z" fill="url(#signinGrad)"/>
               <defs>
                 <linearGradient id="signinGrad" x1="1" y1="1" x2="23" y2="23" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#818CF8"/>
-                  <stop offset="1" stopColor="#60A5FA"/>
+                  <stop stopColor="#D97706"/>
+                  <stop offset="1" stopColor="#FBBF24"/>
                 </linearGradient>
               </defs>
             </svg>

@@ -16,6 +16,22 @@ export const metadata: Metadata = {
       { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
       { url: "/favicon.svg", type: "image/svg+xml" },
     ],
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    title: "Refai — Генератор учебных работ на ИИ",
+    description: "Рефераты, курсовые, ВКР за 2–8 минут. ГОСТ 7.32-2017, реальные источники, уникальность 70–90%.",
+    url: "https://ref-ai.ru",
+    siteName: "Refai",
+    images: [{ url: "https://ref-ai.ru/og-image.png", width: 1200, height: 630, alt: "Refai — Генератор учебных работ на ИИ" }],
+    locale: "ru_RU",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Refai — Генератор учебных работ на ИИ",
+    description: "Рефераты, курсовые, ВКР за 2–8 минут. ГОСТ, реальные источники.",
+    images: ["https://ref-ai.ru/og-image.png"],
   },
   verification: {
     google: 'p1ep5ZwgTpZLx_v2nbMaRLcqOVu5GdiWqhy1g7OC2-8',
@@ -35,6 +51,11 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="format-detection" content="telephone=no, email=no, address=no" />
+
+        {/* Preload критичных шрифтов — кириллица загружается первой */}
+        <link rel="preload" href="/fonts/golos-text-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/pt-serif-400-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/pt-serif-700-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
 
         {/* Google Analytics */}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-G1QKHNT5Y9" />

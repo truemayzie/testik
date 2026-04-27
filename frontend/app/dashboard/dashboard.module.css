@@ -1174,14 +1174,23 @@
   flex: 0 0 70%;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #E5E7EB;
+  background: #1e2a3a;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
+  background-size: 24px 24px;
   position: relative;
   border-radius: 20px 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .docPreviewContainer {
   min-height: 100%;
   padding: 16px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .docPreviewSpinner {
@@ -1191,9 +1200,9 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #64748B;
+  color: #94A3B8;
   font-size: 0.88rem;
-  background: #E5E7EB;
+  background: #1e2a3a;
   z-index: 5;
 }
 
