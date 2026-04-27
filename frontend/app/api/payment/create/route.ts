@@ -34,6 +34,17 @@ export async function POST(request: NextRequest) {
   const secretKey = process.env.YOKASSA_SECRET_KEY;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+  // Отменяем старые pending-платежи этого пользователя за этот тип работы
+  // (возникают когда пользователь возвращается назад в виджете и выбирает другой метод)
+  await prisma.payment.updateMany({
+    where: {
+      userId: user.id,
+      workType,
+      status: "pending",
+    },
+    data: { status: "canceled" },
+  });
+
   // Dev mode: no real YooKassa keys — auto-succeed
   if (!shopId || !secretKey) {
     const payment = await prisma.payment.create({

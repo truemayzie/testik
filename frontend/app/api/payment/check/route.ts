@@ -63,8 +63,11 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
+  const devMode = !process.env.YOKASSA_SHOP_ID;
+
   return NextResponse.json({
     hasPaid: !!payment,
     paymentId: payment?.id ?? null,
+    devMode,
   });
 }

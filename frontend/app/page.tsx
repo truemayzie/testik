@@ -1029,30 +1029,32 @@ export default function Home() {
           sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
         }
 
-        // Dev-режим: YOKASSA_SHOP_ID не задан — создаём платёж сразу, без виджета
-        setPaymentLoading(true);
-        const devCheckRes = await fetch("/api/payment/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workType, extras: formExtrasItems.length > 0 ? formExtrasItems : undefined }),
-        }).catch(() => null);
-        setPaymentLoading(false);
+        if (checkData.devMode) {
+          // Dev-режим: YOKASSA_SHOP_ID не задан — создаём платёж сразу, без виджета
+          setPaymentLoading(true);
+          const devCheckRes = await fetch("/api/payment/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workType, extras: formExtrasItems.length > 0 ? formExtrasItems : undefined }),
+          }).catch(() => null);
+          setPaymentLoading(false);
 
-        if (devCheckRes) {
-          const devData = await devCheckRes.json();
-          if (devData.paymentUrl) {
-            // Dev-режим: платёж уже succeeded, сразу запускаем генерацию
-            sessionStorage.removeItem("pendingGeneration");
-            if (formExtrasItems.length > 0) {
-              _pendingExtrasItems = formExtrasItems;
-              sessionStorage.removeItem("pendingExtrasChoice");
+          if (devCheckRes?.ok) {
+            const devData = await devCheckRes.json();
+            if (devData.paymentUrl) {
+              // Dev-режим: платёж уже succeeded, сразу запускаем генерацию
+              sessionStorage.removeItem("pendingGeneration");
+              if (formExtrasItems.length > 0) {
+                _pendingExtrasItems = formExtrasItems;
+                sessionStorage.removeItem("pendingExtrasChoice");
+              }
+              runGeneration(topic, pages, workType);
+              return;
             }
-            runGeneration(topic, pages, workType);
-            return;
           }
         }
 
-        // Prod: показываем виджет с выбором метода оплаты
+        // Prod: показываем виджет с выбором метода оплаты (payment/create вызывает сам виджет при выборе метода)
         setPaymentWidgetData({ workType, extras: formExtrasItems });
         return;
       }
