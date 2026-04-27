@@ -11,14 +11,5 @@ jobs:
       - name: Call Anthropic and callback
         run: |
           echo "${{ github.event.client_payload.body_b64 }}" | base64 -d > /tmp/body.json
-
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
-            -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
-            -d @/tmp/body.json)
-
-          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
-            -H "Content-Type: application/json" \
-            -H "X-Proxy-Secret: ${{ github.event.client_payload.secret }}" \
-            -d "$RESPONSE"
+          RESPONSE=$(curl -s -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d @/tmp/body.json https://api.anthropic.com/v1/messages)
+          curl -s -X POST -H "Content-Type: application/json" -H "X-Proxy-Secret: ${{ github.event.client_payload.secret }}" -d "$RESPONSE" "${{ github.event.client_payload.callback_url }}"
