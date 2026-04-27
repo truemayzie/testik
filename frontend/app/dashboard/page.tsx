@@ -71,6 +71,7 @@ export default function DashboardPage() {
 
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [giftWorkType, setGiftWorkType] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [deleting, setDeleting]       = useState<string | null>(null);
   const [copiedId, setCopiedId]       = useState<string | null>(null);
@@ -118,6 +119,15 @@ export default function DashboardPage() {
         .then(r => r.json())
         .then(data => { setGenerations(data); setLoadingList(false); })
         .catch(() => setLoadingList(false));
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/gift")
+        .then(r => r.json())
+        .then(data => { if (data.hasGift) setGiftWorkType(data.workType); })
+        .catch(() => {});
     }
   }, [status]);
 
@@ -481,6 +491,19 @@ export default function DashboardPage() {
           <a href="/" className={styles.newBtn}>⚡ Новая работа</a>
         </div>
       </div>
+
+      {giftWorkType && (
+        <div className={styles.giftBanner}>
+          <div className={styles.giftBannerInner}>
+            <span className={styles.giftIcon}>🎁</span>
+            <div className={styles.giftText}>
+              <strong>Подарок от команды Refai</strong>
+              <span>У вас есть бесплатная генерация — {giftWorkType}. Перейдите на главную и создайте работу!</span>
+            </div>
+            <a href="/" className={styles.giftBtn}>Использовать →</a>
+          </div>
+        </div>
+      )}
 
       <main className={styles.main}>
         <section className={styles.section}>

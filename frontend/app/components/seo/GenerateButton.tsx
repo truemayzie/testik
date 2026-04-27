@@ -2,7 +2,7 @@
 import { useSession } from 'next-auth/react'
 import styles from '@/app/[workType]/[slug]/seo-page.module.css'
 
-export function GenerateButton() {
+export function GenerateButton(_props: { workType?: string; title?: string }) {
   const { data: session } = useSession()
   const href = session ? '/' : '/auth/signin'
 
