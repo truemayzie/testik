@@ -6,6 +6,7 @@ import os
 import json
 import time
 import uuid
+import base64
 import socket
 import threading
 import requests
@@ -84,6 +85,8 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> str:
         "max_tokens": max_tokens,
         "messages": messages
     })
+    # base64-кодируем тело чтобы избежать проблем с кавычками в shell-скриптах GitHub Actions
+    body_b64 = base64.b64encode(body.encode("utf-8")).decode("ascii")
 
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -94,7 +97,7 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> str:
     payload = {
         "event_type": "anthropic-request",
         "client_payload": {
-            "body": body,
+            "body_b64": body_b64,
             "callback_url": f"{SERVER_URL}/{request_id}",
             "secret": CALLBACK_SECRET
         }
