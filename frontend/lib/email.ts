@@ -4,24 +4,51 @@
  * Дизайн: navy #061525 + amber #D97706 / #C9962A — повторяет палитру сайта.
  */
 
-const RESEND_API = "https://api.resend.com/emails";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import * as https from "https";
+
+const RESEND_HOST = "api.resend.com";
+const RESEND_PATH = "/emails";
+
+function resendRequest(payload: object): Promise<{ ok: boolean; body: string }> {
+  return new Promise((resolve, reject) => {
+    const body  = JSON.stringify(payload);
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+    const agent = proxy ? new HttpsProxyAgent(proxy) : undefined;
+    const req   = https.request(
+      {
+        hostname: RESEND_HOST,
+        port: 443,
+        path: RESEND_PATH,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+        agent,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => { data += c; });
+        res.on("end", () => resolve({ ok: (res.statusCode ?? 0) < 400, body: data }));
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error("resend timeout")); });
+    req.write(body);
+    req.end();
+  });
+}
 
 /** Обёртка над Resend API */
 export async function sendEmail(to: string, subject: string, html: string) {
   const from = process.env.EMAIL_FROM || "Refai <support@ref-ai.ru>";
-  const res = await fetch(RESEND_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to: [to], subject, html }),
-  });
+  const res = await resendRequest({ from, to: [to], subject, html });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend error: ${err}`);
+    throw new Error(`Resend error: ${res.body}`);
   }
-  return res.json();
+  return JSON.parse(res.body);
 }
 
 // ─── Базовый layout ──────────────────────────────────────────────────────────
