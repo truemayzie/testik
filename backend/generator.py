@@ -23,9 +23,13 @@ _session_cost: float = 0.0
 def ask(prompt: str, max_tokens: int = 8000) -> str:
     """Запрос к Claude API через GitHub Actions прокси."""
     global _session_cost
-    result = ask_via_github(MODEL, max_tokens, [{"role": "user", "content": prompt}])
-    print(f"[Proxy] Ответ получен, длина: {len(result)}")
-    return result
+    text, usage = ask_via_github(MODEL, max_tokens, [{"role": "user", "content": prompt}])
+    # claude-sonnet-4-5: $3/M input tokens, $15/M output tokens
+    input_tokens  = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    _session_cost += input_tokens * 3e-6 + output_tokens * 15e-6
+    print(f"[Proxy] Ответ получен, длина: {len(text)}, токены: {input_tokens}+{output_tokens}, стоимость сессии: ${_session_cost:.4f}")
+    return text
 
 
 def ask_json(prompt: str) -> dict:
@@ -668,6 +672,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
             "sources":   [],
             "meta":      {"Тип работы": "Тест", "Объём": "1 стр."},
             "profile":   profile or {},
+            "_cost_usd": round(_session_cost, 4),
         }
         print(f"[TOTAL] Тип: Тест | Тема: {topic[:40]}")
         return result
@@ -676,6 +681,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     if work_type in ("Сочинение", "Эссе"):
         result = generate_essay_or_composition(topic, pages, work_type)
         result["profile"] = profile or {}
+        result["_cost_usd"] = round(_session_cost, 4)
         print(f"{'='*50}")
         print(f"[TOTAL] Тип: {work_type} | Тема: {topic[:40]}")
         print(f"[TOTAL] Стоимость генерации: ${_session_cost:.4f}")
@@ -796,6 +802,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         "sources":   sources,
         "meta":      meta,
         "profile":   profile or {},
+        "_cost_usd": round(_session_cost, 4),
     }
 
 

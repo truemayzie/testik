@@ -231,12 +231,15 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        const data = await resultRes.json() as ReferatResult;
+        const data = await resultRes.json() as ReferatResult & { _cost_usd?: number };
 
         let savedId: string | undefined;
         try {
           const saved = await saveGeneration(user.id, body.topic, body.pages, workType, data);
           savedId = saved.id;
+
+          const costStr = data._cost_usd != null ? `\n💰 Стоимость: $${data._cost_usd.toFixed(4)}` : "";
+          tgNotify(`✅ <b>Генерация завершена</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»${costStr}`);
 
           // Отправляем письмо пользователю после успешной генерации
           const userEmail = session.user?.email;

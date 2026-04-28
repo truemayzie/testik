@@ -42,14 +42,17 @@ class CallbackHandler(BaseHTTPRequestHandler):
             data = json.loads(body)
             if "content" in data:
                 text = data["content"][0]["text"].strip()
+                usage = data.get("usage", {})
             elif "error" in data:
                 err = data["error"]
                 text = f"ERROR: Claude API {err.get('type', 'error')}: {err.get('message', str(err))}"
+                usage = {}
             else:
                 text = f"ERROR: Unexpected response keys: {list(data.keys())}"
-            _responses[request_id] = text
+                usage = {}
+            _responses[request_id] = {"text": text, "usage": usage}
         except Exception as e:
-            _responses[request_id] = f"ERROR: parse failed: {e} | body: {body[:200]}"
+            _responses[request_id] = {"text": f"ERROR: parse failed: {e} | body: {body[:200]}", "usage": {}}
 
         if request_id in _events:
             _events[request_id].set()
@@ -75,7 +78,7 @@ def start_callback_server():
         print(f"[Proxy] Callback сервер уже запущен или порт {CALLBACK_PORT} занят: {e}")
 
 
-def ask_via_github(model: str, max_tokens: int, messages: list) -> str:
+def ask_via_github(model: str, max_tokens: int, messages: list) -> tuple[str, dict]:
     request_id = uuid.uuid4().hex
     event = threading.Event()
     _events[request_id] = event
@@ -117,12 +120,18 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> str:
     if not event.wait(timeout=300):
         raise Exception("Timeout: GitHub Actions не ответил за 5 минут")
 
-    result = _responses.pop(request_id, None)
+    entry = _responses.pop(request_id, None)
     _events.pop(request_id, None)
 
-    if result and result.startswith("ERROR:"):
-        raise Exception(result)
+    if entry is None:
+        raise Exception("ERROR: no response stored")
 
-    return result
+    text  = entry["text"]
+    usage = entry["usage"]
+
+    if text.startswith("ERROR:"):
+        raise Exception(text)
+
+    return text, usage
 
 
