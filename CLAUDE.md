@@ -284,6 +284,52 @@ YOKASSA_SECRET_KEY=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
+## Инфраструктура (prod-сервер)
+
+**ОС:** Ubuntu 22.04 LTS, 2 vCPU, 2 GB RAM, 30 GB SSD (хостинг Timeweb Cloud)
+
+**Процессы (PM2):**
+- `frontend` — Next.js :3000
+- `backend` — uvicorn FastAPI :8000
+- `tg-bot` — Telegram-бот (Python)
+- `vpn` — sing-box (VPN)
+
+**Nginx:** reverse proxy для ref-ai.ru. Правило: специфичные `location /api/foo` → Next.js:3000 (с авторизацией). Фолбэк `location /api/` → FastAPI:8000 (без авторизации, только публичные эндпоинты: `/api/slots`).
+
+**Proxy для исходящих запросов:** Privoxy (:8118). Backend и Claude Code используют `HTTPS_PROXY=http://127.0.0.1:8118` / `ALL_PROXY=http://127.0.0.1:8118` (прописаны в `.bashrc`). Запускать `claude` напрямую — без `proxychains4`.
+
+**SSL:** Let's Encrypt, auto-renew certbot.
+
+**БД:** SQLite (`frontend/prisma/dev.db`). Prisma ORM.
+
+## Безопасность
+
+### Что защищено
+- Все генерация-эндпоинты проходят через NextAuth (`getServerSession`) — проверка сессии + роли
+- Платёжный вебхук верифицирует статус запросом к YooKassa API (не слепо доверяет payload)
+- Оплата помечается `usedAt` атомарно (`updateMany` с `where: { usedAt: null }`) — защита от двойной траты
+- Admin API защищён `adminGuard.ts` (role=admin из БД, не из токена)
+- `/proxy-callback/` принимает только запросы с корректным `X-Proxy-Secret` заголовком
+- HTTPS enforced: HTTP (порт 80) делает 301 → HTTPS
+
+### Security headers (nginx, HTTPS)
+```
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+### Известные ограничения
+- Rate limiting только на уровне приложения (1 активная генерация на юзера + 5 в день), не на уровне nginx
+- Backend FastAPI не имеет своей аутентификации — защита обеспечивается nginx routing (специфичные locations → Next.js)
+- `_extras_jobs` в памяти не очищаются автоматически — утечка памяти при долгой работе без рестарта
+
+### Изменения 2026-04-28 (security audit)
+- Удалён `/etc/nginx/sites-enabled/ref-ai` — старый HTTP-конфиг с `/api/backend/` (прямой доступ к FastAPI без авторизации) и сломанным HTTPS-редиректом
+- Добавлены security headers в HTTPS nginx блок
+- Убран `LD_PRELOAD=libproxychains.so.4` из backend PM2-окружения — теперь используется privoxy через `HTTPS_PROXY`
+
 ## Статус реализации
 
 - ✅ Генерация всех типов работ (Сочинение, Эссе, Доклад, Реферат, Курсовая, ВКР)

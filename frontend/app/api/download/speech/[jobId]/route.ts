@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { jobId: string } },
 ) {
+  const session = await getServerSession(authOptions);
+  if (!(session?.user as { id?: string } | null)?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const res = await fetch(
       `${BACKEND_URL}/api/download/speech/${params.jobId}`,

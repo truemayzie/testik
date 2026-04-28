@@ -67,7 +67,7 @@ class ReusableTCPServer(HTTPServer):
 
 def start_callback_server():
     try:
-        server = ReusableTCPServer(("0.0.0.0", CALLBACK_PORT), CallbackHandler)
+        server = ReusableTCPServer(("127.0.0.1", CALLBACK_PORT), CallbackHandler)
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
         print(f"[Proxy] Callback сервер запущен на порту {CALLBACK_PORT}")
