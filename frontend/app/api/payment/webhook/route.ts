@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { tgNotify } from "@/lib/tgNotify";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,10 +37,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (event.type === "payment.succeeded") {
+      const payment = await prisma.payment.findFirst({
+        where: { yokassaId },
+        include: { user: { select: { name: true, email: true } } },
+      });
       await prisma.payment.updateMany({
         where: { yokassaId },
         data:  { status: "succeeded" },
       });
+      const amount = event.object?.amount?.value;
+      const name = payment?.user?.name || payment?.user?.email || "—";
+      tgNotify(`💳 <b>Оплата получена</b>\n👤 ${name}\n📄 ${payment?.workType || "—"}\n💰 ${amount} ₽`);
       console.log("[webhook] Платёж подтверждён:", yokassaId);
     }
 

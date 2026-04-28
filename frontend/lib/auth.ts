@@ -7,6 +7,7 @@ import EmailProvider from "next-auth/providers/email";
 import { prisma } from "./prisma";
 import { magicLinkHtml } from "./email";
 import { getDeviceId, deleteDeviceId } from "./vk-device-store";
+import { tgNotify } from "./tgNotify";
 
 // ── Яндекс провайдер ─────────────────────────────────────────────
 const YandexProvider = {
@@ -196,6 +197,12 @@ export const authOptions: NextAuthOptions = {
         (session.user as typeof session.user & { id: string; role: string; banned: boolean }).banned = u.banned ?? false;
       }
       return session;
+    },
+  },
+
+  events: {
+    async createUser({ user }) {
+      tgNotify(`👤 <b>Новый пользователь</b>\n${user.name || "—"} (${user.email || "без email"})`);
     },
   },
 

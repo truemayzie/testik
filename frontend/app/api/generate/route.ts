@@ -6,6 +6,7 @@ import { saveGeneration } from "@/lib/db";
 import type { ReferatResult } from "@/lib/db";
 import { activeJobs } from "@/app/lib/activeJobs";
 import { sendEmail, generationReadyHtml } from "@/lib/email";
+import { tgNotify } from "@/lib/tgNotify";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
     jobId = id;
     // Регистрируем задание — для poll-эндпоинта при восстановлении после F5
     activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType });
+    tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»\n📃 ${body.pages} стр.`);
   } catch (err) {
     console.error("[generate] Не удалось запустить задание:", err);
     await revertPayment(paymentId);
