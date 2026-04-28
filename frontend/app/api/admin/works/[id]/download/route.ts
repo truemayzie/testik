@@ -21,7 +21,7 @@ export async function GET(
 
   const result = JSON.parse(generation.result);
 
-  const docxRes = await fetch("http://localhost:8000/api/download/referat", {
+  const docxRes = await fetch("http://127.0.0.1:8000/api/download/referat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(result),

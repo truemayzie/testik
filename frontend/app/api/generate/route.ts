@@ -8,7 +8,7 @@ import { activeJobs } from "@/app/lib/activeJobs";
 import { sendEmail, generationReadyHtml } from "@/lib/email";
 import { tgNotify } from "@/lib/tgNotify";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 /** Максимальное время ожидания результата от backend (25 минут). */
 const MAX_WAIT_MS   = 25 * 60 * 1000;
