@@ -609,13 +609,15 @@ export default function DashboardPage() {
                           )}
                         </div>
                       )}
-                      <button
-                        className={styles.deleteBtn}
-                        onClick={() => handleDelete(gen.id)}
-                        disabled={deleting === gen.id}
-                      >
-                        {deleting === gen.id ? <span className={styles.btnSpinner} /> : "✕"}
-                      </button>
+                      {(user as typeof user & { role?: string })?.role === "admin" && (
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDelete(gen.id)}
+                          disabled={deleting === gen.id}
+                        >
+                          {deleting === gen.id ? <span className={styles.btnSpinner} /> : "✕"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

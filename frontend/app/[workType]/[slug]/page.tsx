@@ -1,15 +1,9 @@
 import { notFound } from 'next/navigation'
-import { getSeoPageBySlug, getAllSeoPages, getSeoPagesByType } from '@/lib/seo-pages'
+import { getSeoPageBySlug, getSeoPagesByType } from '@/lib/seo-pages'
 import { GenerateButton } from '@/app/components/seo/GenerateButton'
 import styles from './seo-page.module.css'
 
-export async function generateStaticParams() {
-  const pages = await getAllSeoPages()
-  return pages.map((page) => ({
-    workType: page.workType,
-    slug: page.slug,
-  }))
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: { workType: string; slug: string } }) {
   const page = await getSeoPageBySlug(params.slug)

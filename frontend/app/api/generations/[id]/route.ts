@@ -25,17 +25,20 @@ export async function GET(
   return NextResponse.json(generation);
 }
 
-// DELETE — удалить генерацию
+// DELETE — только для администраторов
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const user = session?.user as ({ id: string; role: string } & Record<string, unknown>) | undefined;
+  if (!user) {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
   }
+  if (user.role !== "admin") {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+  }
 
-  const userId = (session.user as typeof session.user & { id: string }).id;
-  await deleteGeneration(params.id, userId);
+  await deleteGeneration(params.id, user.id);
   return NextResponse.json({ success: true });
 }
