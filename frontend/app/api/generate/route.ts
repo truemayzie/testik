@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const sessionUserId = (session?.user as { id?: string } | null)?.id;
   if (!session?.user || !sessionUserId) {
+    console.warn("[generate] unauthorized request");
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
 
   // Тип «Тест» — только для администраторов
   if (workType === "Тест" && !isAdmin) {
+    console.warn("[generate] forbidden test work type", { userId: user.id });
     return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
   } else if (isYukassa) {
     // Проверяем ограничение по типу работы
     if (!YUKASSA_ALLOWED_TYPES.includes(workType)) {
+      console.warn("[generate] yukassa trial restricted", { userId: user.id, workType });
       return NextResponse.json(
         { error: "Тестовому аккаунту доступны только: Сочинение, Эссе, Доклад", code: "TRIAL_RESTRICTED" },
         { status: 403 }
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
     // Проверяем лимит генераций (только 1)
     const genCount = await prisma.generation.count({ where: { userId: user.id } });
     if (genCount >= 1) {
+      console.warn("[generate] yukassa trial already used", { userId: user.id });
       return NextResponse.json(
         { error: "Пробная генерация уже использована. Работа доступна в разделе «Мои работы».", code: "TRIAL_USED" },
         { status: 403 }
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
     if (!payment) {
+      console.warn("[generate] payment required", { userId: user.id, workType });
       return NextResponse.json(
         { error: "Требуется оплата", code: "PAYMENT_REQUIRED", workType },
         { status: 403 }
@@ -99,6 +104,7 @@ export async function POST(request: NextRequest) {
 
   // Проверка 1: активная генерация у этого юзера
   if (activeJobs.get(user.id)) {
+    console.warn("[generate] active job already exists", { userId: user.id });
     return NextResponse.json(
       { error: "У вас уже идёт генерация. Дождитесь завершения." },
       { status: 429 }
@@ -117,6 +123,7 @@ export async function POST(request: NextRequest) {
       },
     });
     if (todayCount >= 5) {
+      console.warn("[generate] daily limit exceeded", { userId: user.id, todayCount });
       return NextResponse.json(
         { error: "Дневной лимит генераций исчерпан. Попробуйте завтра." },
         { status: 429 }
@@ -158,6 +165,7 @@ export async function POST(request: NextRequest) {
     jobId = id;
     // Регистрируем задание — для poll-эндпоинта при восстановлении после F5
     activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType, paymentId });
+    console.info("[generate] job started", { userId: user.id, jobId, workType });
     tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»\n📃 ${body.pages} стр.`);
   } catch (err) {
     console.error("[generate] Не удалось запустить задание:", err);

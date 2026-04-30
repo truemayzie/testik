@@ -21,6 +21,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   const userId = getUserId(session);
   if (!userId) {
+    console.warn("[profile] unauthorized GET");
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
@@ -44,6 +45,7 @@ export async function PATCH(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = getUserId(session);
   if (!userId) {
+    console.warn("[profile] unauthorized PATCH");
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 

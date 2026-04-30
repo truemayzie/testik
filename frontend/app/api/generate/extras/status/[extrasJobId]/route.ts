@@ -19,10 +19,12 @@ export async function GET(
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | null)?.id;
   if (!userId) {
+    console.warn("[extras/status] unauthorized request", { extrasJobId: params.extrasJobId });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const job = await prisma.extrasJob.findUnique({ where: { id: params.extrasJobId } });
   if (!job || job.userId !== userId) {
+    console.warn("[extras/status] forbidden request", { userId, extrasJobId: params.extrasJobId });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -33,6 +35,11 @@ export async function GET(
     );
     if (!res.ok) return NextResponse.json({ status: "error", ready: [] });
     const data = await res.json();
+    if (data.status === "done") {
+      console.info("[extras/status] job done", { userId, extrasJobId: params.extrasJobId });
+    } else if (data.status === "error") {
+      console.error("[extras/status] job error", { userId, extrasJobId: params.extrasJobId, error: data.error });
+    }
     if (data.status === "done" || data.status === "error" || data.status === "not_found") {
       await prisma.extrasJob.delete({ where: { id: params.extrasJobId } }).catch(() => {});
     }

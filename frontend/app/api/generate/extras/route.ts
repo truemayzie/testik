@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | null)?.id;
   if (!session?.user || !userId) {
+    console.warn("[extras] unauthorized request");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
         create: { id: data.extrasJobId, userId },
         update: { userId },
       });
+      console.info("[extras] job started", { userId, extrasJobId: data.extrasJobId });
     }
     return NextResponse.json(data);
   } catch (err) {

@@ -22,6 +22,9 @@ const YandexProvider = {
   userinfo: "https://login.yandex.ru/info?format=json",
   clientId: process.env.YANDEX_CLIENT_ID!,
   clientSecret: process.env.YANDEX_CLIENT_SECRET!,
+  httpOptions: {
+    timeout: 15000,
+  },
   profile(profile: {
     id: string;
     real_name?: string;
@@ -132,6 +135,9 @@ const VKProvider = {
   },
   clientId: process.env.VK_CLIENT_ID!,
   clientSecret: process.env.VK_CLIENT_SECRET!,
+  httpOptions: {
+    timeout: 15000,
+  },
   profile(profile: {
     id: string;
     name: string;

@@ -302,6 +302,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - Важный explicit-проксируемый маршрут: `/api/gift` должен идти в Next.js (`3000`), иначе будет 404 от FastAPI-фолбэка.
 
 **Proxy для исходящих запросов:** Privoxy (:8118). Backend и Claude Code используют `HTTPS_PROXY=http://127.0.0.1:8118` / `ALL_PROXY=http://127.0.0.1:8118` (прописаны в `.bashrc`). Запускать `claude` напрямую — без `proxychains4`.
+- Для PM2 HTTP-процессов (`frontend`, `backend`) не использовать `LD_PRELOAD=libproxychains.so.4` (ломает OAuth/HTTP callbacks). Допустим только стандартный proxy через `HTTPS_PROXY`/`ALL_PROXY`.
 
 **SSL:** Let's Encrypt, auto-renew certbot.
 

@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | null)?.id;
   if (!userId) {
+    console.warn("[generate/poll] unauthorized request");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
       select: { id: true, slug: true },
     });
     if (saved) {
+      console.info("[generate/poll] result found in db", { userId, generationId: saved.id });
       return NextResponse.json({ status: "done", slug: saved.slug, id: saved.id });
     }
   }
@@ -50,6 +52,7 @@ export async function GET(request: NextRequest) {
   // 2. Проверяем активное задание в памяти
   const job = activeJobs.get(userId);
   if (!job) {
+    console.info("[generate/poll] idle", { userId });
     // Нет активного задания и нет результата в БД
     return NextResponse.json({ status: "idle" });
   }
@@ -66,11 +69,13 @@ export async function GET(request: NextRequest) {
     const { status, error } = await statusRes.json();
 
     if (status === "not_found") {
+      console.warn("[generate/poll] backend job not found", { userId, jobId: job.jobId });
       await revertPayment(job.paymentId);
       activeJobs.clear(userId);
       return NextResponse.json({ status: "not_found" });
     }
     if (status === "error") {
+      console.error("[generate/poll] backend job error", { userId, jobId: job.jobId, error });
       await revertPayment(job.paymentId);
       activeJobs.clear(userId);
       return NextResponse.json({ status: "error", error });
@@ -86,6 +91,7 @@ export async function GET(request: NextRequest) {
         }
         const data = await resultRes.json() as ReferatResult & { _cost_usd?: number };
         const saved = await saveGeneration(userId, job.topic, job.pages, job.workType, data);
+        console.info("[generate/poll] job finalized", { userId, jobId: job.jobId, generationId: saved.id });
 
         const user = await prisma.user.findUnique({
           where: { id: userId },
@@ -110,7 +116,8 @@ export async function GET(request: NextRequest) {
             ? { status: "done", slug: saved.slug, id: saved.id, result: data }
             : { status: "done", slug: saved.slug, id: saved.id }
         );
-      } catch {
+      } catch (err) {
+        console.error("[generate/poll] finalize error", { userId, jobId: job.jobId, err });
         return NextResponse.json({ status: "running" });
       }
     }
