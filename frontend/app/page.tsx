@@ -349,7 +349,7 @@ const FUN_FACTS = [
 ];
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
 
   // Тестовый аккаунт ЮКасса
@@ -546,6 +546,23 @@ export default function Home() {
       setDownloading(false);
     }
   }
+
+  // Сброс состояния генерации при смене пользователя
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (sessionStatus === "loading") return;
+    const userId = (session?.user as { id?: string } | null)?.id;
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+      _gen.cancel();
+      clearGenState();
+      sessionStorage.removeItem("activeGeneration");
+      sessionStorage.removeItem("pendingGeneration");
+      setLoading(false);
+      setResult(null);
+      setError(null);
+    }
+    prevUserIdRef.current = userId;
+  }, [session, sessionStatus]);
 
   useEffect(() => {
     if (result) {

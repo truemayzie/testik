@@ -18,7 +18,7 @@ load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 CALLBACK_PORT = 9876
-CALLBACK_SECRET = os.getenv("PROXY_SECRET", "ref-ai-secret-2024")
+CALLBACK_SECRET = os.getenv("PROXY_SECRET")
 SERVER_URL = "https://ref-ai.ru/proxy-callback"
 
 _responses: dict = {}
@@ -69,6 +69,8 @@ class ReusableTCPServer(HTTPServer):
 
 
 def start_callback_server():
+    if not CALLBACK_SECRET:
+        raise RuntimeError("PROXY_SECRET is required for github proxy callback server")
     try:
         server = ReusableTCPServer(("127.0.0.1", CALLBACK_PORT), CallbackHandler)
         t = threading.Thread(target=server.serve_forever, daemon=True)

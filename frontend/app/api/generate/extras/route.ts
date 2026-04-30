@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const userId = (session?.user as { id?: string } | null)?.id;
+  if (!session?.user || !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,6 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json();
+    if (typeof data?.extrasJobId === "string" && data.extrasJobId.length > 0) {
+      await prisma.extrasJob.upsert({
+        where: { id: data.extrasJobId },
+        create: { id: data.extrasJobId, userId },
+        update: { userId },
+      });
+    }
     return NextResponse.json(data);
   } catch (err) {
     console.error("[extras] Backend error:", err);

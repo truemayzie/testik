@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +11,16 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: { extrasJobId: string } },
 ) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | null)?.id;
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const job = await prisma.extrasJob.findUnique({ where: { id: params.extrasJobId } });
+  if (!job || job.userId !== userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const res = await fetch(
       `${BACKEND_URL}/api/generate/extras/status/${params.extrasJobId}`,
@@ -15,6 +28,9 @@ export async function GET(
     );
     if (!res.ok) return NextResponse.json({ status: "error", ready: [] });
     const data = await res.json();
+    if (data.status === "done" || data.status === "error" || data.status === "not_found") {
+      await prisma.extrasJob.delete({ where: { id: params.extrasJobId } }).catch(() => {});
+    }
     return NextResponse.json(data, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     });
