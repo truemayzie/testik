@@ -12,6 +12,7 @@ import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
 import { useModalContext } from "./lib/ModalContext";
+import { useModalA11y } from "./lib/useModalA11y";
 import styles from "./page.module.css";
 import PresentationViewer, { type Slide } from "./components/PresentationViewer";;
 
@@ -24,6 +25,9 @@ type ReferatResult = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   profile?: Record<string, any>;
 };
+
+const GENERATE_MAX_WAIT_MS = 25 * 60 * 1000;
+const GENERATE_POLL_MS = 5_000;
 
 type TitleForm = {
   fullName: string;
@@ -394,6 +398,8 @@ export default function Home() {
   const [showTitleModal, setShowTitleModal]   = useState(false);
   const previewContainerRef                   = useRef<HTMLDivElement>(null);
   const baseScaleRef                          = useRef<number>(1);
+  const resultModalRef                        = useRef<HTMLDivElement>(null);
+  const resultModalCloseRef                   = useRef<HTMLButtonElement>(null);
   const [previewZoom, setPreviewZoom]         = useState(1);
   const [bannerDismissed, setBannerDismissed] = useState(true); // true пока не проверили
   const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
@@ -704,6 +710,21 @@ export default function Home() {
     applyScale(container, baseScaleRef.current * next);
   }
 
+  function closeResultModal() {
+    setModalClosing(true);
+    setTimeout(() => {
+      setShowResultModal(false);
+      setModalClosing(false);
+    }, 200);
+  }
+
+  useModalA11y({
+    active: !!(result && showResultModal) && !showTitleModal,
+    containerRef: resultModalRef,
+    initialFocusRef: resultModalCloseRef,
+    onClose: closeResultModal,
+  });
+
   // Блокируем скролл фона когда модал открыт.
   // position:fixed надёжнее overflow:hidden на iOS Safari.
   useEffect(() => {
@@ -824,8 +845,8 @@ export default function Home() {
         body: JSON.stringify({ topic: t, pages: p, workType: wt }),
       });
       const data = await response.json();
-      stopProgress();
       if (!response.ok) {
+        stopProgress();
         if (data.code === "PAYMENT_REQUIRED") {
           _gen.cancel();
           clearGenState();
@@ -844,20 +865,46 @@ export default function Home() {
         _gen.resolve(null, errMsg);
         setError({ message: errMsg, status: response.status });
       } else {
-        // Извлекаем _generationId из ответа (не должен попасть в ReferatResult)
-        const { _generationId, ...resultData } = data as ReferatResult & { _generationId?: string };
-        if (_generationId) { setGenerationId(_generationId); _extrasGenId = _generationId; }
-        _gen.resolve(resultData as ReferatResult, "");
-        setResult(resultData as ReferatResult);
-        if (resultData.structure?.length > 0) setActiveSection(resultData.structure[0]);
-        if (isYukassa) setTrialUsed(true);
-        // Автозапуск extras если были предварительно выбраны
-        if (_pendingExtrasItems && _pendingExtrasItems.length > 0) {
-          const items = [..._pendingExtrasItems];
-          _pendingExtrasItems = null;
-          setExtrasGenerating(true);
-          setTimeout(() => triggerExtrasGeneration(items, resultData as ReferatResult), 50);
+        const deadline = Date.now() + GENERATE_MAX_WAIT_MS;
+        while (Date.now() < deadline) {
+          const pollRes = await fetch(
+            `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${_gen.startedAt}&includeResult=1`,
+            { cache: "no-store" }
+          );
+          const pollData = await pollRes.json();
+
+          if (pollData.status === "done" && pollData.result) {
+            stopProgress();
+            const resultData = pollData.result as ReferatResult;
+            if (pollData.id) { setGenerationId(pollData.id); _extrasGenId = pollData.id; }
+            _gen.resolve(resultData, "");
+            setResult(resultData);
+            if (resultData.structure?.length > 0) setActiveSection(resultData.structure[0]);
+            if (isYukassa) setTrialUsed(true);
+            if (_pendingExtrasItems && _pendingExtrasItems.length > 0) {
+              const items = [..._pendingExtrasItems];
+              _pendingExtrasItems = null;
+              setExtrasGenerating(true);
+              setTimeout(() => triggerExtrasGeneration(items, resultData), 50);
+            }
+            return;
+          }
+
+          if (pollData.status === "error" || pollData.status === "not_found") {
+            stopProgress();
+            const errMsg = pollData.error || "Сервис сейчас перегружен. Попробуйте снова.";
+            _gen.resolve(null, errMsg);
+            setError({ message: errMsg, status: 503 });
+            return;
+          }
+
+          await new Promise(r => setTimeout(r, GENERATE_POLL_MS));
         }
+
+        stopProgress();
+        const errMsg = "Превышено время ожидания (25 минут). Попробуйте снова.";
+        _gen.resolve(null, errMsg);
+        setError({ message: errMsg, status: 503 });
       }
     } catch (err) {
       console.error('[Refai] Ошибка генерации:', err);
@@ -2104,7 +2151,6 @@ export default function Home() {
         const hasSources   = !["Эссе", "Сочинение"].includes(workType);
         const hasExtras    = !["Эссе", "Сочинение"].includes(workType);
         const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 149 : 0);
-        const closeModal   = () => { setModalClosing(true); setTimeout(() => { setShowResultModal(false); setModalClosing(false); }, 200); };
         const DownloadBtn  = () => modalTab === "presentation" && hasPres ? (
           <button className={styles.downloadBtn} onClick={downloadPresentation} disabled={downloadingPptx}
             style={{ background: downloadingPptx ? "#374151" : "#1E3A5F" }}>
@@ -2186,21 +2232,27 @@ export default function Home() {
 
         return (
           <div className={`${styles.modalOverlay} ${modalClosing ? styles.modalOverlayClosing : ""}`}>
-            <div className={`${styles.modalBox} ${modalClosing ? styles.modalBoxClosing : ""}`}>
+            <div
+              ref={resultModalRef}
+              className={`${styles.modalBox} ${modalClosing ? styles.modalBoxClosing : ""}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="result-modal-title"
+            >
 
               {/* Крестик — только на десктопе */}
-              <button className={styles.modalClose} onClick={closeModal}>✕</button>
+              <button ref={resultModalCloseRef} className={styles.modalClose} onClick={closeResultModal}>✕</button>
 
               {/* Мобильная шапка (скрыта на десктопе) */}
               <div className={styles.mobileModalHeader}>
                 <div>
-                  <h2 className={styles.modalTitle}>{result.title}</h2>
+                  <h2 id="result-modal-title" className={styles.modalTitle}>{result.title}</h2>
                   <div className={styles.modalBadges}>
                     <span className={styles.badge}>{workType}</span>
                     <span className={styles.badge}>{pages} стр.</span>
                   </div>
                 </div>
-                <button className={styles.mobileCloseBtn} onClick={closeModal}>✕</button>
+                <button className={styles.mobileCloseBtn} onClick={closeResultModal}>✕</button>
               </div>
 
               {/* Табы */}

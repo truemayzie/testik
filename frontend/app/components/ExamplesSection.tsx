@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import styles from "./ExamplesSection.module.css";
+import { useModalA11y } from "../lib/useModalA11y";
 
 type Example = {
   type: string;
@@ -70,6 +71,8 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
   const previewRef                  = useRef<HTMLDivElement>(null);
   const baseScaleRef                = useRef(1);
   const [mounted, setMounted]       = useState(false);
+  const modalRef                    = useRef<HTMLDivElement>(null);
+  const closeBtnRef                 = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -149,18 +152,22 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
     }).catch(() => setPrevLoading(false));
   }, [docxBuf]);
 
-  // Escape key + scroll lock
+  // Scroll lock
   useEffect(() => {
     if (!selected) return;
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeModal(); };
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
+
+  useModalA11y({
+    active: !!selected,
+    containerRef: modalRef,
+    initialFocusRef: closeBtnRef,
+    onClose: closeModal,
+  });
 
   function openModal(ex: Example) {
     setSelected(ex);
@@ -188,11 +195,15 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
       onClick={closeModal}
     >
       <div
+        ref={modalRef}
         className={`${styles.box} ${closing ? styles.boxClosing : ""}`}
         onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="examples-modal-title"
       >
         {/* Close */}
-        <button className={styles.closeBtn} onClick={closeModal} aria-label="Закрыть">
+        <button ref={closeBtnRef} className={styles.closeBtn} onClick={closeModal} aria-label="Закрыть">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -229,7 +240,7 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
               {selected.type}
             </span>
 
-            <h2 className={styles.modalTitle}>{selected.topic}</h2>
+            <h2 id="examples-modal-title" className={styles.modalTitle}>{selected.topic}</h2>
 
             <hr className={styles.divider} />
 

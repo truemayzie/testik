@@ -41,6 +41,9 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
   const widgetRef                       = useRef<any>(null);
   const cardInitRef                     = useRef(false);
   const [confirmationToken, setConfirmationToken] = useState("");
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const prevFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -54,6 +57,48 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
       sbpTimerRef.current && clearInterval(sbpTimerRef.current);
       widgetRef.current?.destroy?.();
     };
+  }, []);
+
+  // Делаем модалку доступной с клавиатуры: фокус внутрь и возврат фокуса назад.
+  useEffect(() => {
+    prevFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeBtnRef.current?.focus();
+    return () => {
+      prevFocusedRef.current?.focus();
+    };
+  }, []);
+
+  // Escape закрывает модалку, Tab не выходит за её пределы (focus trap).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!modalRef.current) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+      );
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   // Инициализация виджета карты когда экран = "card" и токен получен
@@ -184,13 +229,19 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
 
   return createPortal(
     <div className={styles.backdrop} onClick={e => { if (e.target === e.currentTarget) handleClose(); }}>
-      <div className={styles.card}>
-        <button className={styles.closeBtn} onClick={handleClose} aria-label="Закрыть">✕</button>
+      <div
+        ref={modalRef}
+        className={styles.card}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-widget-title"
+      >
+        <button ref={closeBtnRef} className={styles.closeBtn} onClick={handleClose} aria-label="Закрыть">✕</button>
 
         {/* ── Экран выбора метода ── */}
         {screen === "select" && (
           <>
-            <h2 className={styles.title}>Оплата заказа</h2>
+            <h2 id="payment-widget-title" className={styles.title}>Оплата заказа</h2>
             <p className={styles.subtitle}>Безопасная оплата через ЮКассу</p>
             {error && <p className={styles.errorBanner}>⚠ {error}</p>}
             <div className={styles.methods}>
@@ -243,7 +294,7 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
         {screen === "sbp" && (
           <>
             <button className={styles.backBtn} onClick={() => { stopSbp(); setScreen("select"); setError(""); }}>← Назад</button>
-            <h2 className={styles.title}>Оплата через СБП</h2>
+            <h2 id="payment-widget-title" className={styles.title}>Оплата через СБП</h2>
 
             {isMobile ? (
               <div className={styles.sbpMobile}>
@@ -286,7 +337,7 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
         {screen === "card" && (
           <>
             <button className={styles.backBtn} onClick={() => { widgetRef.current?.destroy?.(); cardInitRef.current = false; setConfirmationToken(""); setCardLoading(true); setScreen("select"); setError(""); }}>← Назад</button>
-            <h2 className={styles.title}>Оплата картой</h2>
+            <h2 id="payment-widget-title" className={styles.title}>Оплата картой</h2>
             {cardLoading && !error && (
               <div className={styles.spinnerWrap}>
                 <div className={styles.spinner} />

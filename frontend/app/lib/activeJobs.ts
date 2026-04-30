@@ -8,6 +8,7 @@ interface JobInfo {
   topic:    string;
   pages:    number;
   workType: string;
+  paymentId?: string | null;
 }
 
 const jobs = new Map<string, JobInfo>();

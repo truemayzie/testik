@@ -2,18 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { saveGeneration } from "@/lib/db";
-import type { ReferatResult } from "@/lib/db";
 import { activeJobs } from "@/app/lib/activeJobs";
-import { sendEmail, generationReadyHtml } from "@/lib/email";
 import { tgNotify } from "@/lib/tgNotify";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
-
-/** Максимальное время ожидания результата от backend (25 минут). */
-const MAX_WAIT_MS   = 25 * 60 * 1000;
-/** Интервал опроса статуса задания. */
-const POLL_INTERVAL = 5_000;
 
 /** Типы работ, доступные тестовому аккаунту ЮКасса */
 const YUKASSA_ALLOWED_TYPES = ["Сочинение", "Эссе", "Доклад"];
@@ -165,7 +157,7 @@ export async function POST(request: NextRequest) {
     }
     jobId = id;
     // Регистрируем задание — для poll-эндпоинта при восстановлении после F5
-    activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType });
+    activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType, paymentId });
     tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»\n📃 ${body.pages} стр.`);
   } catch (err) {
     console.error("[generate] Не удалось запустить задание:", err);
@@ -176,113 +168,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── Шаг 2: опрашиваем статус каждые 5 секунд ─────────────────────────────
-  const deadline = Date.now() + MAX_WAIT_MS;
-
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL));
-
-    let status: string;
-    let jobError: string | undefined;
-
-    try {
-      const statusRes = await fetch(
-        `${BACKEND_URL}/api/generate/status/${jobId}`,
-        { signal: AbortSignal.timeout(10_000) }
-      );
-      if (!statusRes.ok) continue;
-      const json = await statusRes.json();
-      status   = json.status;
-      jobError = json.error;
-    } catch {
-      continue;
-    }
-
-    if (status === "not_found") {
-      activeJobs.clear(user.id);
-      await revertPayment(paymentId);
-      return NextResponse.json(
-        { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
-        { status: 503 }
-      );
-    }
-
-    if (status === "error") {
-      activeJobs.clear(user.id);
-      await revertPayment(paymentId);
-      console.error("[generate] Backend error:", jobError);
-      return NextResponse.json(
-        { error: "Сервис сейчас перегружен. Ваш баланс не списан — попробуйте через минуту." },
-        { status: 500 }
-      );
-    }
-
-    if (status === "done") {
-      try {
-        const resultRes = await fetch(
-          `${BACKEND_URL}/api/generate/result/${jobId}`,
-          { signal: AbortSignal.timeout(30_000) }
-        );
-        if (!resultRes.ok) {
-          await revertPayment(paymentId);
-          return NextResponse.json(
-            { error: "Не удалось получить результат от backend" },
-            { status: 502 }
-          );
-        }
-
-        const data = await resultRes.json() as ReferatResult & { _cost_usd?: number };
-
-        let savedId: string | undefined;
-        try {
-          const saved = await saveGeneration(user.id, body.topic, body.pages, workType, data);
-          savedId = saved.id;
-
-          const costStr = data._cost_usd != null ? `\n💰 Стоимость: $${data._cost_usd.toFixed(4)}` : "";
-          tgNotify(`✅ <b>Генерация завершена</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»${costStr}`);
-
-          // Отправляем письмо пользователю после успешной генерации
-          const userEmail = session.user?.email;
-          if (userEmail && savedId) {
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://ref-ai.ru";
-            sendEmail(
-              userEmail,
-              `Ваша работа готова: ${body.topic}`,
-              generationReadyHtml(body.topic, workType, savedId, appUrl)
-            ).catch(() => { /* не блокируем ответ при ошибке письма */ });
-          }
-        } catch { /* не блокируем ответ */ }
-
-        activeJobs.clear(user.id);
-        return NextResponse.json({ ...data, _generationId: savedId });
-      } catch (err) {
-        console.error("[generate] Ошибка при получении результата:", err);
-        activeJobs.clear(user.id);
-        await revertPayment(paymentId);
-
-        const saved = await prisma.generation.findFirst({
-          where: { userId: user.id, topic: body.topic, workType },
-          orderBy: { createdAt: "desc" },
-        });
-        if (saved) {
-          return NextResponse.json(
-            { error: "Соединение прервалось, но работа была сохранена.", code: "SAVED", slug: saved.slug },
-            { status: 503 }
-          );
-        }
-        return NextResponse.json(
-          { error: "Не удалось получить результат. Платёж возвращён — попробуйте снова." },
-          { status: 503 }
-        );
-      }
-    }
-    // status === "running" — продолжаем ждать
-  }
-
-  activeJobs.clear(user.id);
-  await revertPayment(paymentId);
-  return NextResponse.json(
-    { error: "Превышено время ожидания (25 минут). Платёж возвращён — попробуйте снова." },
-    { status: 503 }
-  );
+  // Возвращаемся сразу, без long-wait. Дальше фронтенд опрашивает /api/generate/poll.
+  return NextResponse.json({ status: "running", jobId });
 }

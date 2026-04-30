@@ -42,11 +42,11 @@ npm run db:studio    # GUI Prisma Studio
 → page.tsx читает pendingGeneration из sessionStorage → runGeneration()
 → POST /api/generate → проверяет Payment (status=succeeded, usedAt=null)
 → прокси на FastAPI POST /api/generate/referat → возвращает { jobId }
-→ frontend поллит GET /api/generate/poll?jobId=X каждые 5с
+→ `/api/generate` сразу отвечает `{status:"running", jobId}` (без long-wait)
+→ frontend поллит GET /api/generate/poll?workType=X&startedAt=Y&includeResult=1 каждые 5с
 → FastAPI генерирует в фоновом потоке: generator.py (Claude API) → JSON
-→ /api/generate/poll получает result → formatter.py (DOCX в памяти)
-→ usedAt = now() → /api/generations сохраняет в Generation (+ slug)
-→ API возвращает { ...result, _generationId: savedId }
+→ `/api/generate/poll` при `done` забирает result из FastAPI, сохраняет Generation в БД (+slug), отправляет email/TG
+→ frontend получает `{status:"done", id, slug, result}` и показывает модал результата
 ```
 
 **Dev-режим без ЮКассы:** если `YOKASSA_SHOP_ID` пуст, `/api/payment/create` создаёт платёж со статусом `succeeded` автоматически.
@@ -81,6 +81,7 @@ npm run db:studio    # GUI Prisma Studio
   - 503 при нехватке слотов возвращает `{message, available}` — список доступных типов
 - Задания: `running → done | error`. При получении result задание удаляется (`_job_pop`)
 - Extras-задания не удаляются — нужны для повторного скачивания файлов
+- Добавлена TTL-очистка файлов extras в `/tmp` (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
 
 ### generator.py
 - `WORK_RULES` dict: лимиты страниц, флаги `has_title_page / has_toc / has_sources` для каждого типа
@@ -118,6 +119,7 @@ npm run db:studio    # GUI Prisma Studio
 ### github_proxy.py
 - Прокси через GitHub Actions для обхода блокировок Claude API из РФ
 - Запускается при старте FastAPI (`start_callback_server()`)
+- `PROXY_SECRET` обязателен (insecure fallback удалён, при отсутствии backend падает на старте callback-сервера)
 
 ## Фронтенд (Next.js)
 
@@ -186,10 +188,10 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 | Маршрут | Метод | Описание |
 |---------|-------|----------|
-| `/api/generate` | POST | Проверяет Payment → прокси на FastAPI → сохраняет Generation |
-| `/api/generate/poll` | GET | Поллинг статуса основной генерации |
+| `/api/generate` | POST | Проверяет Payment → запускает backend job → сразу возвращает `{status:"running", jobId}` |
+| `/api/generate/poll` | GET | Поллинг статуса основной генерации; при `done` сохраняет Generation и возвращает результат |
 | `/api/generate/extras` | POST | Запускает extras-генерацию через FastAPI |
-| `/api/generate/extras/status/[id]` | GET | Статус extras (force-dynamic!) |
+| `/api/generate/extras/status/[id]` | GET | Статус extras (force-dynamic, no-store, только владелец job) |
 | `/api/generations` | GET/POST | История / сохранение генерации |
 | `/api/generations/[id]` | GET | Одна генерация по id |
 | `/api/generations/[id]/extras` | PATCH | Сохранить job IDs доп. материалов |
@@ -206,6 +208,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 | `/api/profile` | GET/PATCH | Профиль пользователя |
 | `/api/admin/*` | — | Статистика, пользователи, платежи, работы, отзывы |
 | `/api/capacity` | GET | Прокси на FastAPI `/api/slots` — текущая занятость слотов |
+| `/api/gift` | GET | Проверка доступной gift-генерации (по gift payment) |
 | `/api/feedback` | GET | Сохранить рейтинг из письма (`?generationId=X&rating=Y`), редирект |
 | `/api/feedback/comment` | POST | Сохранить детальный отзыв (issues + comment) |
 
@@ -243,6 +246,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - **`User`** — NextAuth + профильные поля титульника (university, faculty, department, speciality, discipline, course, groupNumber, fullName, teacherName, city), `role: "user"|"admin"|"yukassa_test"`, `banned: Boolean`, `password: String?` (bcrypt, для тестовых аккаунтов)
 - **`Generation`** — `result` (JSON-строка), `isPublic`, `slug` (уникальный), `extras` (JSON: `{"presentation":"jobId","speech":"jobId"}`), `rating Int?` (1–5, из письма)
 - **`Payment`** — `usedAt: null` = не использован; `workType` привязан к типу работы
+- **`ExtrasJob`** — ownership `extrasJobId -> userId` для защиты `/api/generate/extras/status/*`
 - **`HealthCheck`** — лог проверок состояния системы
 - **`SeoPage`** — SEO-страницы по типу работы + предмету
 - **`FeedbackComment`** — детальный отзыв: `generationId`, `issues` (JSON-массив строк), `comment String?`
@@ -295,6 +299,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - `vpn` — sing-box (VPN)
 
 **Nginx:** reverse proxy для ref-ai.ru. Правило: специфичные `location /api/foo` → Next.js:3000 (с авторизацией). Фолбэк `location /api/` → FastAPI:8000 (без авторизации, только публичные эндпоинты: `/api/slots`).
+- Важный explicit-проксируемый маршрут: `/api/gift` должен идти в Next.js (`3000`), иначе будет 404 от FastAPI-фолбэка.
 
 **Proxy для исходящих запросов:** Privoxy (:8118). Backend и Claude Code используют `HTTPS_PROXY=http://127.0.0.1:8118` / `ALL_PROXY=http://127.0.0.1:8118` (прописаны в `.bashrc`). Запускать `claude` напрямую — без `proxychains4`.
 
@@ -310,6 +315,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - Оплата помечается `usedAt` атомарно (`updateMany` с `where: { usedAt: null }`) — защита от двойной траты
 - Admin API защищён `adminGuard.ts` (role=admin из БД, не из токена)
 - `/proxy-callback/` принимает только запросы с корректным `X-Proxy-Secret` заголовком
+- `/api/generate/extras/status/[id]` защищён авторизацией + проверкой владельца (`ExtrasJob`)
 - HTTPS enforced: HTTP (порт 80) делает 301 → HTTPS
 
 ### Security headers (nginx, HTTPS)
@@ -323,7 +329,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 ### Известные ограничения
 - Rate limiting только на уровне приложения (1 активная генерация на юзера + 5 в день), не на уровне nginx
 - Backend FastAPI не имеет своей аутентификации — защита обеспечивается nginx routing (специфичные locations → Next.js)
-- `_extras_jobs` в памяти не очищаются автоматически — утечка памяти при долгой работе без рестарта
+- `_extras_jobs` в памяти не очищаются автоматически (статусы extras), но временные файлы `/tmp` теперь чистятся TTL-джобом
 
 ### Изменения 2026-04-28 (security audit)
 - Удалён `/etc/nginx/sites-enabled/ref-ai` — старый HTTP-конфиг с `/api/backend/` (прямой доступ к FastAPI без авторизации) и сломанным HTTPS-редиректом
@@ -367,3 +373,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 - ✅ Умный лимит параллельных задач: слот-based (ВКР=5 слотов, Курсовая=4, Доклад/Реферат=2, Сочинение/Эссе=1, MAX_SLOTS=8). Показывает пользователю доступные типы при перегрузке
 - ✅ Adminфедбек: `/admin/feedback` — таблица с фильтром/пагинацией; дашборд — avgRating, topIssues
 - ✅ DOCX: подпись таблицы внутри таблицы как нулевая строка с tblHeader (не дублируется при переносе страниц)
+- ✅ Защита extras status: ownership через Prisma `ExtrasJob` (устойчива к рестартам) + TTL-очистка старых ownership-записей (24ч)
+- ✅ Убран long-wait в `/api/generate`: API возвращает `jobId` сразу, финализация перенесена в `/api/generate/poll`
+- ✅ Безопасность proxy callback: `PROXY_SECRET` обязателен, insecure fallback удалён
+- ✅ A11y-поведение модалок (без визуальных изменений): фокус внутрь, focus-trap, Escape, возврат фокуса

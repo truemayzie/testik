@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import styles from "./dashboard.module.css";
 import PresentationViewer, { type Slide } from "../components/PresentationViewer";
+import { useModalA11y } from "../lib/useModalA11y";
 
 type Generation = {
   id: string;
@@ -84,6 +85,8 @@ export default function DashboardPage() {
   const [previewZoom, setPreviewZoom] = useState(1);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const baseScaleRef        = useRef<number>(1);
+  const viewerModalRef      = useRef<HTMLDivElement>(null);
+  const viewerCloseRef      = useRef<HTMLButtonElement>(null);
 
   // Табы модального окна
   const [modalTab, setModalTab]         = useState<"work" | "presentation">("work");
@@ -131,12 +134,12 @@ export default function DashboardPage() {
     }
   }, [status]);
 
-  // Закрыть по Escape
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") closeViewer(); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useModalA11y({
+    active: !!viewingGen,
+    containerRef: viewerModalRef,
+    initialFocusRef: viewerCloseRef,
+    onClose: closeViewer,
+  });
 
   // Блокировать скролл фона когда модалка открыта.
   // position:fixed надёжнее overflow:hidden на iOS Safari — браузер не прокручивает фон.
@@ -633,15 +636,21 @@ export default function DashboardPage() {
           className={`${styles.docModalOverlay} ${viewingClosing ? styles.docModalOverlayClosing : ""}`}
           onClick={e => { if (e.target === e.currentTarget) closeViewer(); }}
         >
-          <div className={`${styles.docModalBox} ${viewingClosing ? styles.docModalBoxClosing : ""}`}>
+          <div
+            ref={viewerModalRef}
+            className={`${styles.docModalBox} ${viewingClosing ? styles.docModalBoxClosing : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-doc-modal-title"
+          >
 
             {/* Крестик — только на десктопе */}
-            <button className={styles.docModalClose} onClick={closeViewer}>✕</button>
+            <button ref={viewerCloseRef} className={styles.docModalClose} onClick={closeViewer}>✕</button>
 
             {/* Мобильная шапка */}
             <div className={styles.docMobileHeader}>
               <div>
-                <h2 className={styles.docModalTitle}>{viewingGen.result.title}</h2>
+                <h2 id="dashboard-doc-modal-title" className={styles.docModalTitle}>{viewingGen.result.title}</h2>
                 <div className={styles.docModalBadges}>
                   <span className={styles.docBadge}>{viewingGen.workType}</span>
                   <span className={styles.docBadge}>{viewingGen.pages} стр.</span>
