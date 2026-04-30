@@ -847,11 +847,24 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) {
         stopProgress();
+        if (response.status === 401) {
+          const errMsg = "Нужно войти в аккаунт, чтобы запустить генерацию.";
+          _gen.resolve(null, errMsg);
+          setError({ message: errMsg, status: 401 });
+          router.push("/auth/signin");
+          return;
+        }
         if (data.code === "PAYMENT_REQUIRED") {
           _gen.cancel();
           clearGenState();
           sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
           router.push(`/payment?workType=${encodeURIComponent(wt)}`);
+          return;
+        }
+        if (response.status === 403) {
+          const errMsg = data.error || "Для генерации нужна оплата или доступ к выбранному типу работы.";
+          _gen.resolve(null, errMsg);
+          setError({ message: errMsg, status: 403 });
           return;
         }
         if (data.code === "SAVED") {
@@ -1083,6 +1096,7 @@ export default function Home() {
     try {
       const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(workType)}`);
       if (checkRes.status === 401) {
+        setError({ message: "Нужно войти в аккаунт, чтобы продолжить.", status: 401 });
         router.push("/auth/signin");
         return;
       }
@@ -1908,9 +1922,13 @@ export default function Home() {
             <div className={styles.errorIcon}>⚠</div>
             <div className={styles.errorBody}>
               <p className={styles.errorTitle}>
-                {error.status === 429
-                  ? "Генерация уже запущена"
-                  : "Что-то пошло не так"}
+                {error.status === 401
+                  ? "Требуется вход"
+                  : error.status === 403
+                    ? "Нужна оплата или доступ"
+                    : error.status === 429
+                      ? "Генерация уже запущена"
+                      : "Что-то пошло не так"}
               </p>
               <p className={styles.errorText}>{error.message}</p>
             </div>

@@ -153,6 +153,8 @@ const VKProvider = {
   },
 };
 
+console.info("[auth] oauth http timeout configured", { timeoutMs: 15000 });
+
 // ── Настройки NextAuth ───────────────────────────────────────────
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],

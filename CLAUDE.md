@@ -308,6 +308,14 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 **БД:** SQLite (`frontend/prisma/dev.db`). Prisma ORM.
 
+### Мини-runbook деплоя frontend
+1. `cd /var/www/ref-ai/frontend && npm run build`
+2. `pm2 restart frontend --update-env` (обязательный рестарт после build, иначе возможен рассинхрон `/_next/static/chunks/*`)
+3. Smoke-check:
+   - `curl -I https://ref-ai.ru/auth/signin` → `200`
+   - `curl -I https://ref-ai.ru/_next/static/chunks/<актуальный-webpack-chunk>.js` → `200`, `Content-Type: application/javascript`
+   - `curl https://ref-ai.ru/api/capacity` → JSON от backend-прокси
+
 ## Безопасность
 
 ### Что защищено
