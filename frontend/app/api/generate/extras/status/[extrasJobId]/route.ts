@@ -6,11 +6,16 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+const EXTRAS_JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { extrasJobId: string } },
 ) {
+  await prisma.extrasJob.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - EXTRAS_JOB_TTL_MS) } },
+  });
+
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | null)?.id;
   if (!userId) {

@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import time
 import subprocess
 import threading
 import uuid
@@ -200,6 +201,7 @@ def download_referat(request: ReferatResponse):
 
 _extras_jobs: dict[str, dict] = {}
 _extras_lock = threading.Lock()
+EXTRAS_FILE_TTL_SEC = 24 * 60 * 60  # 24 часа
 
 
 class ExtrasRequest(BaseModel):
@@ -210,9 +212,30 @@ class ExtrasRequest(BaseModel):
     profile: dict | None = None
 
 
+def _cleanup_old_extras_files() -> None:
+    """Удаляет старые файлы extras из /tmp, чтобы не накапливать мусор."""
+    now = time.time()
+    for prefix, ext in (("pptx_", ".pptx"), ("speech_", ".docx")):
+        try:
+            for name in os.listdir("/tmp"):
+                if not (name.startswith(prefix) and name.endswith(ext)):
+                    continue
+                path = os.path.join("/tmp", name)
+                try:
+                    if not os.path.isfile(path):
+                        continue
+                    if now - os.path.getmtime(path) > EXTRAS_FILE_TTL_SEC:
+                        os.remove(path)
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+
 @app.post("/api/generate/extras")
 def create_extras(request: ExtrasRequest):
     """Запускает генерацию доп. материалов в фоновом потоке."""
+    _cleanup_old_extras_files()
     extras_job_id = str(uuid.uuid4())
     with _extras_lock:
         _extras_jobs[extras_job_id] = {"status": "running", "ready": [], "error": None}
@@ -272,6 +295,7 @@ def get_extras_status(extras_job_id: str):
 @app.get("/api/download/presentation/{job_id}")
 def download_presentation(job_id: str):
     """Возвращает PPTX-файл презентации."""
+    _cleanup_old_extras_files()
     path = f"/tmp/pptx_{job_id}.pptx"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Файл не найден")
@@ -287,6 +311,7 @@ def download_presentation(job_id: str):
 @app.get("/api/download/speech/{job_id}")
 def download_speech(job_id: str):
     """Возвращает DOCX-файл текста выступления."""
+    _cleanup_old_extras_files()
     path = f"/tmp/speech_{job_id}.docx"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Файл не найден")

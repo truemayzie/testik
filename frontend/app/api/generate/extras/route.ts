@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+const EXTRAS_JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,6 +16,11 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
 
   try {
+    // Мягкая очистка старых ownership-записей extras jobs.
+    await prisma.extrasJob.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - EXTRAS_JOB_TTL_MS) } },
+    });
+
     const res = await fetch(`${BACKEND_URL}/api/generate/extras`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
