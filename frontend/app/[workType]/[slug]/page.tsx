@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getSeoPageBySlug, getSeoPagesByType } from '@/lib/seo-pages'
 import { GenerateButton } from '@/app/components/seo/GenerateButton'
+import { safeJsonLd } from '@/lib/safeJsonLd'
 import styles from './seo-page.module.css'
 
 export const dynamic = "force-dynamic";
@@ -171,8 +172,8 @@ export default async function SeoPage({ params }: { params: { workType: string; 
   return (
     <main className={styles.page}>
 
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleJsonLd) }} />
 
       {/* Хлебные крошки */}
       <nav className={styles.breadcrumbs}>

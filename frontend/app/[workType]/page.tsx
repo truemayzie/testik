@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getSeoPagesByType } from '@/lib/seo-pages'
+import { safeJsonLd } from '@/lib/safeJsonLd'
 import styles from './hub.module.css'
 
 const WORK_TYPES = ['referat', 'kursovaya', 'esse', 'doklad', 'vkr', 'sochinenie']
@@ -114,8 +115,8 @@ export default async function HubPage({ params }: { params: { workType: string }
 
   return (
     <main className={styles.page}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionJsonLd) }} />
 
       {/* Хлебные крошки */}
       <nav className={styles.breadcrumbs}>

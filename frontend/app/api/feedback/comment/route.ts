@@ -10,13 +10,21 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const userId = (session?.user as { id?: string } | null)?.id;
+  if (!userId) {
     return NextResponse.json({ error: "Необходима авторизация" }, { status: 401 });
   }
 
   const { generationId, issues, comment } = await request.json();
   if (!generationId || !Array.isArray(issues)) {
     return NextResponse.json({ error: "Неверные данные" }, { status: 400 });
+  }
+  const ownGeneration = await prisma.generation.findFirst({
+    where: { id: generationId, userId },
+    select: { id: true },
+  });
+  if (!ownGeneration) {
+    return NextResponse.json({ error: "Нет доступа к этой работе" }, { status: 403 });
   }
 
   await prisma.feedbackComment.create({

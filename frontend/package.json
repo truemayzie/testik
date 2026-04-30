@@ -16,7 +16,7 @@
     "bcryptjs": "^3.0.3",
     "docx-preview": "^0.3.7",
     "https-proxy-agent": "^9.0.0",
-    "next": "14.2.3",
+    "next": "^14.2.35",
     "next-auth": "^4.24.7",
     "prisma": "^5.14.0",
     "qrcode.react": "^4.2.0",

@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { safeJsonLd } from "@/lib/safeJsonLd";
 import PreviewClient from "./PreviewClient";
 
 type Props = { params: { slug: string } };
@@ -72,7 +73,7 @@ export default async function PreviewPage({ params }: Props) {
       {articleJsonLd && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(articleJsonLd) }}
         />
       )}
       <PreviewClient

@@ -5,6 +5,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import GenerationWidget from "./components/GenerationWidget";
 import TelegramSupport from "./components/TelegramSupport";
+import { safeJsonLd } from "@/lib/safeJsonLd";
 
 export const metadata: Metadata = {
   title: "Refai — Генератор учебных работ на ИИ | Реферат за 2 минуты",
@@ -80,7 +81,7 @@ export default function RootLayout({
 
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          dangerouslySetInnerHTML={{ __html: safeJsonLd({
             '@context': 'https://schema.org',
             '@type': 'SoftwareApplication',
             name: 'Refai',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -9,8 +10,19 @@ export async function GET(
   { params }: { params: { jobId: string } },
 ) {
   const session = await getServerSession(authOptions);
-  if (!(session?.user as { id?: string } | null)?.id) {
+  const userId = (session?.user as { id?: string } | null)?.id;
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const ownsJob = await prisma.generation.findFirst({
+    where: {
+      userId,
+      extras: { contains: params.jobId },
+    },
+    select: { id: true },
+  });
+  if (!ownsJob) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {

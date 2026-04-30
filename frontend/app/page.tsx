@@ -13,6 +13,7 @@ import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib
 import { getProgressSteps, type Step } from "./lib/progressSteps";
 import { useModalContext } from "./lib/ModalContext";
 import { useModalA11y } from "./lib/useModalA11y";
+import { safeJsonLd } from "@/lib/safeJsonLd";
 import styles from "./page.module.css";
 import PresentationViewer, { type Slide } from "./components/PresentationViewer";;
 
@@ -1674,8 +1675,8 @@ export default function Home() {
   return (
     <main className={styles.main}>
 
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(websiteJsonLd) }} />
 
       {/* ── Hero ── */}
       <section ref={heroRef} className={styles.hero}>
