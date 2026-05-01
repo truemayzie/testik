@@ -1,8 +1,12 @@
 import asyncio
 import logging
 import os
+import socket
+
+# Установите в .env TELEGRAM_HTTP_PROXY (например http://127.0.0.1:8118), если до api.telegram.org нет прямого доступа — иначе aiogram «зависает» на CONNECT.
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -26,7 +30,19 @@ SITE_URL = os.getenv("SITE_URL", "https://ref-ai.ru")
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=BOT_TOKEN)
+TG_PROXY = (
+    os.getenv("TELEGRAM_HTTP_PROXY", "").strip()
+    or os.getenv("HTTPS_PROXY", "").strip()
+    or os.getenv("ALL_PROXY", "").strip()
+    or ""
+)
+_kwargs: dict = {"timeout": 120}
+if TG_PROXY:
+    _kwargs["proxy"] = TG_PROXY
+_bot_session = AiohttpSession(**_kwargs)
+if not TG_PROXY:
+    _bot_session._connector_init["family"] = socket.AF_INET
+bot = Bot(token=BOT_TOKEN, session=_bot_session)
 dp = Dispatcher(storage=MemoryStorage())
 
 
@@ -120,10 +136,18 @@ async def show_faq(message: Message, state: FSMContext):
 @dp.message(F.text == "🌐 Перейти на сайт")
 async def go_to_site(message: Message, state: FSMContext):
     await state.clear()
+    url = (SITE_URL or "https://ref-ai.ru").strip()
+    if not url.startswith(("http://", "https://")):
+        url = f"https://{url}"
     kb = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Открыть Refai", url=SITE_URL)]]
+        inline_keyboard=[[InlineKeyboardButton(text="Открыть Refai", url=url)]]
     )
-    await message.answer("Переходите на сайт:", reply_markup=kb)
+    # Дублируем URL текстом: кнопка с url не показывает адрес в чате — так ссылка всегда видна и копируется.
+    await message.answer(
+        f"Переходите на сайт:\n{url}",
+        reply_markup=kb,
+        disable_web_page_preview=True,
+    )
 
 
 # ── FAQ callbacks ───────────────────────────────────────────────────

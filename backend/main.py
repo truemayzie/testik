@@ -8,7 +8,7 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from pptx import Presentation
 from pptx.util import Pt, Emu
 from generator import generate_work
@@ -98,6 +98,9 @@ class ReferatRequest(BaseModel):
 
 
 class ReferatResponse(BaseModel):
+    """Результат генерации. extra='allow' — чтобы в JSON уходили служебные поля (`_cost_usd` и др.) для TG/аналитики."""
+    model_config = ConfigDict(extra="allow")
+
     title: str
     structure: list[str]
     content: dict[str, str]

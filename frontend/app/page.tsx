@@ -410,7 +410,8 @@ export default function Home() {
   const [usingRealWorks, setUsingRealWorks]   = useState(false);
   const poolRef                               = useRef<typeof MOCK_WORKS_POOL>([]);
   const poolCursorRef                         = useRef(0);
-  const [dailyCount, setDailyCount]           = useState(getDailyGenCount);
+  /** Не вызывать getDailyGenCount в useState: там есть Math.random() → разный HTML на SSR и при гидрации. */
+  const [dailyCount, setDailyCount]           = useState(0);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
   const [trialUsed, setTrialUsed]             = useState(false);
   const [f5Recovery, setF5Recovery]           = useState(false);
@@ -1255,8 +1256,9 @@ export default function Home() {
     setDisplayedWorks(buildInitialWorks(shuffled));
   }, []);
 
-  // Счётчик генераций — обновляем каждые 37 секунд
+  // Счётчик генераций — только на клиенте + обновление каждые 37 с (без расхождения SSR/гидрации)
   useEffect(() => {
+    setDailyCount(getDailyGenCount());
     const t = setInterval(() => setDailyCount(getDailyGenCount()), 37_000);
     return () => clearInterval(t);
   }, []);

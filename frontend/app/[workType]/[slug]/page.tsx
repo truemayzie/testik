@@ -115,6 +115,7 @@ export default async function SeoPage({ params }: { params: { workType: string; 
 
   const typeName = WORK_TYPE_NAMES[page.workType] ?? page.workType
   const structure = getStructure(page.workType)
+  const isCompactPreview = page.workType === "sochinenie" || page.workType === "esse"
 
   // Похожие работы — того же типа, кроме текущей, случайные 5
   const allSameType = await getSeoPagesByType(page.workType)
@@ -209,91 +210,121 @@ export default async function SeoPage({ params }: { params: { workType: string; 
       </div>
 
       {/* Содержание */}
-      <section className={styles.tocSection}>
-        <h2 className={styles.tocHeading}>Содержание</h2>
-        <ol className={styles.tocList}>
-          {structure.map((item, i) => (
-            <li key={i} className={`${styles.tocItem}${item.sub ? ` ${styles.tocSub}` : ''}`}>
-              <span className={styles.tocName}>{item.title}</span>
-              <span className={styles.tocDots} />
-              <span className={styles.tocPage}>{item.page}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      {!isCompactPreview && (
+        <section className={styles.tocSection}>
+          <h2 className={styles.tocHeading}>Содержание</h2>
+          <ol className={styles.tocList}>
+            {structure.map((item, i) => (
+              <li key={i} className={`${styles.tocItem}${item.sub ? ` ${styles.tocSub}` : ''}`}>
+                <span className={styles.tocName}>{item.title}</span>
+                <span className={styles.tocDots} />
+                <span className={styles.tocPage}>{item.page}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {/* Предпросмотр секций */}
       <div className={styles.docPreview}>
         <div className={styles.docPreviewHeading}>Предпросмотр</div>
-
-        {/* Введение — виден текст + блюр */}
-        <div className={styles.docSection}>
-          <div className={styles.docSectionHead}>Введение</div>
-          <p className={styles.docSectionText}>{page.previewText}</p>
-          <div className={styles.docBlurWrap}>
-            <div className={styles.docBlurred}>
-              <p>Актуальность данной работы обусловлена необходимостью комплексного изучения рассматриваемой проблематики в контексте современных научных подходов и методологических требований к академическим исследованиям в данной области знания.</p>
-              <p>Цель работы — провести всестороннее исследование, систематизировать существующие теоретические подходы и на их основе сформулировать обоснованные выводы и практические рекомендации.</p>
-            </div>
-            <div className={styles.docBlurFade} />
-          </div>
-        </div>
-
-        {/* Первая основная секция — полный блюр */}
-        <div className={styles.docSection}>
-          <div className={styles.docSectionHead}>{firstSection.title}</div>
-          <div className={styles.docBlurWrap}>
-            <div className={styles.docBlurred}>
-              <p>В рамках данного раздела проводится детальный анализ основных теоретических концепций и практических аспектов исследуемой темы с опорой на актуальные отечественные и зарубежные научные источники.</p>
-              <p>Рассматриваются ключевые подходы учёных к изучению проблемы, анализируются современные тенденции развития данной области знаний и выявляются основные закономерности исследуемого явления.</p>
-              <p>На основании проведённого анализа установлено, что исследуемое явление характеризуется рядом специфических особенностей, определяющих его место в системе научного знания.</p>
-            </div>
-            <div className={styles.docBlurFade} />
-          </div>
-        </div>
-
-        {/* Вторая секция — полный блюр */}
-        {secondSection && (
-          <div className={styles.docSection}>
-            <div className={styles.docSectionHead}>{secondSection.title}</div>
-            <div className={styles.docBlurWrap}>
+        {isCompactPreview ? (
+          <div className={styles.docSectionCompact}>
+            <div className={styles.docSectionHead}>Фрагмент сочинения</div>
+            <div className={styles.docBlurWrapCompact}>
+              <p className={styles.docSectionText}>{page.previewText}</p>
               <div className={styles.docBlurred}>
-                <p>Проведённое исследование позволяет констатировать, что рассматриваемая проблема сохраняет свою значимость и требует дальнейшего изучения с применением современных методов научного анализа.</p>
-                <p>Полученные данные свидетельствуют о необходимости системного подхода к изучению данной темы, что открывает перспективы для дальнейших исследований в указанном направлении.</p>
+                <p>Когда герой оказывается перед нравственным выбором, автор не дает простого ответа, а шаг за шагом показывает, как внутренний конфликт меняет взгляд человека на себя и на окружающий мир.</p>
+                <p>Сравнивая поступки персонажей, можно заметить, что внешняя правота не всегда совпадает с внутренней честностью: иногда тихое раскаяние оказывается сильнее громких убеждений и красивых слов.</p>
+                <p>Художественные детали работают как точные акценты: повторяющиеся образы, интонация авторского комментария, контраст между мечтой и реальностью помогают глубже понять главную мысль произведения.</p>
+                <p>Именно поэтому итоговое впечатление от текста остается объемным: это не пересказ событий, а разговор о цене выбора, о взрослении души и о том, почему человеческое достоинство проверяется в трудную минуту.</p>
               </div>
-              <div className={styles.docBlurFade} />
+              <div className={styles.compactLockCard}>
+                <div className={styles.compactLockTitle}>Текст доступен в расширенной версии</div>
+                <div className={styles.compactLockText}>
+                  Полная версия содержит логичную структуру, ключевые тезисы и готовые формулировки, которые можно адаптировать под своё задание.
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Введение — виден текст + блюр */}
+            <div className={styles.docSection}>
+              <div className={styles.docSectionHead}>Введение</div>
+              <p className={styles.docSectionText}>{page.previewText}</p>
+              <div className={styles.docBlurWrap}>
+                <div className={styles.docBlurred}>
+                  <p>Актуальность данной работы обусловлена необходимостью комплексного изучения рассматриваемой проблематики в контексте современных научных подходов и методологических требований к академическим исследованиям в данной области знания.</p>
+                  <p>Цель работы — провести всестороннее исследование, систематизировать существующие теоретические подходы и на их основе сформулировать обоснованные выводы и практические рекомендации.</p>
+                </div>
+                <div className={styles.docBlurFade} />
+              </div>
+            </div>
+
+            {/* Первая основная секция — полный блюр */}
+            <div className={styles.docSection}>
+              <div className={styles.docSectionHead}>{firstSection.title}</div>
+              <div className={styles.docBlurWrap}>
+                <div className={styles.docBlurred}>
+                  <p>В рамках данного раздела проводится детальный анализ основных теоретических концепций и практических аспектов исследуемой темы с опорой на актуальные отечественные и зарубежные научные источники.</p>
+                  <p>Рассматриваются ключевые подходы учёных к изучению проблемы, анализируются современные тенденции развития данной области знаний и выявляются основные закономерности исследуемого явления.</p>
+                  <p>На основании проведённого анализа установлено, что исследуемое явление характеризуется рядом специфических особенностей, определяющих его место в системе научного знания.</p>
+                </div>
+                <div className={styles.docBlurFade} />
+              </div>
+            </div>
+
+            {/* Вторая секция — полный блюр */}
+            {secondSection && (
+              <div className={styles.docSection}>
+                <div className={styles.docSectionHead}>{secondSection.title}</div>
+                <div className={styles.docBlurWrap}>
+                  <div className={styles.docBlurred}>
+                    <p>Проведённое исследование позволяет констатировать, что рассматриваемая проблема сохраняет свою значимость и требует дальнейшего изучения с применением современных методов научного анализа.</p>
+                    <p>Полученные данные свидетельствуют о необходимости системного подхода к изучению данной темы, что открывает перспективы для дальнейших исследований в указанном направлении.</p>
+                  </div>
+                  <div className={styles.docBlurFade} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {!isCompactPreview && (
+          <div className={styles.docSection}>
+            <div className={styles.docLockNote}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="12" rx="3"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+              <span>Полный текст открывается после генерации</span>
             </div>
           </div>
         )}
-
-        <div className={styles.docLockNote}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="12" rx="3"/>
-            <path d="M7 11V7a5 5 0 0110 0v4"/>
-          </svg>
-          <span>Полный текст открывается после генерации</span>
-        </div>
       </div>
 
       {/* Список литературы (превью) */}
-      <section className={styles.sourcesPreview}>
-        <div className={styles.sourcesPreviewHead}>
-          Список литературы <span>· фрагмент</span>
-        </div>
-        <ul className={styles.sourcesPreviewList}>
-          <li className={styles.sourcesPreviewItem}>
-            Авдеев В.М. {page.subject}: теория и практика современного исследования. — М.: Академия, 2023. — 312 с.
-          </li>
-          <li className={styles.sourcesPreviewItem}>
-            Козлова Е.Н. Актуальные вопросы изучения {page.subject}. — СПб.: Питер, 2022. — 248 с.
-          </li>
-        </ul>
-        <div className={styles.sourcesBlurred}>
-          <div className={styles.sourcesBlurLine} style={{ width: '88%' }} />
-          <div className={styles.sourcesBlurLine} style={{ width: '74%' }} />
-          <div className={styles.sourcesBlurLine} style={{ width: '82%' }} />
-        </div>
-      </section>
+      {!isCompactPreview && (
+        <section className={styles.sourcesPreview}>
+          <div className={styles.sourcesPreviewHead}>
+            Список литературы <span>· фрагмент</span>
+          </div>
+          <ul className={styles.sourcesPreviewList}>
+            <li className={styles.sourcesPreviewItem}>
+              Авдеев В.М. {page.subject}: теория и практика современного исследования. — М.: Академия, 2023. — 312 с.
+            </li>
+            <li className={styles.sourcesPreviewItem}>
+              Козлова Е.Н. Актуальные вопросы изучения {page.subject}. — СПб.: Питер, 2022. — 248 с.
+            </li>
+          </ul>
+          <div className={styles.sourcesBlurred}>
+            <div className={styles.sourcesBlurLine} style={{ width: '88%' }} />
+            <div className={styles.sourcesBlurLine} style={{ width: '74%' }} />
+            <div className={styles.sourcesBlurLine} style={{ width: '82%' }} />
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <div className={styles.cta}>

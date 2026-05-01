@@ -82,6 +82,7 @@ npm run db:studio    # GUI Prisma Studio
 - Задания: `running → done | error`. При получении result задание удаляется (`_job_pop`)
 - Extras-задания не удаляются — нужны для повторного скачивания файлов
 - Добавлена TTL-очистка файлов extras в `/tmp` (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
+- `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам). Без этого поле отрезалось моделью и в Telegram (`tgNotify` при завершении в `/api/generate/poll`) не было строки «Стоимость»
 
 ### generator.py
 - `WORK_RULES` dict: лимиты страниц, флаги `has_title_page / has_toc / has_sources` для каждого типа
@@ -148,6 +149,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - Scroll-reveal анимации: `[data-reveal]` + `[data-visible="true"]` через IntersectionObserver (threshold 0.08); иконки шагов получают `stepIconPop` анимацию при появлении
 - Модальное окно результата через `createPortal(document.body)`
 - Две колонки на десктопе (превью + панель), bottom-sheet на мобиле
+- **Гидратация:** счётчик «генераций сегодня» не инициализировать через `getDailyGenCount()` в `useState` — внутри есть `Math.random()`, из‑за расхождения SSR/клиента возможны ошибки React #418/#423/#425. Начальное значение `0`, первый расчёт и интервал 37 с — только в `useEffect` после монтирования
 
 **Модульные переменные (вне React) в page.tsx:**
 - `_gen` — состояние основной генерации. Не сбрасывается при client-side навигации, только при F5. Автоочистка через 60с после завершения
@@ -174,7 +176,9 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 **`app/[workType]/page.tsx`** — SEO-хаб по типу работы (`/referat`, `/kursovaya` и т.д.): список тем с фильтрами, ссылки на отдельные SEO-страницы
 
-**`app/[workType]/[slug]/page.tsx`** — SEO-страница конкретной работы: содержание (TOC), предпросмотр текста с блюром, список литературы (фрагмент), CTA с кнопкой генерации, SEO bodyText, breadcrumbs, JSON-LD (BreadcrumbList + Article)
+**`app/[workType]/[slug]/page.tsx`** — SEO-страница конкретной работы: содержание (TOC), предпросмотр текста с блюром, список литературы (фрагмент), CTA с кнопкой генерации, SEO bodyText, breadcrumbs, JSON-LD (BreadcrumbList + Article). Для **`sochinenie`** и **`esse`**: компактный блок без TOC и списка литературы — заголовок предпросмотра «Фрагмент сочинения» (для эссе тот же паттерн compact), единый blur + карточка блокировки; стили в `seo-page.module.css` (`.docBlurWrapCompact`, `.compactLockCard`)
+
+**`frontend/scripts/add-sochinenie-top5.ts`** — upsert пачки SEO-страниц «сочинение TOP-5» в Prisma (`seoPage`): slug, `previewText`, `metaDescription`, `bodyText` (запуск: `npx tsx scripts/add-sochinenie-top5.ts` из `frontend/`)
 
 **`app/profile/page.tsx`** — профиль: поля титульника (университет, факультет, кафедра, специальность, дисциплина, курс, группа, ФИО, преподаватель, город). `GET/PATCH /api/profile`
 
@@ -295,8 +299,13 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 **Процессы (PM2):**
 - `frontend` — Next.js :3000
 - `backend` — uvicorn FastAPI :8000
-- `tg-bot` — Telegram-бот (Python)
+- `tg-bot` — Telegram-бот поддержки (Python, `tg_bot/bot.py`, Aiogram)
 - `vpn` — sing-box (VPN)
+
+### Telegram
+- **Бот поддержки (`tg_bot/`):** отдельный токен (`BOT_TOKEN` в `tg_bot/.env`), ответы пользователям, FAQ, пересылка вопросов админу (`ADMIN_ID`). На prod до `api.telegram.org` часто нет прямого канала — в **`tg_bot/.env`** задаётся **`TELEGRAM_HTTP_PROXY=http://127.0.0.1:8118`** (Privoxy); в venv нужен пакет **`aiohttp-socks`** (см. `tg_bot/requirements.txt`). Сессия Aiogram: таймаут 120 с, при отсутствии прокси — принудительно IPv4 для коннектора.
+- **Уведомления админу о событиях сайта:** `frontend/lib/tgNotify.ts` — `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID` в `frontend/.env.local` (регистрация, старт/конец генерации с `_cost_usd`, оплата). Это не тот же процесс, что `tg-bot`, но тот же класс исходящих запросов к Telegram API; при необходимости прокси для Node задаётся через `HTTPS_PROXY` в окружении процесса `frontend`.
+- После правок бота: `pm2 restart tg-bot --update-env`
 
 **Nginx:** reverse proxy для ref-ai.ru. Правило: специфичные `location /api/foo` → Next.js:3000 (с авторизацией). Фолбэк `location /api/` → FastAPI:8000 (без авторизации, только публичные эндпоинты: `/api/slots`).
 - Важный explicit-проксируемый маршрут: `/api/gift` должен идти в Next.js (`3000`), иначе будет 404 от FastAPI-фолбэка.
@@ -315,6 +324,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
    - `curl -I https://ref-ai.ru/auth/signin` → `200`
    - `curl -I https://ref-ai.ru/_next/static/chunks/<актуальный-webpack-chunk>.js` → `200`, `Content-Type: application/javascript`
    - `curl https://ref-ai.ru/api/capacity` → JSON от backend-прокси
+
+### Мини-runbook деплоя backend / бота
+- После изменений в `backend/main.py` (модели ответа, эндпоинты): `pm2 restart backend --update-env`
+- После `pip install` в `tg_bot/venv`: перезапуск `pm2 restart tg-bot --update-env`
 
 ## Безопасность
 
@@ -386,3 +399,9 @@ Referrer-Policy: strict-origin-when-cross-origin
 - ✅ Убран long-wait в `/api/generate`: API возвращает `jobId` сразу, финализация перенесена в `/api/generate/poll`
 - ✅ Безопасность proxy callback: `PROXY_SECRET` обязателен, insecure fallback удалён
 - ✅ A11y-поведение модалок (без визуальных изменений): фокус внутрь, focus-trap, Escape, возврат фокуса
+
+### Изменения 2026-05-01
+- Главная: исправление гидратации счётчика «генераций сегодня» (`page.tsx`), без случайных значений в первом SSR-рендере
+- Backend: `ReferatResponse` с `model_config = ConfigDict(extra="allow")` — в ответе результата сохраняется `_cost_usd` для строки стоимости в `tgNotify`
+- SEO: компактное превью сочинений/эссе (фрагмент + blur + lock card), правки CSS; скрипт `add-sochinenie-top5.ts` для контента топ-страниц
+- Telegram: бот поддержки через Privoxy (`TELEGRAM_HTTP_PROXY` + `aiohttp-socks`), дублирование URL текстом при «Перейти на сайт»
