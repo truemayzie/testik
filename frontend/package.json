@@ -8,7 +8,8 @@
     "start": "next start",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "fill-seo": "tsx scripts/fill-body-text.ts"
+    "fill-seo": "tsx scripts/fill-body-text.ts",
+    "seed-seo": "tsx scripts/seed-seo.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^1.6.0",

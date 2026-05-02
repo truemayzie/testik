@@ -14,16 +14,30 @@ async function fetchPreview(slug: string) {
   return res.json();
 }
 
+const SITE = "https://ref-ai.ru";
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await fetchPreview(params.slug);
   if (!data) return { title: "Работа не найдена | Refai" };
+  const metaTitle = `${data.workType} — ${data.topic} | Refai`;
+  const metaDescription = `Готовый ${data.workType.toLowerCase()} на тему «${data.topic}». ${data.pages} страниц, оформление по ГОСТ, уникальность 80%+`;
+  const ogTitle = `${data.workType}: ${data.topic}`;
+  const previewUrl = `${SITE}/preview/${params.slug}`;
   return {
-    title: `${data.workType} — ${data.topic} | Refai`,
-    description: `Готовый ${data.workType.toLowerCase()} на тему «${data.topic}». ${data.pages} страниц, оформление по ГОСТ, уникальность 80%+`,
-    alternates: { canonical: `https://ref-ai.ru/preview/${params.slug}` },
+    title: metaTitle,
+    description: metaDescription,
+    alternates: { canonical: previewUrl },
     openGraph: {
-      title: `${data.workType}: ${data.topic}`,
-      description: `${data.pages} стр. · ГОСТ · Антиплагиат 80%+`,
+      title: ogTitle,
+      description: `${data.pages} стр. · ГОСТ · антиплагиат 80%+`,
+      url: previewUrl,
+      type: "article",
+      siteName: "Refai",
+    },
+    twitter: {
+      card: "summary",
+      title: ogTitle,
+      description: `${data.pages} стр. · ГОСТ · Refai`,
     },
   };
 }

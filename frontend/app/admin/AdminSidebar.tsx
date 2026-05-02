@@ -6,6 +6,7 @@ import styles from "./admin.module.css";
 
 const NAV = [
   { href: "/admin",           icon: "📊", label: "Дашборд" },
+  { href: "/admin/seo-pages", icon: "🔎", label: "SEO и превью" },
   { href: "/admin/users",     icon: "👥", label: "Пользователи" },
   { href: "/admin/works",     icon: "📄", label: "Работы" },
   { href: "/admin/payments",  icon: "💳", label: "Платежи" },

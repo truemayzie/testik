@@ -133,6 +133,83 @@
   margin: 0;
 }
 
+.tabRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.tabBtn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 24, 40, 0.45);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tabBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.tabBtnActive {
+  background: rgba(99, 102, 241, 0.35);
+  border-color: rgba(165, 180, 252, 0.5);
+  color: #E0E7FF;
+}
+
+.tabBtn:focus-visible {
+  outline: 2px solid #93C5FD;
+  outline-offset: 2px;
+}
+
+.indexCheckBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.indexCheckBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.indexCheckBtn:hover {
+  background: #E2E8F0;
+  border-color: #94A3B8;
+}
+
+.seoIndexHint {
+  font-size: 0.8rem;
+  color: #64748B;
+  line-height: 1.45;
+  margin: -8px 0 16px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+}
+
 .pageBody {
   padding: 28px 32px 60px;
   max-width: 1200px;
