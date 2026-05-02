@@ -59,12 +59,12 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/pt-serif-700-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
 
         {/* Google Analytics */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-G1QKHNT5Y9" />
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-G1QKHHT5Y9" />
         <script dangerouslySetInnerHTML={{ __html: `
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
-          gtag('config', 'G-G1QKHNT5Y9');
+          gtag('config', 'G-G1QKHHT5Y9');
         `}} />
 
         {/* Yandex Metrika */}

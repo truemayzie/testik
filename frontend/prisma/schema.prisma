@@ -33,6 +33,7 @@ model User {
   payments      Payment[]
   sessions      Session[]
   extrasJobs    ExtrasJob[]
+  workActivities WorkActivity[]
 }
 
 model Account {
@@ -83,7 +84,27 @@ model Generation {
   extras           String?
   rating           Int?
   feedbackComments FeedbackComment[]
+  workActivities    WorkActivity[]
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Журнал скачиваний работ (DOCX/PPTX/Speech) для поддержки и аналитики
+model WorkActivity {
+  id            String      @id @default(cuid())
+  userId        String
+  generationId  String?
+  action        String
+  source        String
+  slug          String?
+  workType      String?
+  meta          String?
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generation    Generation? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([generationId])
+  @@index([action, createdAt])
 }
 
 model FeedbackComment {

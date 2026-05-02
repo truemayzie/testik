@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from pptx import Presentation
-from pptx.util import Pt, Emu
+from pptx.util import Emu
 from generator import generate_work
 from github_proxy import start_callback_server
 
@@ -218,7 +218,11 @@ class ExtrasRequest(BaseModel):
 def _cleanup_old_extras_files() -> None:
     """Удаляет старые файлы extras из /tmp, чтобы не накапливать мусор."""
     now = time.time()
-    for prefix, ext in (("pptx_", ".pptx"), ("speech_", ".docx")):
+    for prefix, ext in (
+        ("pptx_", ".pptx"),
+        ("speech_", ".docx"),
+        ("pptx_slides_", ".json"),
+    ):
         try:
             for name in os.listdir("/tmp"):
                 if not (name.startswith(prefix) and name.endswith(ext)):
@@ -258,7 +262,25 @@ def create_extras(request: ExtrasRequest):
                 )
                 with _extras_lock:
                     _extras_jobs[extras_job_id]["slides"] = slides_dict
+                try:
+                    slides_path = f"/tmp/pptx_slides_{extras_job_id}.json"
+                    with open(slides_path, "w", encoding="utf-8") as sf:
+                        json.dump(slides_dict, sf, ensure_ascii=False)
+                except Exception as exc:
+                    print(f"[extras] backup slides JSON: {exc}")
                 ready.append("presentation")
+                try:
+                    s_list = slides_dict.get("slides") or []
+                    if s_list:
+                        pptx_io = _render_to_pptx(s_list, slides_dict.get("accent") or "blue", {})
+                        path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
+                        with open(path_cache, "wb") as f:
+                            f.write(pptx_io.getvalue())
+                        print(f"[extras] готовый PPTX: {path_cache}")
+                except HTTPException as he:
+                    print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
+                except Exception as exc:
+                    print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
             if "speech" in request.items:
                 generate_speech(
                     extras_job_id,
@@ -295,6 +317,17 @@ def get_extras_status(extras_job_id: str):
     }
 
 
+@app.get("/api/extras/presentation-json/{job_id}")
+def extras_presentation_json(job_id: str):
+    """Резервная копия JSON слайдов (предпросмотр/БД), рядом с pptx в /tmp."""
+    _cleanup_old_extras_files()
+    path = f"/tmp/pptx_slides_{job_id}.json"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="JSON слайдов не найден")
+    with open(path, "rb") as f:
+        return Response(content=f.read(), media_type="application/json")
+
+
 @app.get("/api/download/presentation/{job_id}")
 def download_presentation(job_id: str):
     """Возвращает PPTX-файл презентации."""
@@ -327,48 +360,60 @@ def download_speech(job_id: str):
     )
 
 
-# ── Генерация PPTX из JSON-слайдов через Puppeteer ───────────────────────────
+# ── Генерация PPTX: HTML-слайды → Puppeteer PNG → сборка как у предпросмотра ─
 
 class PresentationDownloadRequest(BaseModel):
     slides: list
     accent: str = "blue"
-    images: dict = {}   # { "0": "data:image/...;base64,...", ... }
+    images: dict = {}  # { "0": "data:image/...;base64,...", ... }
 
 
-_RENDER_SCRIPT = os.path.join(os.path.dirname(__file__), "render_slides.js")
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_RENDER_SCRIPT = os.path.join(BACKEND_DIR, "render_slides.js")
 
 
 def _render_to_pptx(slides: list, accent: str, images: dict) -> io.BytesIO:
-    """Запускает render_slides.js и собирает PPTX. Возвращает BytesIO."""
+    """Визуал как вкладке «Презентация» в браузере: render_slides.js + python-pptx."""
     import base64
-    payload = json.dumps({"accent": accent, "slides": slides, "images": images})
+
+    if not slides:
+        raise HTTPException(status_code=400, detail="Пустой список слайдов")
+
+    accent_s = accent or "blue"
+    imgs = images if isinstance(images, dict) else {}
+
+    payload = json.dumps({"accent": accent_s, "slides": slides, "images": imgs}, ensure_ascii=False).encode("utf-8")
     try:
         proc = subprocess.run(
             ["node", _RENDER_SCRIPT],
-            input=payload, capture_output=True, text=True, timeout=120,
+            input=payload,
+            capture_output=True,
+            timeout=300,
+            cwd=BACKEND_DIR,
         )
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="Таймаут рендеринга слайдов")
 
     if proc.returncode != 0:
-        print("[pptx] render_slides.js stderr:", proc.stderr[:500])
-        raise HTTPException(status_code=500, detail="Ошибка рендеринга слайдов")
+        err = (proc.stderr or b"").decode("utf-8", errors="replace")[:2500]
+        out_h = (proc.stdout or b"").decode("utf-8", errors="replace")[:500]
+        print(f"[pptx] render_slides.js rc={proc.returncode} stderr={err!r} stdout_head={out_h!r}")
+        raise HTTPException(status_code=500, detail="Ошибка рендеринга слайдов (Puppeteer)")
 
     try:
-        png_list = json.loads(proc.stdout)
+        png_list = json.loads(proc.stdout.decode("utf-8"))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Ошибка парсинга PNG: {exc}")
 
     prs = Presentation()
-    prs.slide_width  = Emu(9144000)
+    prs.slide_width = Emu(9144000)
     prs.slide_height = Emu(5143500)
     blank_layout = prs.slide_layouts[6]
 
     for b64 in png_list:
-        slide = prs.slides.add_slide(blank_layout)
+        slide_p = prs.slides.add_slide(blank_layout)
         img_stream = io.BytesIO(base64.b64decode(b64))
-        slide.shapes.add_picture(img_stream, left=0, top=0,
-                                 width=prs.slide_width, height=prs.slide_height)
+        slide_p.shapes.add_picture(img_stream, left=0, top=0, width=prs.slide_width, height=prs.slide_height)
     out = io.BytesIO()
     prs.save(out)
     out.seek(0)
@@ -377,7 +422,7 @@ def _render_to_pptx(slides: list, accent: str, images: dict) -> io.BytesIO:
 
 @app.post("/api/presentation/download")
 def presentation_download(request: PresentationDownloadRequest):
-    """Принимает JSON-слайды → рендерит PNG → PPTX."""
+    """Собирает PPTX через HTML-рендер (как во фронтовом предпросмотре)."""
     pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
     return StreamingResponse(
         pptx_io,
@@ -388,7 +433,7 @@ def presentation_download(request: PresentationDownloadRequest):
 
 @app.post("/api/presentation/rebuild")
 def presentation_rebuild(request: PresentationDownloadRequest):
-    """Пересборка PPTX из отредактированных слайдов + изображений."""
+    """Пересборка PPTX через HTML → PNG."""
     pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
 
     return StreamingResponse(

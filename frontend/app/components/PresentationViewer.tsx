@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import styles from "./PresentationViewer.module.css";
 import { accentColor, panelBg, borderColor } from "./slideStyles";
 
@@ -413,19 +413,25 @@ function SlideFinal({
 }
 
 // ─── SlideWrapper — масштабирует слайд 1280×720 в контейнер ──────────────────
-// containerWidth — ширина скролл-контейнера (offsetWidth, включает его padding)
+// При первом монтировании вкладка «Презентация» может быть скрыта (display:none):
+// offsetWidth=0 → раньше scale≈1/1280 и слайды становились в ~1px по высоте.
+function fallbackEmbedWidthPx(): number {
+  if (typeof window === "undefined") return 640;
+  return Math.min(900, Math.max(340, Math.round(window.innerWidth * 0.58)));
+}
+
 function SlideWrapper({
-  children, containerWidth, isMobile,
+  children, layoutWidth, isMobile,
 }: {
   children: React.ReactNode;
-  containerWidth: number;
+  layoutWidth: number;
   isMobile: boolean;
 }) {
-  // На мобилке padding embeddedScroll = 8px × 2; на десктопе = 16px × 2
   const sidePad = isMobile ? 8 : 16;
-  const availableWidth = Math.max(containerWidth - sidePad * 2, 1);
+  const raw = layoutWidth > 48 ? layoutWidth : fallbackEmbedWidthPx();
+  const availableWidth = Math.max(raw - sidePad * 2, 120);
   const scale = availableWidth / 1280;
-  const outerHeight = Math.round(720 * scale);
+  const outerHeight = Math.max(Math.round(720 * scale), 80);
   return (
     <div style={{ position: "relative", width: "100%", height: outerHeight, overflow: "hidden", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", flexShrink: 0 }}>
       <div style={{ position: "absolute", top: 0, left: 0, width: 1280, height: 720, transform: `scale(${scale})`, transformOrigin: "top left" }}>
@@ -462,19 +468,68 @@ export default function PresentationViewer({
   const containerRef  = useRef<HTMLDivElement>(null); // embedded: scroll area; standalone: outer
   const [containerWidth, setContainerWidth] = useState(0);
 
+  /** Реальная ширина скролла; если ещё 0 (скрытый родитель), не ломаем масштаб — см. SlideWrapper fallback */
+  const layoutWidth =
+    containerWidth > 48 ? containerWidth : fallbackEmbedWidthPx();
+
   // Sync external slides (from parent titleForm changes)
   useEffect(() => { setSlides(initialSlides); }, [initialSlides]);
   useEffect(() => { if (externalImages) setImages(externalImages); }, [externalImages]);
 
   useEffect(() => {
-    const update = () => {
-      if (containerRef.current) setContainerWidth(containerRef.current.offsetWidth);
+    const el = containerRef.current;
+    if (!el || mode !== "embedded") return;
+
+    const measure = () => {
+      const w = el.offsetWidth || el.clientWidth || 0;
+      if (w > 48) setContainerWidth(w);
     };
-    update();
-    const ro = new ResizeObserver(update);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [mode, slides.length]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || mode !== "standalone") return;
+    const measure = () =>
+      setContainerWidth(el.offsetWidth || el.clientWidth || 0);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [mode, slides.length]);
+
+  /* После смены display у предка Layout может обновиться позже ResizeObserver — догоняем пару кадров */
+  useLayoutEffect(() => {
+    if (mode !== "embedded" || slides.length === 0) return;
+    const el = containerRef.current;
+    if (!el) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      const w = el.offsetWidth || el.clientWidth || 0;
+      if (w > 48) setContainerWidth(w);
+      raf2 = requestAnimationFrame(() => {
+        const w2 = el.offsetWidth || el.clientWidth || 0;
+        if (w2 > 48) setContainerWidth(w2);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [mode, slides.length]);
 
   // Slide update helpers
   const updateSlide = useCallback((idx: number, patch: Partial<Slide>) => {
@@ -557,9 +612,8 @@ export default function PresentationViewer({
     }
   }
 
-  const isMobile = containerWidth > 0
-    ? containerWidth < 600
-    : (typeof window !== "undefined" && window.innerWidth < 768);
+  const isMobile = layoutWidth < 600
+    || (containerWidth <= 48 && typeof window !== "undefined" && window.innerWidth < 768);
 
   if (slides.length === 0) return null;
 
@@ -595,7 +649,7 @@ export default function PresentationViewer({
         )}
         <div className={styles.embeddedScroll} ref={containerRef}>
           {slides.map((sl, idx) => (
-            <SlideWrapper key={idx} containerWidth={containerWidth} isMobile={isMobile}>
+            <SlideWrapper key={idx} layoutWidth={layoutWidth} isMobile={isMobile}>
               {renderSlide(sl, idx)}
             </SlideWrapper>
           ))}

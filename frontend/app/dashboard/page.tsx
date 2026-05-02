@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import styles from "./dashboard.module.css";
 import PresentationViewer, { type Slide } from "../components/PresentationViewer";
 import { useModalA11y } from "../lib/useModalA11y";
+import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
 
 type Generation = {
   id: string;
@@ -51,6 +52,36 @@ const DOC_WIDTH = 816;
 
 const TITLE_PAGE_TYPES = ["Реферат", "Курсовая", "ВКР", "Доклад"];
 
+/** Типы, для которых доступны презентация и текст выступления */
+const WORK_TYPES_WITHOUT_EXTRAS = new Set(["Сочинение", "Эссе"]);
+
+/** Защита от двойного чтения pendingExtras при Strict Mode */
+let extrasDashboardResumeSync = false;
+
+function supportsExtras(workType: string) {
+  return !WORK_TYPES_WITHOUT_EXTRAS.has(workType);
+}
+
+/** Массив слайдов из extras.presentationSlides (объект, строка JSON или ошибочное «массива-сущность» в прошлых сохранениях). */
+function extractSlidesFromPresentationSlides(raw: unknown): Slide[] | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) return raw as Slide[];
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t.startsWith("{") && !t.startsWith("[")) return null;
+    try {
+      return extractSlidesFromPresentationSlides(JSON.parse(t) as unknown);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object") {
+    const s = (raw as { slides?: unknown }).slides;
+    if (Array.isArray(s)) return s as Slide[];
+  }
+  return null;
+}
+
 type TitleForm = {
   fullName: string; university: string; faculty: string;
   department: string; groupNumber: string; teacherName: string;
@@ -93,6 +124,9 @@ export default function DashboardPage() {
   const [presImages, setPresImages]     = useState<Record<number, string>>({});
   const [presSlides, setPresSlides]     = useState<Slide[] | null>(null);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    () => typeof window !== "undefined" && window.innerWidth <= 768
+  );
 
   // Титульный лист
   const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
@@ -102,6 +136,24 @@ export default function DashboardPage() {
   const [skipSpeciality, setSkipSpeciality] = useState(false);
   const [skipDiscipline, setSkipDiscipline] = useState(false);
   const [showMobileTitleForm, setShowMobileTitleForm] = useState(false);
+
+  const userRole    = (session?.user as { role?: string } | null)?.role;
+  const isAdminUser = userRole === "admin";
+
+  const [dashPresSel, setDashPresSel]     = useState(false);
+  const [dashSpeechSel, setDashSpeechSel] = useState(false);
+  const [dashExtrasBusy, setDashExtrasBusy] = useState(false);
+  const [dashExtrasErr, setDashExtrasErr]   = useState<string | null>(null);
+  /** Прогресс после старта extras */
+  const [dashExtrasProgress, setDashExtrasProgress] = useState(0);
+  const dashExtrasProgRef = useRef(0);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobileViewport(window.innerWidth <= 768);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
@@ -282,23 +334,59 @@ export default function DashboardPage() {
       const result: ReferatResult = data.result;
       const gen = generations.find(g => g.id === id);
       let extrasObj: ExtrasData | null = null;
-      if (gen?.extras) {
-        try { extrasObj = JSON.parse(gen.extras); } catch {}
+      const extrasRaw =
+        typeof data.extras === "string" ? data.extras : (typeof gen?.extras === "string" ? gen.extras : null);
+      if (extrasRaw?.trim()) {
+        try {
+          extrasObj = JSON.parse(extrasRaw) as ExtrasData;
+        } catch {
+          extrasObj = null;
+        }
       }
+      let extrasForView: ExtrasData | null = extrasObj;
+      let extracted = extractSlidesFromPresentationSlides(extrasForView?.presentationSlides);
+      if (
+        (!extracted || extracted.length === 0) &&
+        extrasForView?.presentation &&
+        supportsExtras(data.workType ?? gen?.workType ?? "")
+      ) {
+        try {
+          const sr = await fetch(`/api/presentation/slides/${extrasForView.presentation}`, {
+            cache: "no-store",
+          });
+          if (sr.ok) {
+            const backup = (await sr.json()) as PresentationSlides;
+            extracted = extractSlidesFromPresentationSlides(backup);
+            if (extracted && extracted.length > 0 && extrasForView) {
+              extrasForView = { ...extrasForView, presentationSlides: backup };
+              void fetch(`/api/generations/${data.id}/extras`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ extras: extrasForView }),
+              }).catch(() => {});
+            }
+          }
+        } catch {
+          /* noop */
+        }
+      }
+
       setViewingGen({
         id:      data.id,
-        topic:   gen?.topic ?? "",
-        workType: gen?.workType ?? "Реферат",
-        pages:   gen?.pages ?? 0,
-        slug:    gen?.slug ?? null,
-        extras:  extrasObj,
+        topic:   data.topic ?? gen?.topic ?? "",
+        workType: data.workType ?? gen?.workType ?? "Реферат",
+        pages:   data.pages ?? gen?.pages ?? 0,
+        slug:    data.slug ?? gen?.slug ?? null,
+        extras:  extrasForView,
         result,
       });
       // Инициализируем слайды для вкладки Презентация
       setModalTab("work");
       setPresImages({});
-      const ps = extrasObj?.presentationSlides;
-      setPresSlides(ps ? (ps.slides as Slide[]) : null);
+      setPresSlides(extracted && extracted.length > 0 ? extracted : null);
+      setDashPresSel(false);
+      setDashSpeechSel(false);
+      setDashExtrasErr(null);
     } catch {
       alert("Не удалось загрузить работу");
     } finally {
@@ -308,8 +396,243 @@ export default function DashboardPage() {
 
   function closeViewer() {
     setViewingClosing(true);
-    setTimeout(() => { setViewingGen(null); setViewingClosing(false); }, 200);
+    setTimeout(() => {
+      setViewingGen(null);
+      setViewingClosing(false);
+      setDashPresSel(false);
+      setDashSpeechSel(false);
+      setDashExtrasBusy(false);
+      setDashExtrasErr(null);
+    }, 200);
   }
+
+  async function mergeExtrasAfterPoll(genId: string, jobId: string, poll: { ready?: string[]; slides?: unknown }) {
+    const genRes = await fetch(`/api/generations/${genId}`);
+    if (!genRes.ok) throw new Error("Не удалось загрузить работу");
+    const genRow = await genRes.json();
+    let prev: Record<string, unknown> = {};
+    try {
+      if (genRow.extras) prev = JSON.parse(genRow.extras as string);
+    } catch {
+      prev = {};
+    }
+    const merged: Record<string, unknown> = { ...prev };
+    (poll.ready ?? []).forEach((item: string) => {
+      merged[item] = jobId;
+    });
+    if (poll.slides) merged.presentationSlides = poll.slides;
+    const pr = await fetch(`/api/generations/${genId}/extras`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extras: merged }),
+    });
+    if (!pr.ok) {
+      console.error("[dashboard extras PATCH]", pr.status, await pr.text());
+      throw new Error("Не удалось сохранить презентацию в профиле. Проверьте лимиты сервера.");
+    }
+  }
+
+  /** Обновить модал и слайды из БД после extras */
+  async function hydrateViewerAfterExtras(genId: string) {
+    const genRes = await fetch(`/api/generations/${genId}`);
+    if (!genRes.ok) return;
+    const genRow = await genRes.json();
+    let extrasObj: ExtrasData | null = null;
+    try {
+      extrasObj = genRow.extras ? JSON.parse(genRow.extras as string) : null;
+    } catch {
+      extrasObj = null;
+    }
+    setViewingGen({
+      id:       genRow.id,
+      topic:    genRow.topic,
+      workType: genRow.workType,
+      pages:    genRow.pages,
+      slug:     genRow.slug ?? null,
+      extras:   extrasObj,
+      result:   genRow.result as ReferatResult,
+    });
+    setPresSlides(extractSlidesFromPresentationSlides(extrasObj?.presentationSlides));
+    setPresImages({});
+    setModalTab("presentation");
+  }
+
+  /** Запуск extras из кабинета (поллинг + сохранение в БД). */
+  async function runDashboardExtras(
+    items: string[],
+    genId: string,
+    resPayload: ReferatResult,
+    wt: string,
+    topic: string,
+  ) {
+    setDashExtrasBusy(true);
+    setDashExtrasErr(null);
+    try {
+      const r = await fetch("/api/generate/extras", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic:     resPayload.title || topic,
+          work_type: wt,
+          items,
+          result:    resPayload,
+          profile:   resPayload.profile ?? null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || typeof data?.extrasJobId !== "string") {
+        setDashExtrasErr(typeof data?.error === "string" ? data.error : "Не удалось запустить генерацию");
+        return;
+      }
+      const jobId = data.extrasJobId as string;
+      for (;;) {
+        await new Promise(ok => setTimeout(ok, 4000));
+        const stRes = await fetch(`/api/generate/extras/status/${jobId}`, { cache: "no-store" });
+        const st    = await stRes.json();
+
+        if (st.status === "done") {
+          await mergeExtrasAfterPoll(genId, jobId, st);
+          try {
+            const listRes = await fetch("/api/generations");
+            const list    = await listRes.json();
+            if (Array.isArray(list)) setGenerations(list);
+          } catch { /* noop */ }
+          await hydrateViewerAfterExtras(genId);
+          return;
+        }
+        if (st.status === "error" || st.status === "not_found") {
+          setDashExtrasErr(typeof st.error === "string" ? st.error : "Ошибка генерации");
+          return;
+        }
+      }
+    } catch {
+      setDashExtrasErr("Сервер недоступен");
+    } finally {
+      setDashExtrasBusy(false);
+      setDashExtrasProgress(0);
+      dashExtrasProgRef.current = 0;
+    }
+  }
+
+  async function handleDashboardExtrasPayment() {
+    const v = viewingGen;
+    if (!v) return;
+
+    const hasPresReady = !!(v.extras?.presentationSlides || v.extras?.presentation);
+    const dashCanPres   = supportsExtras(v.workType) && !hasPresReady;
+    const dashCanSpeech = supportsExtras(v.workType) && !v.extras?.speech;
+
+    const items: string[] = [];
+    if (dashPresSel && dashCanPres) items.push("presentation");
+    if (dashSpeechSel && dashCanSpeech) items.push("speech");
+    if (!items.length) return;
+
+    if (isAdminUser) {
+      await runDashboardExtras(items, v.id, v.result, v.workType, v.topic);
+      return;
+    }
+
+    const basePayload = {
+      result: v.result,
+      workType: v.workType,
+      pages:    v.pages,
+      topic:    v.topic,
+      items,
+      returnTo:       "dashboard" as const,
+      generationId:   v.id,
+    };
+
+    try {
+      sessionStorage.setItem("pendingExtras", JSON.stringify(basePayload));
+      const res = await fetch("/api/payment/extras", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(typeof data?.error === "string" ? data.error : "Ошибка платежа");
+        return;
+      }
+      if (data.autoSucceed) {
+        sessionStorage.removeItem("pendingExtras");
+        await runDashboardExtras(items, v.id, v.result, v.workType, v.topic);
+      } else {
+        sessionStorage.setItem(
+          "pendingExtras",
+          JSON.stringify({
+            ...basePayload,
+            paymentId: data.paymentId as string,
+          }),
+        );
+        window.location.href = data.paymentUrl as string;
+      }
+    } catch {
+      alert("Не удалось создать платёж");
+    }
+  }
+
+  /** Вернулся платёж за extras из кабинета */
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const p =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    if (!p?.get("extrasAutoGenerate")) return;
+
+    if (extrasDashboardResumeSync) return;
+
+    router.replace("/dashboard");
+
+    const raw = sessionStorage.getItem("pendingExtras");
+    let parsed: {
+      items?: string[];
+      generationId?: string;
+      result?: ReferatResult;
+      workType?: string;
+      topic?: string;
+      returnTo?: string;
+    };
+    try {
+      if (!raw) return;
+      parsed = JSON.parse(raw);
+    } catch {
+      sessionStorage.removeItem("pendingExtras");
+      return;
+    }
+
+    if (parsed.returnTo !== "dashboard" || !parsed.generationId || !parsed.items?.length || !parsed.result) {
+      return;
+    }
+
+    extrasDashboardResumeSync = true;
+    sessionStorage.removeItem("pendingExtras");
+
+    void runDashboardExtras(
+      parsed.items,
+      parsed.generationId,
+      parsed.result,
+      parsed.workType ?? "Реферат",
+      parsed.topic ?? "",
+    ).finally(() => {
+      extrasDashboardResumeSync = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router]);
+
+  useEffect(() => {
+    if (!dashExtrasBusy) {
+      dashExtrasProgRef.current = 0;
+      setDashExtrasProgress(0);
+      return;
+    }
+    dashExtrasProgRef.current = 8;
+    setDashExtrasProgress(8);
+    const id = setInterval(() => {
+      dashExtrasProgRef.current = Math.min(94, dashExtrasProgRef.current + 3 + Math.random() * 4);
+      setDashExtrasProgress(Math.round(dashExtrasProgRef.current));
+    }, 500);
+    return () => clearInterval(id);
+  }, [dashExtrasBusy]);
 
   async function persistProfile() {
     if (!saveProfile || !session?.user) return;
@@ -331,16 +654,26 @@ export default function DashboardPage() {
     if (!src) return;
     const key = gen ? gen.id : "viewer";
     // Если скачиваем из просмотрщика — мержим данные титульника
-    const body = (!gen && TITLE_PAGE_TYPES.includes(src.workType))
+    const baseBody = (!gen && TITLE_PAGE_TYPES.includes(src.workType))
       ? { ...src.result, profile: { ...(src.result.profile ?? {}), ...buildProfilePayload() } }
       : src.result;
+    const docxBody = {
+      ...baseBody,
+      _activity: {
+        action: "DOCX_DOWNLOAD",
+        source: "dashboard",
+        generationId: src.id,
+        slug: src.slug,
+        workType: src.workType,
+      },
+    };
     if (!gen) persistProfile();
     setDownloading(key);
     try {
       const docxRes = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(docxBody),
       });
       if (!docxRes.ok) throw new Error();
       const blob = await docxRes.blob();
@@ -385,26 +718,88 @@ export default function DashboardPage() {
   async function handleDownloadExtra(type: "presentation" | "speech") {
     if (!viewingGen?.extras) return;
     if (type === "presentation") {
-      const slidesPayload = presSlides
-        ? { slides: presSlides, accent: (viewingGen.extras.presentationSlides as { accent?: string } | undefined)?.accent || "blue", images: presImages }
-        : viewingGen.extras.presentationSlides;
-      if (!slidesPayload) { alert("Данные презентации недоступны. Перегенерируйте дополнительные материалы."); return; }
+      const presentationJobId = viewingGen.extras.presentation;
+      const rawPs = viewingGen.extras.presentationSlides as unknown;
+      const accentMeta =
+        rawPs &&
+        typeof rawPs === "object" &&
+        !Array.isArray(rawPs) &&
+        "accent" in rawPs &&
+        typeof (rawPs as { accent?: unknown }).accent === "string"
+          ? (rawPs as { accent: string }).accent
+          : "blue";
+      const accent = accentMeta || "blue";
+      const slidesForPost = presSlides ?? extractSlidesFromPresentationSlides(rawPs);
+      const hasCustomImages = Object.keys(presImages).length > 0;
+
+      const downloadBlob = (blob: Blob) => {
+        trackWorkActivityClient({
+          action: "PPTX_DOWNLOAD",
+          source: "dashboard",
+          generationId: viewingGen.id,
+          slug: viewingGen.slug,
+          workType: viewingGen.workType,
+        });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "presentation.pptx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      };
+
+      const downloadByJobId = async (reason: "no_slides_saved" | "post_failed") => {
+        if (!presentationJobId) {
+          alert("Для этой работы не найден доп. заказ презентации. Оформите презентацию в кабинете.");
+          return;
+        }
+        const res = await fetch(`/api/download/presentation/${presentationJobId}`);
+        if (!res.ok) {
+          alert(
+            reason === "no_slides_saved"
+              ? "Не удалось восстановить презентацию: нет сохранённых данных в аккаунте и файла на сервере (после 24 ч временные файлы удаляются). Оформите презентацию заново во вкладке «Презентация» этой работы."
+              : "Сервер не смог заново собрать презентацию (или не хватило времени). Временного файла тоже нет. Через пару минут попробуйте снова или оформите презентацию заново во вкладке «Презентация»."
+          );
+          return;
+        }
+        const blob = await res.blob();
+        downloadBlob(blob);
+      };
+
+      if (!slidesForPost || slidesForPost.length === 0) {
+        await downloadByJobId("no_slides_saved");
+        return;
+      }
+
+      const postBody = {
+        slides: slidesForPost,
+        accent,
+        images: presImages,
+      };
+
       setDownloadingPptx(true);
       try {
-        const res = await fetch("/api/presentation/download", {
+        const res = await fetch("/api/generate/presentation/download", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(slidesPayload),
+          body: JSON.stringify(postBody),
         });
-        if (!res.ok) throw new Error("bad response");
-        const blob = await res.blob();
-        const url  = window.URL.createObjectURL(blob);
-        const a    = document.createElement("a");
-        a.href = url; a.download = "presentation.pptx";
-        document.body.appendChild(a); a.click(); a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch { alert("Ошибка скачивания, попробуйте снова"); }
-        finally { setDownloadingPptx(false); }
+        if (!res.ok) {
+          await downloadByJobId("post_failed");
+          return;
+        }
+        downloadBlob(await res.blob());
+      } catch {
+        try {
+          await downloadByJobId("post_failed");
+        } catch {
+          alert("Ошибка скачивания, попробуйте снова");
+        }
+      } finally {
+        setDownloadingPptx(false);
+      }
       return;
     }
     // Речь — скачиваем по jobId из /tmp
@@ -414,6 +809,13 @@ export default function DashboardPage() {
       const res = await fetch(`/api/download/speech/${jobId}`);
       if (!res.ok) { alert("Файл недоступен. Перегенерируйте дополнительные материалы."); return; }
       const blob = await res.blob();
+      trackWorkActivityClient({
+        action: "SPEECH_DOWNLOAD",
+        source: "dashboard",
+        generationId: viewingGen.id,
+        slug: viewingGen.slug,
+        workType: viewingGen.workType,
+      });
       const url  = window.URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href = url; a.download = "speech.docx";
@@ -454,6 +856,31 @@ export default function DashboardPage() {
   }
 
   const user = session?.user;
+
+  const vxDash = viewingGen;
+  const dashExtrasAvail =
+    !!(vxDash && supportsExtras(vxDash.workType));
+  const dashHasPresReady =
+    !!(vxDash?.extras?.presentationSlides || vxDash?.extras?.presentation);
+  const dashCanOrderPres =
+    !!(dashExtrasAvail && !dashHasPresReady);
+  const dashCanOrderSpeech =
+    !!(dashExtrasAvail && !vxDash?.extras?.speech);
+  const dashShowExtrasOrder =
+    !!(dashExtrasAvail && (dashCanOrderPres || dashCanOrderSpeech));
+  const dashExtrasTotal =
+    (dashPresSel && dashCanOrderPres ? 199 : 0) +
+    (dashSpeechSel && dashCanOrderSpeech ? 149 : 0);
+  const dashShowPresHero =
+    !!(
+      vxDash &&
+      modalTab === "presentation" &&
+      dashShowExtrasOrder &&
+      !(presSlides && presSlides.length > 0) &&
+      !dashExtrasBusy
+    );
+  const hasPresSlides = !!(presSlides && presSlides.length > 0);
+  const hasPresFileOnly = !!(vxDash?.extras?.presentation && !hasPresSlides);
 
   return (
     <div className={styles.page}>
@@ -575,7 +1002,16 @@ export default function DashboardPage() {
                             const docxRes = await fetch("/api/download", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify(result),
+                              body: JSON.stringify({
+                                ...result,
+                                _activity: {
+                                  action: "DOCX_DOWNLOAD",
+                                  source: "dashboard",
+                                  generationId: gen.id,
+                                  slug: gen.slug,
+                                  workType: gen.workType,
+                                },
+                              }),
                             });
                             if (!docxRes.ok) throw new Error();
                             const blob = await docxRes.blob();
@@ -661,18 +1097,20 @@ export default function DashboardPage() {
 
             {/* Табы */}
             <div className={styles.docTabs}>
-              <button className={`${styles.docTab} ${modalTab === "work" ? styles.docTabActive : ""}`}
+              <button type="button" className={`${styles.docTab} ${modalTab === "work" ? styles.docTabActive : ""}`}
                 onClick={() => setModalTab("work")}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/docx-icon.png" alt="" className={styles.docTabIcon} />
                 Работа
               </button>
-              <button className={`${styles.docTab} ${modalTab === "presentation" ? styles.docTabActive : ""}`}
-                onClick={() => setModalTab("presentation")}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/pptx-icon.svg" alt="" className={styles.docTabIcon} />
-                Презентация
-              </button>
+              {supportsExtras(viewingGen.workType) && (
+                <button type="button" className={`${styles.docTab} ${modalTab === "presentation" ? styles.docTabActive : ""}`}
+                  onClick={() => setModalTab("presentation")}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/pptx-icon.svg" alt="" className={styles.docTabIcon} />
+                  Презентация
+                </button>
+              )}
             </div>
 
             <div className={styles.docModalBody}>
@@ -689,15 +1127,114 @@ export default function DashboardPage() {
                 <div ref={previewContainerRef} className={styles.docPreviewContainer} />
               </div>
               {/* PresentationViewer — скрыт при табе Работа */}
-              <div style={{ display: modalTab === "presentation" ? "flex" : "none", height: "100%", flexDirection: "column" }}>
-                <PresentationViewer
-                  slides={presSlides ?? []}
-                  accent={(viewingGen.extras?.presentationSlides as { accent?: string } | undefined)?.accent || "blue"}
-                  mode="embedded"
-                  images={presImages}
-                  onSlidesChange={setPresSlides}
-                  onImagesChange={setPresImages}
-                />
+              <div
+                style={{
+                  display: modalTab === "presentation" ? "flex" : "none",
+                  flex: 1,
+                  minHeight: 0,
+                  width: "100%",
+                  flexDirection: "column",
+                  position: "relative",
+                }}
+              >
+                {dashShowPresHero ? (
+                  <div className={styles.dashPresentationHero}>
+                    <p className={styles.dashPresentationHeroHint}>
+                      Выберите дополнительные материалы для вашей работы. После оплаты генерация начнется автоматически.
+                    </p>
+                    <div className={styles.dashPresentationHeroGrid}>
+                      {dashCanOrderPres && (
+                        <button
+                          type="button"
+                          className={`${styles.dashPresentationHeroCard} ${dashPresSel ? styles.dashPresentationHeroCardActive : ""}`}
+                          onClick={() => setDashPresSel(v => !v)}
+                        >
+                          <img src="/pptx-icon.svg" alt="" className={styles.dashPresentationHeroIcon} />
+                          <span className={styles.dashPresentationHeroTitle}>Презентация</span>
+                          <span className={styles.dashPresentationHeroPrice}>+199 ₽</span>
+                        </button>
+                      )}
+                      {dashCanOrderSpeech && (
+                        <button
+                          type="button"
+                          className={`${styles.dashPresentationHeroCard} ${dashSpeechSel ? styles.dashPresentationHeroCardActive : ""}`}
+                          onClick={() => setDashSpeechSel(v => !v)}
+                        >
+                          <img src="/txt-icon.svg" alt="" className={styles.dashPresentationHeroIcon} />
+                          <span className={styles.dashPresentationHeroTitle}>Текст выступления</span>
+                          <span className={styles.dashPresentationHeroPrice}>+149 ₽</span>
+                        </button>
+                      )}
+                    </div>
+                    {!isMobileViewport && dashExtrasTotal > 0 && (
+                      <button type="button" className={styles.dashPresentationHeroPayBtn} onClick={handleDashboardExtrasPayment}>
+                        Оплатить {dashExtrasTotal} ₽
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {hasPresSlides ? (
+                      <PresentationViewer
+                        slides={presSlides ?? []}
+                        accent={(viewingGen.extras?.presentationSlides as { accent?: string } | undefined)?.accent || "blue"}
+                        mode="embedded"
+                        images={presImages}
+                        onSlidesChange={setPresSlides}
+                        onImagesChange={setPresImages}
+                      />
+                    ) : (
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "rgba(255,255,255,0.8)", textAlign: "center", padding: 24 }}>
+                        <p style={{ margin: 0, fontSize: 14, fontFamily: "\"Golos Text\", -apple-system, sans-serif", maxWidth: 420, lineHeight: 1.5 }}>
+                          {hasPresFileOnly
+                            ? "Предпросмотр здесь собирается из сохранённых слайдов. Для этой работы в базе есть только признак заказа, а сам список слайдов при сохранении не попал — поэтому превью пустое. Оформи «Презентацию» к этой же работе ещё раз (после фиксов сервера данные сохранятся полностью) или попробуй скачать PPTX."
+                            : "Предпросмотр недоступен для этой версии записи работы."}
+                        </p>
+                        {hasPresFileOnly && (
+                          <button
+                            type="button"
+                            className={styles.dashPresentationHeroPayBtn}
+                            onClick={() => handleDownloadExtra("presentation")}
+                          >
+                            Скачать PPTX
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {dashExtrasBusy && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset:            0,
+                          background:       "#1a1a2e",
+                          display:          "flex",
+                          flexDirection:    "column",
+                          alignItems:       "center",
+                          justifyContent:   "center",
+                          gap:              14,
+                          zIndex:           6,
+                          padding:          24,
+                          textAlign:        "center",
+                        }}
+                      >
+                        <span style={{ color: "rgba(255,255,255,0.82)", fontSize: 14, marginBottom: 6 }}>
+                          Создаём материалы…
+                        </span>
+                        <div style={{ width: "82%", maxWidth: 340, height: 8, background: "#2d3748", borderRadius: 4, overflow: "hidden" }}>
+                          <div
+                            style={{
+                              height:           "100%",
+                              width:            `${dashExtrasProgress}%`,
+                              background:       "linear-gradient(90deg, #1e3a5f, #d97706)",
+                              borderRadius:     4,
+                              transition:       "width 0.35s ease",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
@@ -711,7 +1248,7 @@ export default function DashboardPage() {
               <hr className={styles.docDivider} />
 
               {/* Скачать DOCX / PPTX в зависимости от таба */}
-              {modalTab === "presentation" && presSlides ? (
+              {modalTab === "presentation" && (hasPresSlides || hasPresFileOnly) ? (
                 <button className={styles.docDownloadBtn} onClick={() => handleDownloadExtra("presentation")}
                   disabled={downloadingPptx}
                   style={{ background: downloadingPptx ? "#374151" : "#1E3A5F", color: "#fff" }}>
@@ -729,6 +1266,73 @@ export default function DashboardPage() {
                     ? <><span className={styles.docBtnSpinner} />Создаём...</>
                     : <><img src="/docx-icon.png" alt="" className={styles.docDownloadIcon} />Скачать DOCX</>}
                 </button>
+              )}
+
+              {/* Заказ доп. материалов к уже сохранённой работе */}
+              {dashShowExtrasOrder && (
+                <>
+                  <hr className={styles.docDivider} />
+                  <p className={styles.docExtrasHeading}>Добавить материалы</p>
+                  {dashExtrasBusy ? (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: 8 }}>Генерируем… {dashExtrasProgress}%</div>
+                      <div style={{ width: "100%", height: 7, background: "#E2E8F0", borderRadius: 4, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${dashExtrasProgress}%`,
+                            background: "linear-gradient(90deg, #1e3a5f, #d97706)",
+                            borderRadius: 4,
+                            transition: "width 0.35s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.dashExtrasToggles}>
+                      {dashCanOrderPres && (
+                        <label className={styles.dashExtrasToggleRow}>
+                          <input
+                            type="checkbox"
+                            className={styles.dashExtrasToggleInput}
+                            checked={dashPresSel}
+                            onChange={e => setDashPresSel(e.target.checked)}
+                          />
+                          <span className={styles.dashExtrasToggleSlider} />
+                          <span className={styles.dashExtrasToggleLabel}>
+                            <img src="/pptx-icon.svg" alt="" className={styles.dashExtrasToggleIcon} />
+                            Презентация
+                          </span>
+                          <span className={styles.dashExtrasTogglePrice}>+199 ₽</span>
+                        </label>
+                      )}
+                      {dashCanOrderSpeech && (
+                        <label className={styles.dashExtrasToggleRow}>
+                          <input
+                            type="checkbox"
+                            className={styles.dashExtrasToggleInput}
+                            checked={dashSpeechSel}
+                            onChange={e => setDashSpeechSel(e.target.checked)}
+                          />
+                          <span className={styles.dashExtrasToggleSlider} />
+                          <span className={styles.dashExtrasToggleLabel}>
+                            <img src="/txt-icon.svg" alt="" className={styles.dashExtrasToggleIcon} />
+                            Текст выступления
+                          </span>
+                          <span className={styles.dashExtrasTogglePrice}>+149 ₽</span>
+                        </label>
+                      )}
+                      {dashExtrasTotal > 0 && (
+                        <button type="button" className={styles.dashExtrasPayBtn} onClick={handleDashboardExtrasPayment}>
+                          Оплатить {dashExtrasTotal} ₽
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {dashExtrasErr && (
+                    <p className={styles.dashExtrasError}>{dashExtrasErr}</p>
+                  )}
+                </>
               )}
 
               {/* Дополнительные материалы — только выступление, PPTX скачивается большой кнопкой */}
@@ -817,7 +1421,7 @@ export default function DashboardPage() {
                   <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
                 </div>
               )}
-              {modalTab === "presentation" && presSlides ? (
+              {modalTab === "presentation" && (hasPresSlides || hasPresFileOnly) ? (
                 <button
                   className={styles.docDownloadBtn}
                   onClick={() => handleDownloadExtra("presentation")}
@@ -846,6 +1450,57 @@ export default function DashboardPage() {
                     Выступление .txt
                   </button>
                 </div>
+              )}
+              {dashShowExtrasOrder && (
+                <>
+                  {dashExtrasBusy ? (
+                    <div className={styles.dashMobileExtrasProgress}>
+                      <span>Создаём материалы… {dashExtrasProgress}%</span>
+                      <div className={styles.dashMobileExtrasBarOuter}>
+                        <div className={styles.dashMobileExtrasBarInner} style={{ width: `${dashExtrasProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {modalTab === "work" && (
+                        <div className={styles.dashExtrasMobileGrid}>
+                          {dashCanOrderPres && (
+                            <label className={`${styles.dashExtrasMobileChip} ${dashPresSel ? styles.dashExtrasMobileChipOn : ""}`}>
+                              <input
+                                type="checkbox"
+                                className={styles.dashExtrasToggleInput}
+                                checked={dashPresSel}
+                                onChange={e => setDashPresSel(e.target.checked)}
+                              />
+                              <img src="/pptx-icon.svg" alt="" className={styles.dashExtrasMobileChipIcon} />
+                              <span>Презентация</span>
+                              <span className={styles.dashExtrasMobileChipPrice}>+199</span>
+                            </label>
+                          )}
+                          {dashCanOrderSpeech && (
+                            <label className={`${styles.dashExtrasMobileChip} ${dashSpeechSel ? styles.dashExtrasMobileChipOn : ""}`}>
+                              <input
+                                type="checkbox"
+                                className={styles.dashExtrasToggleInput}
+                                checked={dashSpeechSel}
+                                onChange={e => setDashSpeechSel(e.target.checked)}
+                              />
+                              <img src="/txt-icon.svg" alt="" className={styles.dashExtrasMobileChipIcon} />
+                              <span>Выступление</span>
+                              <span className={styles.dashExtrasMobileChipPrice}>+149</span>
+                            </label>
+                          )}
+                        </div>
+                      )}
+                      {dashExtrasTotal > 0 && (
+                        <button type="button" className={`${styles.dashExtrasPayBtnWide} ${styles.dashExtrasPayBtnWideBlue}`} onClick={handleDashboardExtrasPayment}>
+                          Оплатить {dashExtrasTotal} ₽
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {dashExtrasErr && <p className={styles.dashExtrasErrorMobile}>{dashExtrasErr}</p>}
+                </>
               )}
               {TITLE_PAGE_TYPES.includes(viewingGen.workType) && (
                 <button className={styles.docMobileTitleBtn} onClick={() => setShowMobileTitleForm(true)}>

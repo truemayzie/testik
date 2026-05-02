@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordWorkActivity } from "@/lib/workActivity";
 
 export async function POST(
   _req: NextRequest,
@@ -16,12 +17,21 @@ export async function POST(
 
   const generation = await prisma.generation.findUnique({
     where: { slug: params.slug },
-    select: { userId: true, result: true },
+    select: { id: true, userId: true, result: true, slug: true, workType: true },
   });
 
   if (!generation || generation.userId !== userId) {
     return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
   }
+
+  void recordWorkActivity({
+    userId,
+    generationId: generation.id,
+    action: "DOCX_DOWNLOAD",
+    source: "preview",
+    slug: generation.slug,
+    workType: generation.workType,
+  }).catch(() => {});
 
   const result = JSON.parse(generation.result);
 

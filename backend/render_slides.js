@@ -266,36 +266,57 @@ async function main() {
   const accent = data.accent || "blue";
   const images = data.images || {};   // { "0": "data:image/...;base64,...", ... }
 
+  // deviceScaleFactor 2 — качество текста и линий в PPTX (логический 1280×720 → PNG 2560×1440).
+  // При нехватке RAM на VPS: RENDER_SLIDES_DSF=1 в окружении процесса backend.
+  const dsfRaw = parseInt(process.env.RENDER_SLIDES_DSF || "2", 10);
+  const deviceScaleFactor = Number.isFinite(dsfRaw)
+    ? Math.min(3, Math.max(1, dsfRaw))
+    : 2;
+
   const browser = await puppeteer.launch({
     args: [
-      "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
-      "--disable-gpu", "--disable-software-rasterizer", "--single-process",
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-software-rasterizer",
     ],
     headless: true,
   });
 
   const results = [];
+  let page;
   try {
+    page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor });
+
     for (let i = 0; i < slides.length; i++) {
       const sl    = slides[i];
       const image = images[String(i)] || null;
       const html  = buildHtml(sl, accent, image);
 
-      const pg = await browser.newPage();
-      await pg.setViewport({ width: 1280, height: 720, deviceScaleFactor: 2 });
-      await pg.setContent(html, { waitUntil: "domcontentloaded" });
-      const png = await pg.screenshot({ type: "png", fullPage: false, encoding: "base64" });
-      await pg.close();
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
+      const png = await page.screenshot({ type: "png", fullPage: false, encoding: "base64" });
       results.push(png);
     }
   } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch (_) { /* noop */ }
+    }
     await browser.close();
   }
 
-  process.stdout.write(JSON.stringify(results));
+  return results;
 }
 
-main().catch(err => {
-  process.stderr.write(String(err));
-  process.exit(1);
-});
+main()
+  .then((results) => {
+    process.stdout.write(JSON.stringify(results), () => process.exit(0));
+  })
+  .catch((err) => {
+    process.stderr.write(String(err));
+    process.exit(1);
+  });

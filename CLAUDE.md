@@ -121,6 +121,8 @@ npm run db:studio    # GUI Prisma Studio
 - Прокси через GitHub Actions для обхода блокировок Claude API из РФ
 - Запускается при старте FastAPI (`start_callback_server()`)
 - `PROXY_SECRET` обязателен (insecure fallback удалён, при отсутствии backend падает на старте callback-сервера)
+- **`POST https://api.github.com/.../dispatches`**: `requests.Session` с **`trust_env = False`** — запуск workflow **не идёт через `HTTPS_PROXY`/Privoxy**. Иначе CONNECT-туннель к GitHub периодически давал `SSLEOFError` и обрывал длинную генерацию посредине процесса.
+- До **5 повторных попыток** при `SSLError`, `ConnectionError`, `Timeout`, `OSError` с нарастающей паузой.
 
 ## Фронтенд (Next.js)
 
@@ -141,6 +143,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 ### Ключевые файлы фронтенда
 
 **`app/page.tsx`** — главная страница
+- При старте новой генерации (`runGeneration`) сбрасываются `generationId` / `generationSlug`; после успешного poll подставляются `id` и `slug` (для журнала скачиваний и связи с extras)
 - Hero с формой + выбором типа работы + TypewriterInput
 - Прогресс-бар (тёмная тема, navy градиент `#061525 → #1B3A6B`, shimmer) — шаги в `stepsRef` (ref, не state — избегает stale closure)
   - Дизайн: точки-шаги (pending/active с пульсацией/done), тема работы в кавычках, счётчик «Шаг N из M», анимированная смена подписи текущего шага (`key={stepIndex}` для ре-монтирования)
@@ -158,6 +161,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - `_extrasGenId` — хранит DB id генерации для сохранения extras job IDs
 
 **`app/dashboard/page.tsx`** — «Мои работы»
+- Журнал скачиваний: см. `WorkActivity` (`_activity` в `POST /api/download` для DOCX + `trackWorkActivityClient` после PPTX/Speech)
 - Список карточек с бейджами типа работы
 - Extras-бейджи: Презентация (красный `#EF4444`), Выступление (янтарный `#F59E0B`)
 - Модальное окно через `createPortal`: DOCX-превью слева + info-панель справа (десктоп), bottom-sheet (мобиль)
@@ -204,13 +208,15 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 | `/api/payment/extras` | POST | Платёж за extras |
 | `/api/payment/check` | GET | Проверить наличие оплаченного платежа |
 | `/api/payment/webhook` | POST | Вебхук ЮКассы |
-| `/api/download` | POST | Скачать DOCX результата |
+| `/api/download` | POST | Скачать DOCX результата; опционально `_activity` в JSON (служебное поле, вырезается до прокси на FastAPI) — запись в `WorkActivity` |
+| `/api/work-activity` | POST | Fire-and-forget: фиксация PPTX/Speech download (клиент после успешного blob) |
 | `/api/download/presentation/[jobId]` | GET | Прокси PPTX с бэкенда |
 | `/api/download/speech/[jobId]` | GET | Прокси speech DOCX с бэкенда |
 | `/api/preview/[slug]` | GET | Публичный предпросмотр |
-| `/api/preview/[slug]/download` | GET | Скачать DOCX по slug |
+| `/api/preview/[slug]/download` | POST | Скачать DOCX по slug (владелец); пишет `WorkActivity` с `source: preview` |
 | `/api/profile` | GET/PATCH | Профиль пользователя |
 | `/api/admin/*` | — | Статистика, пользователи, платежи, работы, отзывы |
+| `/api/admin/work-activity` | GET | Журнал скачиваний (`?limit=`, `?email=`); только `role=admin` |
 | `/api/capacity` | GET | Прокси на FastAPI `/api/slots` — текущая занятость слотов |
 | `/api/gift` | GET | Проверка доступной gift-генерации (по gift payment) |
 | `/api/feedback` | GET | Сохранить рейтинг из письма (`?generationId=X&rating=Y`), редирект |
@@ -254,6 +260,9 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - **`HealthCheck`** — лог проверок состояния системы
 - **`SeoPage`** — SEO-страницы по типу работы + предмету
 - **`FeedbackComment`** — детальный отзыв: `generationId`, `issues` (JSON-массив строк), `comment String?`
+- **`WorkActivity`** — учёт скачиваний: `userId`, `generationId?`, **`action`** (`DOCX_DOWNLOAD` \| `PPTX_DOWNLOAD` \| `SPEECH_DOWNLOAD`), **`source`** (`home` \| `dashboard` \| `preview`), `slug`, `workType`, `meta?` (JSON), `createdAt`. Привязка `generationId` проверяется на сервере (владелец).
+
+**`lib/workActivity.ts`** — `recordWorkActivity` для API-маршрутов.
 
 **`lib/db.ts`** — хелперы: `saveGeneration`, `getUserGenerations`, `getGeneration`, `deleteGeneration`, `updateGenerationExtras`
 
@@ -405,3 +414,8 @@ Referrer-Policy: strict-origin-when-cross-origin
 - Backend: `ReferatResponse` с `model_config = ConfigDict(extra="allow")` — в ответе результата сохраняется `_cost_usd` для строки стоимости в `tgNotify`
 - SEO: компактное превью сочинений/эссе (фрагмент + blur + lock card), правки CSS; скрипт `add-sochinenie-top5.ts` для контента топ-страниц
 - Telegram: бот поддержки через Privoxy (`TELEGRAM_HTTP_PROXY` + `aiohttp-socks`), дублирование URL текстом при «Перейти на сайт»
+
+### Изменения 2026-05-02
+- **`github_proxy.py`**: запуск GitHub Actions (`repository_dispatch`) без системного HTTPS-прокси + ретраи — устранён обрыв TLS к `api.github.com` через Privoxy на длинных работах (курсовые и т.д.).
+- **Учёт скачиваний**: модель **`WorkActivity`**, `POST /api/work-activity`, запись DOCX-потоков через **`_activity`** в `POST /api/download`, серверная запись для **`POST /api/preview/[slug]/download`**, `GET /api/admin/work-activity` для поддержки (`app/lib/trackWorkActivity.ts` на клиенте для PPTX/Speech).
+- Деплой: после изменения схемы — `npm run db:push` в `frontend/`; оплата и цепочка `generate → poll → saveGeneration` не затрагиваются (кроме косметики состояния `generationSlug` на главной).

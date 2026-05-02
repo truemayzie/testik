@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { tgNotify } from "@/lib/tgNotify";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 const EXTRAS_JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа
@@ -42,6 +43,22 @@ export async function POST(request: NextRequest) {
         update: { userId },
       });
       console.info("[extras] job started", { userId, extrasJobId: data.extrasJobId });
+
+      const topic = typeof body.topic === "string" ? body.topic : "—";
+      const wt    = typeof body.work_type === "string" ? body.work_type : "—";
+      const rawItems = Array.isArray(body.items) ? body.items : [];
+      const itemLabels = rawItems.flatMap((x: unknown) => {
+        if (x === "presentation") return ["презентация"];
+        if (x === "speech") return ["текст выступления"];
+        return [];
+      });
+      prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }).then((u) => {
+        const name = u?.fullName || userId;
+        const line = itemLabels.length ? itemLabels.join(", ") : rawItems.join(", ");
+        tgNotify(`🎞 <b>Дополнительные материалы</b> (старт)\n👤 ${name}\n📄 ${wt}: «${topic}»\n📎 ${line}`);
+      }).catch(() => {
+        tgNotify(`🎞 <b>Дополнительные материалы</b> (старт)\n👤 ${userId}\n📄 ${wt}: «${topic}»\n📎 ${rawItems}`);
+      });
     }
     return NextResponse.json(data);
   } catch (err) {

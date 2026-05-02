@@ -1243,6 +1243,9 @@
 
 .modalLeft {
   flex: 0 0 70%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   background: #1e2a3a;
@@ -1526,6 +1529,12 @@
   margin-top: 4px;
 }
 .payExtrasBtn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.payExtrasBtnMobile {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  background: linear-gradient(135deg, #1E3A5F 0%, #1B3A6B 55%, #35578A 100%);
+  box-shadow: 0 8px 18px rgba(27, 58, 107, 0.28);
+}
 
 /* ── Extras: статус и скачивание ── */
 .extrasLoading {
@@ -3257,5 +3266,155 @@
   .faqQ {
     font-size: 0.9rem;
     padding: 14px 16px;
+  }
+}
+
+/* ── Вкладка «Презентация»: крупный выбор extras (главная модалка) ── */
+.presentationExtrasHero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px 20px 32px;
+  box-sizing: border-box;
+}
+
+.presentationExtrasHeroHint {
+  margin: 0;
+  font-family: "Golos Text", sans-serif;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+  max-width: 360px;
+}
+
+.presentationExtrasHeroGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.presentationHeroCard {
+  font-family: "Golos Text", -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 16px 22px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, transform 0.12s;
+  color: inherit;
+}
+
+.presentationHeroCard:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.presentationHeroCard:active {
+  transform: scale(0.98);
+}
+
+.presentationHeroCardActive {
+  border-color: rgba(251, 191, 36, 0.75);
+  background: rgba(217, 119, 6, 0.12);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25);
+}
+
+.presentationHeroIcon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.presentationHeroTitle {
+  font-family: "Golos Text", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.presentationHeroPrice {
+  font-family: "Golos Text", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fcd34d;
+}
+
+.presentationHeroPayBtn {
+  font-family: "Golos Text", -apple-system, sans-serif;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #0f2645 0%, #1b3a6b 55%, #2d4f80 100%);
+  border: 1px solid rgba(147, 197, 253, 0.28);
+  border-radius: 12px;
+  padding: 13px 26px;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.12s, box-shadow 0.15s;
+  box-shadow: 0 10px 20px rgba(4, 17, 34, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.presentationHeroPayBtn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 24px rgba(4, 17, 34, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.presentationHeroPayBtn:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 560px) {
+  .presentationExtrasHero {
+    padding: 18px 12px 22px;
+  }
+
+  .presentationExtrasHeroGrid {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+    width: min(100%, 340px);
+  }
+
+  .presentationHeroCard {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 16px 14px;
+    gap: 12px;
+    min-height: 86px;
+  }
+
+  .presentationHeroIcon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .presentationHeroTitle,
+  .presentationHeroPrice {
+    text-align: left;
+  }
+
+  .presentationHeroTitle {
+    font-size: 0.92rem;
+    line-height: 1.2;
+  }
+
+  .presentationHeroPrice {
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .presentationHeroCard .presentationHeroPrice {
+    margin-left: auto;
   }
 }

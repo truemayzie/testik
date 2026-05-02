@@ -1172,6 +1172,7 @@
 /* Left column: preview */
 .docModalLeft {
   flex: 0 0 70%;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   background: #1e2a3a;
@@ -1181,7 +1182,7 @@
   border-radius: 20px 0 0 20px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
 }
 
 .docPreviewContainer {
@@ -1703,5 +1704,310 @@
   .docMobileBottom {
     display: flex;
     grid-row: 4;
+  }
+}
+
+/* ── Презентация / extras из «Мои работы» ── */
+
+.dashPresentationHero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 20px 16px 28px;
+  box-sizing: border-box;
+}
+
+.dashPresentationHeroHint {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.66);
+  text-align: center;
+  max-width: 360px;
+}
+
+.dashPresentationHeroGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.dashPresentationHeroCard {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dashPresentationHeroCard:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.dashPresentationHeroCardActive {
+  border-color: rgba(251, 191, 36, 0.75);
+  background: rgba(217, 119, 6, 0.14);
+}
+
+.dashPresentationHeroIcon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.dashPresentationHeroTitle {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.dashPresentationHeroPrice {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fcd34d;
+}
+
+.dashPresentationHeroPayBtn {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #0f2645 0%, #1b3a6b 55%, #2d4f80 100%);
+  border: 1px solid rgba(147, 197, 253, 0.28);
+  border-radius: 11px;
+  padding: 12px 24px;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(4, 17, 34, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  transition: filter 0.15s, transform 0.12s, box-shadow 0.15s;
+}
+
+.dashPresentationHeroPayBtn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 24px rgba(4, 17, 34, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.dashExtrasToggles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashExtrasToggleRow {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dashExtrasToggleInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.dashExtrasToggleSlider {
+  flex-shrink: 0;
+  width: 34px;
+  height: 18px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.dashExtrasToggleSlider::after {
+  content: "";
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2.5px;
+  left: 3px;
+  transition: left 0.2s;
+}
+
+.dashExtrasToggleRow:focus-within .dashExtrasToggleSlider {
+  outline: 2px solid #1b3a6b;
+  outline-offset: 1px;
+}
+
+.dashExtrasToggleInput:checked + .dashExtrasToggleSlider {
+  background: #1b3a6b;
+}
+
+.dashExtrasToggleInput:checked + .dashExtrasToggleSlider::after {
+  left: 17px;
+}
+
+.dashExtrasToggleLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+
+.dashExtrasToggleIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.dashExtrasTogglePrice {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #1b3a6b;
+}
+
+.dashExtrasPayBtn {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  margin-top: 4px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0f2645 0%, #1b3a6b 55%, #2d4f80 100%);
+  box-shadow: 0 8px 16px rgba(27, 58, 107, 0.24);
+}
+
+.dashExtrasPayBtnWide {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0f2645 0%, #1b3a6b 55%, #2d4f80 100%);
+  box-shadow: 0 8px 16px rgba(27, 58, 107, 0.24);
+}
+
+.dashExtrasPayBtnWideBlue {
+  background: linear-gradient(135deg, #1E3A5F 0%, #1B3A6B 55%, #35578A 100%);
+}
+
+.dashExtrasError,
+.dashExtrasErrorMobile {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #dc2626;
+  line-height: 1.35;
+}
+
+.dashExtrasMobileGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.dashExtrasMobileChip {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+}
+
+.dashExtrasMobileChipOn {
+  border-color: #1b3a6b;
+  background: #eff6ff;
+}
+
+.dashExtrasMobileChipIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.dashExtrasMobileChipPrice {
+  width: 100%;
+  font-size: 0.68rem;
+  color: #1b3a6b;
+}
+
+.dashMobileExtrasProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+.dashMobileExtrasProgress span {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.dashMobileExtrasBarOuter {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dashMobileExtrasBarInner {
+  height: 100%;
+  background: linear-gradient(90deg, #1e3a5f, #d97706);
+  transition: width 0.35s ease;
+}
+
+@media (max-width: 520px) {
+  .dashPresentationHero {
+    padding: 14px 10px 18px;
+  }
+
+  .dashPresentationHeroGrid {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+    width: min(100%, 330px);
+  }
+
+  .dashPresentationHeroCard {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 14px 12px;
+    gap: 10px;
+    min-height: 78px;
+  }
+
+  .dashPresentationHeroPrice {
+    margin-left: auto;
+    white-space: nowrap;
   }
 }

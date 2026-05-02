@@ -108,14 +108,41 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> tuple[str, di
         }
     }
 
-    resp = requests.post(
-        f"https://api.github.com/repos/{GITHUB_REPO}/dispatches",
-        headers=headers,
-        json=payload
-    )
+    # Важно: не использовать HTTP(S)_PROXY (Privoxy) для api.github.com.
+    # CONNECT-туннель через локальный прокси периодически рвёт TLS (SSLEOFError),
+    # из‑за чего падает вся генерация посредине длинной курсовой.
+    dispatch_url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
+    resp = None
+    for attempt in range(1, 6):
+        sess = None
+        try:
+            sess = requests.Session()
+            sess.trust_env = False
+            resp = sess.post(
+                dispatch_url,
+                headers=headers,
+                json=payload,
+                timeout=(20, 90),
+            )
+            if resp.status_code != 204:
+                raise RuntimeError(f"Ошибка запуска workflow: {resp.status_code} {resp.text}")
+            break
+        except (
+            requests.exceptions.SSLError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            OSError,
+        ) as e:
+            wait = min(3 * attempt, 20)
+            print(f"[Proxy] dispatch попытка {attempt}/5 не удалась ({type(e).__name__}), пауза {wait}s …")
+            if attempt == 5:
+                raise RuntimeError(f"GitHub dispatch после 5 попыток: {e}") from e
+            time.sleep(wait)
+        finally:
+            if sess is not None:
+                sess.close()
 
-    if resp.status_code != 204:
-        raise Exception(f"Ошибка запуска workflow: {resp.status_code} {resp.text}")
+    assert resp is not None
 
     print(f"[Proxy] Workflow запущен, ждём ответ...")
 

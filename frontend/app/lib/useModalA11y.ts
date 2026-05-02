@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 type Options = {
   active: boolean;
@@ -10,19 +10,25 @@ type Options = {
 };
 
 export function useModalA11y({ active, containerRef, initialFocusRef, onClose }: Options) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!active) return;
 
-    const prevFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prevFocusedOutside =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     (initialFocusRef?.current ?? containerRef.current)?.focus();
 
     function onKeyDown(e: KeyboardEvent) {
       const container = containerRef.current;
       if (!container) return;
 
-      if (e.key === "Escape" && onClose) {
+      const close = onCloseRef.current;
+      if (e.key === "Escape" && close) {
         e.preventDefault();
-        onClose();
+        close();
         return;
       }
       if (e.key !== "Tab") return;
@@ -48,7 +54,7 @@ export function useModalA11y({ active, containerRef, initialFocusRef, onClose }:
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      prevFocused?.focus();
+      prevFocusedOutside?.focus();
     };
-  }, [active, containerRef, initialFocusRef, onClose]);
+  }, [active, containerRef, initialFocusRef]);
 }

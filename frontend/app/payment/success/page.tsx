@@ -17,13 +17,18 @@ export default function PaymentSuccessPage() {
     const isExtras = searchParams.get("mode") === "extras";
 
     if (isExtras) {
-      // Extras: читаем pendingExtras
-      let pending: { paymentId?: string } = {};
+      // Extras: читаем pendingExtras (returnTo=dashboard → редирект в кабинет)
+      let pending: { paymentId?: string; returnTo?: string } = {};
       try { pending = JSON.parse(sessionStorage.getItem("pendingExtras") || "{}"); } catch {}
+
+      const extrasTarget =
+        pending.returnTo === "dashboard"
+          ? "/dashboard?extrasAutoGenerate=1"
+          : "/?extrasAutoGenerate=1";
 
       const paymentId = pending.paymentId;
       if (!paymentId) {
-        router.push("/?extrasAutoGenerate=1");
+        router.push(extrasTarget);
         return;
       }
 
@@ -37,7 +42,7 @@ export default function PaymentSuccessPage() {
           if (data.status === "succeeded") {
             clearInterval(id);
             setState("succeeded");
-            setTimeout(() => router.push("/?extrasAutoGenerate=1"), 1200);
+            setTimeout(() => router.push(extrasTarget), 1200);
             return;
           }
           if (data.status === "cancelled") { clearInterval(id); setState("cancelled"); return; }
@@ -45,7 +50,7 @@ export default function PaymentSuccessPage() {
         if (polls >= MAX_POLLS) {
           clearInterval(id);
           setState("timeout");
-          setTimeout(() => router.push("/?extrasAutoGenerate=1"), 2000);
+          setTimeout(() => router.push(extrasTarget), 2000);
         }
       }, 2000);
       return () => clearInterval(id);

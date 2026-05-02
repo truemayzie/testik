@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180_000),
+      // По одному Puppeteer на слайд на backend — до ~12×95 с плюс сборка PPTX
+      signal: AbortSignal.timeout(1_200_000),
     });
     if (!res.ok) {
       const text = await res.text();
