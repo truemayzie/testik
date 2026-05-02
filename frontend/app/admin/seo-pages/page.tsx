@@ -9,6 +9,43 @@ import { IndexCheckLinks } from "../components/IndexCheckLinks";
 
 type TabKey = "templates" | "previews";
 
+type IndexGoogleRow = {
+  verdict: string | null;
+  coverageState: string | null;
+  lastCheck: string | null;
+};
+
+function GoogleGscBadge({ row }: { row: IndexGoogleRow | null }) {
+  if (!row?.lastCheck && !row?.verdict && !row?.coverageState) {
+    return <span style={{ color: "#94A3B8", fontSize: "0.8rem" }}>—</span>;
+  }
+  const v = row.verdict ?? "";
+  let color = "#64748B";
+  let label = row.coverageState || v || "проверено";
+  if (v === "PASS") {
+    color = "#15803D";
+    label = "В индексе";
+  } else if (v === "FAIL") {
+    color = "#B91C1C";
+    label = "Нет в индексе";
+  } else if (v === "PARTIAL") {
+    color = "#B45309";
+    label = "Частично";
+  } else if (v === "NEUTRAL") {
+    color = "#475569";
+    label = "Нейтрально";
+  }
+  const tip = [row.verdict, row.coverageState].filter(Boolean).join(" · ");
+  return (
+    <div style={{ fontSize: "0.78rem", lineHeight: 1.35 }} title={tip || undefined}>
+      <div style={{ fontWeight: 700, color }}>{label}</div>
+      {row.lastCheck && (
+        <div style={{ color: "#94A3B8", marginTop: 2 }}>{new Date(row.lastCheck).toLocaleString("ru-RU")}</div>
+      )}
+    </div>
+  );
+}
+
 async function parseAdminFetch<T>(response: Response): Promise<T> {
   const bodyText = await response.text();
   if (!response.ok) {
@@ -45,6 +82,7 @@ type SeoRow = {
   bodyLen: number;
   createdAt: string;
   updatedAt: string;
+  indexGoogle: IndexGoogleRow | null;
 };
 
 type SeoApiPayload = {
@@ -67,6 +105,7 @@ type PreviewRow = {
   createdAt: string;
   path: string;
   fullUrl: string;
+  indexGoogle: IndexGoogleRow | null;
 };
 
 type PreviewApiPayload = {
@@ -84,6 +123,9 @@ const PREVIEW_WORK_TYPES = Object.keys(WORK_PRICES)
 
 export default function AdminSeoPages() {
   const [tab, setTab] = useState<TabKey>("templates");
+  const [gscSyncBusy, setGscSyncBusy] = useState(false);
+  const [gscSyncMsg, setGscSyncMsg] = useState<string | null>(null);
+  const [gscBatchLimit, setGscBatchLimit] = useState(30);
 
   /* SeoPage */
   const [seoData, setSeoData] = useState<SeoApiPayload | null>(null);
@@ -185,6 +227,37 @@ export default function AdminSeoPages() {
     });
 
   const typeOptionsSeo = Object.entries(SEO_WORK_TYPE_LABELS).sort((a, b) => a[1].localeCompare(b[1], "ru"));
+
+  const runGscSync = () => {
+    const source = tab === "templates" ? "seo" : "preview";
+    setGscSyncBusy(true);
+    setGscSyncMsg(null);
+    fetch("/api/admin/index-status/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source, limit: gscBatchLimit }),
+    })
+      .then(async (r) => {
+        const text = await r.text();
+        let j: { error?: string; processed?: number; results?: unknown } = {};
+        try {
+          j = JSON.parse(text) as typeof j;
+        } catch {
+          /* ignore */
+        }
+        if (!r.ok) {
+          throw new Error(j.error || `Ошибка ${r.status}`);
+        }
+        const n = j.processed ?? 0;
+        setGscSyncMsg(`Google: обработано запросов: ${n} (ещё есть лимит ~2000 URL/день на сайт в GSC). Обновите список — колонка «GSC» заполнится.`);
+        if (tab === "templates") loadSeo();
+        else loadPreviews();
+      })
+      .catch((e: unknown) => {
+        setGscSyncMsg(e instanceof Error ? e.message : "Сбой синхронизации");
+      })
+      .finally(() => setGscSyncBusy(false));
+  };
 
   const prevWaitingFirstFetch =
     tab === "previews" && prevData === null && !prevLoadError;
@@ -309,11 +382,28 @@ export default function AdminSeoPages() {
 
         {(tab === "templates" ? seoData : prevData) && (
           <p className={styles.seoIndexHint}>
-            <strong>G / Я</strong> — переход в поиск с оператором{" "}
-            <code style={{ fontSize: "0.82em" }}>site:полный_URL</code>: так видно, есть ли страница в выдаче. Это{" "}
-            <em>не</em> то же самое, что статус в Search Console / Вебмастере; автоматические «галочки» в таблице без
-            их API сделать нельзя (нужны ключи, верификация и фоновые запросы по квотам).
+            <strong>GSC</strong> — данные из Google Search Console (<em>URL Inspection API</em>): нужны переменные{" "}
+            <code style={{ fontSize: "0.82em" }}>GSC_SITE_PROPERTY</code>,{" "}
+            <code style={{ fontSize: "0.82em" }}>GOOGLE_APPLICATION_CREDENTIALS</code> или{" "}
+            <code style={{ fontSize: "0.82em" }}>GSC_SERVICE_ACCOUNT_JSON</code>; сервисный аккаунт добавьте в GSC с
+            правами на сайт. Лимит ~2000 проверок/сутки. <strong>G / Я</strong> — ручная проверка через запрос{" "}
+            <code style={{ fontSize: "0.82em" }}>site:URL</code> (Яндекс так в API официально не отдаёт — только вручную
+            или в кабинете).
           </p>
+        )}
+
+        {gscSyncMsg && (
+          <div
+            className={styles.statCard}
+            style={{
+              marginBottom: 14,
+              borderColor: gscSyncMsg.startsWith("Google:") ? "#86EFAC" : "#FCA5A5",
+              background: gscSyncMsg.startsWith("Google:") ? "rgba(34,197,94,0.08)" : "rgba(248,113,113,0.09)",
+            }}
+          >
+            <div className={styles.statLabel}>Синхронизация GSC</div>
+            <div style={{ marginTop: 6, fontSize: "0.9rem", lineHeight: 1.45 }}>{gscSyncMsg}</div>
+          </div>
         )}
 
         {/* Панель */}
@@ -361,6 +451,28 @@ export default function AdminSeoPages() {
                 }}
               >
                 Применить
+              </button>
+              <select
+                className={styles.filterInput}
+                title="Сколько URL проверить за один запрос (старые в очереди — первые)"
+                value={gscBatchLimit}
+                onChange={(e) => setGscBatchLimit(Number(e.target.value))}
+                style={{ minWidth: 72 }}
+              >
+                {[15, 30, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    GSC ×{n}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                disabled={gscSyncBusy || tab !== "templates"}
+                onClick={() => tab === "templates" && runGscSync()}
+                title="Обновить кэш индекса Google для типа «шаблоны»"
+              >
+                {gscSyncBusy ? "Запрос GSC…" : "Синхр. Google (шаблоны)"}
               </button>
               {seoData && (
                 <span className={styles.toolbarCount}>
@@ -412,6 +524,28 @@ export default function AdminSeoPages() {
               >
                 Применить
               </button>
+              <select
+                className={styles.filterInput}
+                title="Сколько URL проверить за один запрос"
+                value={gscBatchLimit}
+                onChange={(e) => setGscBatchLimit(Number(e.target.value))}
+                style={{ minWidth: 72 }}
+              >
+                {[15, 30, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    GSC ×{n}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                disabled={gscSyncBusy || tab !== "previews"}
+                onClick={() => tab === "previews" && runGscSync()}
+                title="Обновить кэш индекса Google для превью в sitemap"
+              >
+                {gscSyncBusy ? "Запрос GSC…" : "Синхр. Google (превью)"}
+              </button>
               {prevData && (
                 <span className={styles.toolbarCount}>
                   Стр. {prevPage} / {prevData.totalPages} · на странице {prevData.pages.length}
@@ -442,14 +576,15 @@ export default function AdminSeoPages() {
                     <th>Meta title</th>
                     <th>Объём текста</th>
                     <th>Обновлено</th>
-                    <th title="Проверка через site: в Google и Яндексе">В выдаче</th>
+                    <th title="URL Inspection API, кэш в БД">GSC индекс</th>
+                    <th title="Проверка через site: в Google и Яндексе">site:</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {seoData.pages.length === 0 ? (
                     <tr className={styles.emptyRow}>
-                      <td colSpan={8}>
+                      <td colSpan={9}>
                         {seoData.total === 0 && !seoSearchRef.current.trim() && !workType ? (
                           <>
                             В базе нет строк в{" "}
@@ -490,6 +625,9 @@ export default function AdminSeoPages() {
                           body {r.bodyLen.toLocaleString("ru-RU")} зн.
                         </td>
                         <td style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{fmt(r.updatedAt)}</td>
+                        <td style={{ maxWidth: 120 }}>
+                          <GoogleGscBadge row={r.indexGoogle} />
+                        </td>
                         <td>{r.fullUrl ? <IndexCheckLinks fullUrl={r.fullUrl} /> : "—"}</td>
                         <td>
                           <Link href={r.path} className={styles.tableLink} target="_blank" rel="noopener noreferrer">
@@ -513,14 +651,15 @@ export default function AdminSeoPages() {
                   <th>Slug / URL</th>
                   <th>Страниц</th>
                   <th>Создана</th>
-                  <th title="Проверка через site: в Google и Яндексе">В выдаче</th>
+                  <th title="URL Inspection API">GSC</th>
+                  <th title="site: в выдаче">site:</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {prevData.pages.length === 0 ? (
                   <tr className={styles.emptyRow}>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       {prevData.total === 0 && !prevSearchRef.current.trim() && !prevWorkType ? (
                         <>
                           Нет публичных превью с slug. После сохранения работы они появятся здесь и в{" "}
@@ -550,6 +689,9 @@ export default function AdminSeoPages() {
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>{r.pages}</td>
                       <td style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{fmt(r.createdAt)}</td>
+                      <td style={{ maxWidth: 120 }}>
+                        <GoogleGscBadge row={r.indexGoogle} />
+                      </td>
                       <td>{r.fullUrl ? <IndexCheckLinks fullUrl={r.fullUrl} /> : "—"}</td>
                       <td>
                         <Link href={r.path} className={styles.tableLink} target="_blank" rel="noopener noreferrer">

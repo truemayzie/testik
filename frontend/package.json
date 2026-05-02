@@ -16,6 +16,7 @@
     "@prisma/client": "^5.14.0",
     "bcryptjs": "^3.0.3",
     "docx-preview": "^0.3.7",
+    "google-auth-library": "^9.15.1",
     "https-proxy-agent": "^9.0.0",
     "next": "^14.2.35",
     "next-auth": "^4.24.7",

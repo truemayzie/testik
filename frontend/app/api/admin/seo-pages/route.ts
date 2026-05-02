@@ -3,6 +3,7 @@ import { getAdminUser } from "@/lib/adminGuard";
 import { prisma } from "@/lib/prisma";
 import { SEO_WORK_TYPE_LABELS } from "@/lib/seo-work-type-labels";
 import { absolutePublicUrl } from "@/lib/siteOrigin";
+import { loadIndexStatusMap } from "@/lib/indexStatusMap";
 
 export const dynamic = "force-dynamic";
 
@@ -78,15 +79,31 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b.count - a.count);
 
+  const pageRows = rows.map((p) => {
+    const path = `/${p.workType}/${p.slug}`;
+    return {
+      ...p,
+      path,
+      fullUrl: absolutePublicUrl(path),
+      previewLen: p.previewText?.length ?? 0,
+      bodyLen: p.bodyText?.length ?? 0,
+    };
+  });
+  const idxMap = await loadIndexStatusMap(pageRows.map((r) => r.fullUrl));
+
   return NextResponse.json({
-    pages: rows.map((p) => {
-      const path = `/${p.workType}/${p.slug}`;
+    pages: pageRows.map((r) => {
+      const idx = idxMap.get(r.fullUrl);
       return {
-        ...p,
-        path,
-        fullUrl: absolutePublicUrl(path),
-        previewLen: p.previewText?.length ?? 0,
-        bodyLen: p.bodyText?.length ?? 0,
+        ...r,
+        indexGoogle:
+          idx && (idx.googleVerdict != null || idx.googleCoverageState != null || idx.googleLastCheck != null)
+            ? {
+                verdict: idx.googleVerdict,
+                coverageState: idx.googleCoverageState,
+                lastCheck: idx.googleLastCheck?.toISOString() ?? null,
+              }
+            : null,
       };
     }),
     total,

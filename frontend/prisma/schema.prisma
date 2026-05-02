@@ -140,6 +140,16 @@ model SeoPage {
   updatedAt       DateTime @default(now()) @updatedAt
 }
 
+/// Кэш проверки индекса (Google URL Inspection API). URL — полный canonical (https://…).
+model UrlIndexStatus {
+  url                 String    @id
+  googleVerdict       String?
+  googleCoverageState String?
+  googleLastCheck     DateTime?
+  yandexState         String?
+  yandexLastCheck     DateTime?
+}
+
 model Payment {
   id        String    @id @default(cuid())
   userId    String
