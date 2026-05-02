@@ -9,6 +9,15 @@ export const maxDuration = 120;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Как ресурс заведён в GSC: явно или https://host/ из NEXT_PUBLIC_APP_URL */
+function resolveGscSiteProperty(): string | undefined {
+  const explicit = process.env.GSC_SITE_PROPERTY?.trim();
+  if (explicit) return explicit;
+  const pub = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!pub || !/^https?:\/\//i.test(pub)) return undefined;
+  return `${pub.replace(/\/+$/, "")}/`;
+}
+
 /**
  * POST: обновить кэш статуса индекса Google (URL Inspection) для части URL.
  * Тело: { source?: "seo"|"preview"|"all", limit?: number } (limit по умолчанию 30, макс 100).
@@ -24,11 +33,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const siteProp = process.env.GSC_SITE_PROPERTY?.trim();
+  const siteProp = resolveGscSiteProperty();
   if (!siteProp) {
     return NextResponse.json(
       {
-        error: "Не задан GSC_SITE_PROPERTY (например https://ref-ai.ru/ или sc-domain:ref-ai.ru)",
+        error:
+          "Не задан ресурс GSC: укажите GSC_SITE_PROPERTY (напр. https://ref-ai.ru/) или sc-domain:ref-ai.ru, либо NEXT_PUBLIC_APP_URL=https://ref-ai.ru (возьмём https://ref-ai.ru/)",
       },
       { status: 400 }
     );
