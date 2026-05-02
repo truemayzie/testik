@@ -239,14 +239,19 @@ export default function AdminSeoPages() {
     })
       .then(async (r) => {
         const text = await r.text();
-        let j: { error?: string; processed?: number; results?: unknown } = {};
+        type SyncErr = { error?: string; processed?: number; results?: unknown; setupSteps?: string[] };
+        let j: SyncErr = {};
         try {
-          j = JSON.parse(text) as typeof j;
+          j = JSON.parse(text) as SyncErr;
         } catch {
           /* ignore */
         }
         if (!r.ok) {
-          throw new Error(j.error || `Ошибка ${r.status}`);
+          let msg = j.error || `Ошибка ${r.status}`;
+          if (Array.isArray(j.setupSteps) && j.setupSteps.length) {
+            msg += `\n\n${j.setupSteps.join("\n")}`;
+          }
+          throw new Error(msg);
         }
         const n = j.processed ?? 0;
         setGscSyncMsg(`Google: обработано запросов: ${n} (ещё есть лимит ~2000 URL/день на сайт в GSC). Обновите список — колонка «GSC» заполнится.`);
@@ -402,7 +407,9 @@ export default function AdminSeoPages() {
             }}
           >
             <div className={styles.statLabel}>Синхронизация GSC</div>
-            <div style={{ marginTop: 6, fontSize: "0.9rem", lineHeight: 1.45 }}>{gscSyncMsg}</div>
+            <div style={{ marginTop: 6, fontSize: "0.88rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+              {gscSyncMsg}
+            </div>
           </div>
         )}
 

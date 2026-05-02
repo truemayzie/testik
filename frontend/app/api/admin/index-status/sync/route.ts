@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/adminGuard";
-import { inspectGoogleIndex } from "@/lib/gscUrlInspect";
+import { hasGscServiceAccountConfigured, inspectGoogleIndex } from "@/lib/gscUrlInspect";
 import { prisma } from "@/lib/prisma";
 import { absolutePublicUrl } from "@/lib/siteOrigin";
 
@@ -41,6 +41,24 @@ export async function POST(req: NextRequest) {
           "Не задан ресурс GSC: укажите GSC_SITE_PROPERTY (напр. https://ref-ai.ru/) или sc-domain:ref-ai.ru, либо NEXT_PUBLIC_APP_URL=https://ref-ai.ru (возьмём https://ref-ai.ru/)",
       },
       { status: 400 }
+    );
+  }
+
+  if (!hasGscServiceAccountConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "Нет ключа сервисного аккаунта Google для Search Console API (файл не найден или GSC_SERVICE_ACCOUNT_JSON битый JSON).",
+        setupSteps: [
+          "1) console.cloud.google.com → проект → «APIs & Services» → включить «Google Search Console API».",
+          "2) «Credentials» → Create credentials → Service account → создать → Keys → Add key → JSON → скачать файл.",
+          "3) Положить на сервер, напр.: /var/www/ref-ai/frontend/secrets/gsc-sa.json ( chmod 600 ).",
+          "4) В frontend/.env.local добавить строку: GOOGLE_APPLICATION_CREDENTIALS=/var/www/ref-ai/frontend/secrets/gsc-sa.json",
+          "5) search.google.com/search-console → твой сайт → Параметры → Пользователи → Добавить пользователя → вставить email сервисного аккаунта из JSON (поле client_email) с правом «Полный».",
+          "6) pm2 restart frontend --update-env",
+        ],
+      },
+      { status: 501 }
     );
   }
 

@@ -1,6 +1,23 @@
 import { GoogleAuth } from "google-auth-library";
+import { existsSync } from "fs";
 
 const SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"];
+
+/** Есть ли что-нибудь, из чего поднять JWT к Search Console API */
+export function hasGscServiceAccountConfigured(): boolean {
+  const jsonRaw = process.env.GSC_SERVICE_ACCOUNT_JSON?.trim();
+  if (jsonRaw) {
+    try {
+      JSON.parse(jsonRaw);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const path = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+  if (path && existsSync(path)) return true;
+  return false;
+}
 
 async function getAuth(): Promise<GoogleAuth | null> {
   const jsonRaw = process.env.GSC_SERVICE_ACCOUNT_JSON?.trim();
