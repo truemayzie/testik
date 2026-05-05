@@ -1,0 +1,788 @@
+/* Дополнения к seo-page.module.css и hub.module.css — без отхода от токенов сайта */
+
+/* ── Hero (navy градиент как на лендинге / оферте) ── */
+.heroBand {
+  position: relative;
+  margin: 0 0 40px;
+  padding: 32px 28px 36px;
+  background: linear-gradient(160deg, #061525 0%, #0f2645 52%, #1b3a6b 100%);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(27, 58, 107, 0.22);
+}
+
+.heroBand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+}
+
+.heroLabel {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #93b5d9;
+  background: rgba(27, 58, 107, 0.35);
+  border: 1px solid rgba(147, 181, 217, 0.35);
+  border-radius: 100px;
+  padding: 5px 14px;
+  margin-bottom: 14px;
+}
+
+.heroTitleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.heroH1 {
+  font-family: "PT Serif", Georgia, serif;
+  font-size: clamp(1.65rem, 4.2vw, 2.35rem);
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.heroLead {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.65;
+  margin: 0 0 22px;
+}
+
+.heroTrustBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.heroTrustBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 6px 12px;
+  letter-spacing: 0.02em;
+}
+
+.heroTrustBadgeAccent {
+  color: #fde68a;
+  background: rgba(217, 119, 6, 0.2);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.heroCtaBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.heroCtaMicro {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.5;
+  max-width: 440px;
+  margin: 0;
+}
+
+/* Оформление кнопок как на главной: импорт `homeHero.heroBtn`; здесь доп. правила для <Link>. */
+.kzHeroBtnLanding {
+  text-decoration: none;
+  color: #fff;
+  white-space: normal !important;
+  flex-wrap: wrap;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.kzHeroBtnLanding:visited {
+  color: #fff;
+}
+
+.kzHeroBtnLanding:hover {
+  color: #fff;
+}
+
+.kzHeroBtnLanding:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* ── Секции с чередованием фона ── */
+.sectionBand {
+  margin: 0 -8px 36px;
+  padding: 26px 20px 30px;
+  background: linear-gradient(180deg, var(--paper-2) 0%, rgba(241, 245, 249, 0.65) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.sectionBandInner {
+  margin: 0 auto;
+}
+
+.sectionHead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.sectionHead .sectionTitle {
+  margin: 0;
+}
+
+.sectionKicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.15);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.trustBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.trustBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #1B3A6B;
+  background: rgba(27, 58, 107, 0.07);
+  border: 1px solid rgba(27, 58, 107, 0.15);
+  border-radius: 20px;
+  padding: 5px 12px;
+  letter-spacing: 0.02em;
+}
+
+.lead {
+  font-size: 1.05rem;
+  color: var(--ink-muted);
+  line-height: 1.7;
+  margin: -12px 0 28px;
+  max-width: 640px;
+}
+
+.ctaBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.ctaMicro {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  line-height: 1.5;
+  max-width: 480px;
+  margin: 0;
+}
+
+.section {
+  margin-bottom: 40px;
+}
+
+.sectionTitle {
+  font-family: 'PT Serif', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 16px;
+  line-height: 1.3;
+}
+
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 640px) {
+  .benefits {
+    grid-template-columns: 1fr;
+  }
+}
+
+.benefitItem {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.benefitIcon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(27, 58, 107, 0.1);
+  color: #1B3A6B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.priceBox {
+  background: linear-gradient(145deg, #ffffff 0%, #fffbeb 48%, #ffffff 100%);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  border-radius: var(--radius);
+  padding: 22px 24px 22px 28px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 24px rgba(27, 58, 107, 0.08);
+  position: relative;
+}
+
+.priceBox::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+}
+
+.priceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 20px;
+  margin-bottom: 10px;
+}
+
+.priceValue {
+  font-family: 'PT Serif', Georgia, serif;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 700;
+  color: #1B3A6B;
+}
+
+.priceMeta {
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+}
+
+.priceBullets {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  line-height: 1.65;
+}
+
+.priceCta {
+  margin-top: 16px;
+  display: inline-block;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step {
+  counter-increment: step;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.step::before {
+  content: counter(step);
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepBody {
+  font-size: 0.93rem;
+  color: var(--ink);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compareCard {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.compareCardSam {
+  background: var(--paper-2);
+}
+
+.compareCardRefai {
+  background: linear-gradient(160deg, rgba(27, 58, 107, 0.06) 0%, var(--card) 100%);
+  border-color: rgba(27, 58, 107, 0.2);
+  box-shadow: 0 4px 20px rgba(27, 58, 107, 0.07);
+}
+
+.compareCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.compareIconWrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(27, 58, 107, 0.09);
+  color: #1b3a6b;
+}
+
+.compareCardRefai .compareIconWrap {
+  background: rgba(217, 119, 6, 0.15);
+  color: #b45309;
+}
+
+.compareCard strong {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #1B3A6B;
+  margin-bottom: 0;
+}
+
+.compareCardRefai strong {
+  color: #0f172a;
+}
+
+.extrasGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .extrasGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.extraCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 0.88rem;
+  color: var(--ink);
+  line-height: 1.45;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.extraCard:hover {
+  border-color: rgba(27, 58, 107, 0.25);
+  box-shadow: 0 4px 16px rgba(27, 58, 107, 0.07);
+}
+
+.extraCardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.extraIcon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(27, 58, 107, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1b3a6b;
+}
+
+.extraPrice {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 700;
+  color: #1B3A6B;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92rem;
+}
+
+.extrasNote {
+  margin-top: 14px;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.compareText {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.textLink {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(27, 58, 107, 0.25);
+  transition: border-color 0.15s;
+}
+
+.textLink:hover {
+  border-bottom-color: var(--accent);
+}
+
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faqItem {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.faqItem summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.93rem;
+  color: var(--ink);
+  padding: 14px 40px 14px 16px;
+  list-style: none;
+  position: relative;
+  transition: background 0.12s;
+}
+
+.faqItem summary:hover {
+  background: rgba(27, 58, 107, 0.04);
+}
+
+.faqItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqItem summary::after {
+  content: "+";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: #1b3a6b;
+  opacity: 0.55;
+  transition: transform 0.2s;
+}
+
+.faqItem[open] summary::after {
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.faqAnswer {
+  padding: 0 16px 14px;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.seoLead {
+  font-size: 0.93rem;
+  color: var(--ink-muted);
+  line-height: 1.75;
+  margin: 32px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.spacingBeforeCtaHub {
+  margin-top: 16px;
+}
+
+/* ── Мобильная вёрстка: без налезания и горизонтального скролла ── */
+.kzRoot {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.kzBreadcrumbs {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  align-items: baseline;
+}
+
+.kzPrimaryCta,
+.kzHubBtn {
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.35;
+  justify-content: center;
+}
+
+.heroTitleRow {
+  min-width: 0;
+}
+
+.heroH1 {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 720px) {
+  .kzRoot {
+    padding-top: 28px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: 64px;
+  }
+
+  .heroBand {
+    padding: 22px 16px 26px;
+    border-radius: 16px;
+    margin-bottom: 28px;
+  }
+
+  /* Звезда отдельной строкой над H1 на мобилке */
+  .heroTitleRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .heroH1 {
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+    line-height: 1.18;
+    width: 100%;
+  }
+
+  /* Длинная плашка («Выпускная квалификационная работа») — одна строка */
+  .heroBand .heroLabel {
+    max-width: 100%;
+    align-self: flex-start;
+    white-space: nowrap;
+    font-size: clamp(9px, 2.9vw, 11px);
+    letter-spacing: 0.065em;
+    padding: 5px 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    box-sizing: border-box;
+  }
+
+  .heroBand .heroLabel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .heroTrustBadges {
+    gap: 6px;
+  }
+
+  .heroTrustBadge {
+    font-size: 0.68rem;
+    padding: 5px 10px;
+  }
+
+  .heroLead,
+  .heroCtaMicro {
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+
+  .sectionBand {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 14px;
+  }
+
+  .sectionTitle {
+    font-size: clamp(1.08rem, 4.8vw, 1.35rem);
+    margin-bottom: 12px;
+    overflow-wrap: break-word;
+  }
+
+  .sectionHead {
+    margin-bottom: 14px;
+  }
+
+  .benefitItem,
+  .step {
+    padding: 12px 12px;
+  }
+
+  .priceBox {
+    padding: 18px 14px 18px 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .faqItem summary {
+    padding-right: 44px;
+    font-size: 0.875rem;
+    line-height: 1.38;
+    overflow-wrap: break-word;
+  }
+
+  .faqAnswer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .extraCard {
+    padding: 14px 14px;
+  }
+
+  .extraCardTop {
+    align-items: center;
+    min-width: 0;
+  }
+
+  .extraCardTop > div {
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+
+  .seoLead {
+    font-size: 0.875rem;
+    margin-top: 24px;
+    padding-top: 20px;
+  }
+
+  .kzHubWrap {
+    box-sizing: border-box;
+    max-width: 100%;
+    border-radius: 16px !important;
+  }
+
+  .kzHubTitle {
+    font-size: clamp(1.12rem, 5.2vw, 1.4rem);
+    line-height: 1.22;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .kzHubDesc {
+    font-size: 0.82rem;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-bottom: 22px !important;
+  }
+
+  .kzPrimaryCta,
+  .kzHubBtn {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 13px 16px !important;
+    gap: 4px;
+  }
+
+  .priceCta.kzPrimaryCta {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .heroBand {
+    padding: 18px 12px 22px;
+  }
+
+  .heroBand .heroLabel {
+    font-size: clamp(8.5px, 2.8vw, 10px);
+    padding: 5px 8px;
+    letter-spacing: 0.05em;
+  }
+
+  .sectionBand {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

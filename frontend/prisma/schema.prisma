@@ -81,6 +81,10 @@ model Generation {
   result           String
   isPublic         Boolean           @default(true)
   slug             String?           @unique
+  /// Ручная отметка: страница в выдаче Google (site: URL); null — не решено.
+  adminInSearchGoogle  Boolean?
+  /// Ручная отметка: страница в выдаче Яндекса; null — не решено.
+  adminInSearchYandex  Boolean?
   extras           String?
   rating           Int?
   feedbackComments FeedbackComment[]
@@ -136,18 +140,10 @@ model SeoPage {
   metaDescription String
   previewText     String
   bodyText        String   @default("")
+  adminInSearchGoogle Boolean?
+  adminInSearchYandex Boolean?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
-}
-
-/// Кэш проверки индекса (Google URL Inspection API). URL — полный canonical (https://…).
-model UrlIndexStatus {
-  url                 String    @id
-  googleVerdict       String?
-  googleCoverageState String?
-  googleLastCheck     DateTime?
-  yandexState         String?
-  yandexLastCheck     DateTime?
 }
 
 model Payment {

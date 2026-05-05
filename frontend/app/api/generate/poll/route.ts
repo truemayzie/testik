@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     if (!statusRes.ok) {
       return NextResponse.json({ status: "running" });
     }
-    const { status, error } = await statusRes.json();
+    const { status, error, progress } = await statusRes.json();
 
     if (status === "not_found") {
       console.warn("[generate/poll] backend job not found", { userId, jobId: job.jobId });
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
           { signal: AbortSignal.timeout(30_000) }
         );
         if (!resultRes.ok) {
-          return NextResponse.json({ status: "running" });
+      return NextResponse.json({ status: "running", progress });
         }
         const data = await resultRes.json() as ReferatResult & { _cost_usd?: number };
         const saved = await saveGeneration(userId, job.topic, job.pages, job.workType, data);
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       }
     }
     // "running"
-    return NextResponse.json({ status: "running" });
+    return NextResponse.json({ status: "running", progress });
   } catch {
     return NextResponse.json({ status: "running" });
   }

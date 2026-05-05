@@ -426,6 +426,7 @@ export default function Home() {
   const [stepIndex, setStepIndex]       = useState(0);
 
   const [totalProgress, setTotalProgress] = useState(0);
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
   const [dots, setDots] = useState(".");
 
   const [factIndex, setFactIndex]   = useState(0);
@@ -435,6 +436,7 @@ export default function Home() {
   );
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasBackendProgressRef = useRef(false);
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef        = useRef<Step[]>(getProgressSteps("Реферат"));
   const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
@@ -477,6 +479,7 @@ export default function Home() {
   }
 
   function startProgress(elapsedOffset = 0) {
+    if (timerRef.current) clearInterval(timerRef.current);
     const steps = stepsRef.current;
     const totalDuration = steps.reduce((s: number, x: Step) => s + x.duration, 0);
     let elapsed = elapsedOffset;
@@ -538,6 +541,48 @@ export default function Home() {
     if (timerRef.current) clearInterval(timerRef.current);
     setTotalProgress(100);
     setStepIndex(stepsRef.current.length - 1);
+    setEtaSeconds(0);
+  }
+
+  type BackendProgress = {
+    step?: number;
+    total_steps?: number;
+    label?: string;
+    percent?: number;
+    eta_seconds?: number | null;
+  };
+
+  function applyBackendProgress(progress?: BackendProgress) {
+    if (!progress) return;
+    if (!hasBackendProgressRef.current) {
+      hasBackendProgressRef.current = true;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    if (typeof progress.percent === "number") {
+      const percent = Math.min(99, progress.percent);
+      setTotalProgress(prev => Math.max(prev, percent));
+      patchGenState({ percent });
+    }
+    if (typeof progress.step === "number" && progress.step > 0) {
+      const idx = Math.min(Math.max(progress.step - 1, 0), Math.max(stepsRef.current.length - 1, 0));
+      setStepIndex(idx);
+    }
+    if (typeof progress.eta_seconds === "number") {
+      setEtaSeconds(Math.max(0, progress.eta_seconds));
+    }
+  }
+
+  function formatEta(sec: number | null): string {
+    if (sec == null) return "";
+    if (sec <= 0) return "меньше минуты";
+    const min = Math.ceil(sec / 60);
+    if (min < 60) return `~${min} мин`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m === 0 ? `~${h} ч` : `~${h} ч ${m} мин`;
   }
 
   async function persistProfile() {
@@ -877,6 +922,8 @@ export default function Home() {
     setActiveSection("");
     setTotalProgress(0);
     setStepIndex(0);
+    setEtaSeconds(null);
+    hasBackendProgressRef.current = false;
     startProgress();
 
     try {
@@ -926,6 +973,7 @@ export default function Home() {
             { cache: "no-store" }
           );
           const pollData = await pollRes.json();
+          applyBackendProgress(pollData.progress);
 
           if (pollData.status === "done" && pollData.result) {
             stopProgress();
@@ -1681,6 +1729,7 @@ export default function Home() {
         );
         if (!res.ok) return;
         const data = await res.json();
+        applyBackendProgress(data.progress);
 
         if (data.status === "done") {
           clearInterval(pollRef.current!);
@@ -1937,7 +1986,10 @@ export default function Home() {
               <span className={styles.progressStepCount}>
                 Шаг {stepIndex + 1} из {stepsRef.current.length}
               </span>
-              <span className={styles.progressPercent}>{Math.round(totalProgress)}%</span>
+              <span className={styles.progressPercent}>
+                {Math.round(totalProgress)}%
+                {etaSeconds != null && totalProgress < 100 ? ` · ${formatEta(etaSeconds)}` : ""}
+              </span>
             </div>
 
             {/* Тема работы */}

@@ -1,10 +1,16 @@
 import styles from "../admin.module.css";
 
-/** Ссылки на выдачу с оператором site: — быстрая ручная проверка, не замена кабинета вебмастера. */
-export function IndexCheckLinks({ fullUrl }: { fullUrl: string }) {
+export function siteSearchUrls(fullUrl: string) {
   const q = encodeURIComponent(`site:${fullUrl}`);
-  const google = `https://www.google.com/search?q=${q}`;
-  const yandex = `https://yandex.ru/search/?text=${q}`;
+  return {
+    google: `https://www.google.com/search?q=${q}`,
+    yandex: `https://yandex.ru/search/?text=${q}`,
+  };
+}
+
+/** Кнопки открывают поиск с оператором site: — ручная проверка «в индексе или нет». */
+export function IndexCheckLinks({ fullUrl }: { fullUrl: string }) {
+  const { google, yandex } = siteSearchUrls(fullUrl);
   return (
     <div className={styles.indexCheckBtns}>
       <a
@@ -12,16 +18,16 @@ export function IndexCheckLinks({ fullUrl }: { fullUrl: string }) {
         href={google}
         target="_blank"
         rel="noopener noreferrer"
-        title="Google: есть ли URL в выдаче (site:)"
+        title="Google: выдача по site:URL"
       >
-        G
+        Г
       </a>
       <a
         className={styles.indexCheckBtn}
         href={yandex}
         target="_blank"
         rel="noopener noreferrer"
-        title="Яндекс: есть ли URL в выдаче (site:)"
+        title="Яндекс: выдача по site:URL"
       >
         Я
       </a>

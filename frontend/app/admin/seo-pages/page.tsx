@@ -5,43 +5,131 @@ import Link from "next/link";
 import styles from "../admin.module.css";
 import { SEO_WORK_TYPE_LABELS } from "@/lib/seo-work-type-labels";
 import { WORK_PRICES } from "@/lib/prices";
-import { IndexCheckLinks } from "../components/IndexCheckLinks";
+import { siteSearchUrls } from "../components/IndexCheckLinks";
 
 type TabKey = "templates" | "previews";
 
-type IndexGoogleRow = {
-  verdict: string | null;
-  coverageState: string | null;
-  lastCheck: string | null;
-};
+type DraftIndexed = "__unset__" | "yes" | "no";
 
-function GoogleGscBadge({ row }: { row: IndexGoogleRow | null }) {
-  if (!row?.lastCheck && !row?.verdict && !row?.coverageState) {
-    return <span style={{ color: "#94A3B8", fontSize: "0.8rem" }}>—</span>;
+type IndexEngineKey = "google" | "yandex";
+
+function toDraft(v: boolean | null | undefined): DraftIndexed {
+  if (v === true) return "yes";
+  if (v === false) return "no";
+  return "__unset__";
+}
+
+function draftToApi(d: DraftIndexed): boolean | null {
+  if (d === "__unset__") return null;
+  return d === "yes";
+}
+
+function EngineIndexEditor({
+  engine,
+  rowKey,
+  apiPath,
+  saved,
+  fullUrl,
+  onSaved,
+}: {
+  engine: IndexEngineKey;
+  rowKey: string;
+  apiPath: string;
+  saved: boolean | null | undefined;
+  fullUrl?: string | null;
+  onSaved: (v: boolean | null) => void;
+}) {
+  const [draft, setDraft] = useState<DraftIndexed>(() => toDraft(saved));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(toDraft(saved));
+    setErr(null);
+  }, [saved, rowKey]);
+
+  const dirty = draft !== toDraft(saved);
+  const searchHref =
+    fullUrl != null && fullUrl.trim() !== ""
+      ? engine === "google"
+        ? siteSearchUrls(fullUrl).google
+        : siteSearchUrls(fullUrl).yandex
+      : null;
+
+  const patchKey =
+    engine === "google" ? ("adminInSearchGoogle" as const) : ("adminInSearchYandex" as const);
+
+  const ariaLabel = engine === "google" ? "Отметка: в Google" : "Отметка: в Яндексе";
+  const openLabel = engine === "google" ? "Google" : "Яндекс";
+  const outerClass =
+    engine === "google" ? styles.indexEngineGoogle : styles.indexEngineYandex;
+  const openClass =
+    engine === "google" ? styles.indexOpenGoogle : styles.indexOpenYandex;
+  const saveDirtyClass =
+    engine === "google" ? styles.indexSaveGoogleDirty : styles.indexSaveYandexDirty;
+
+  async function save() {
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(apiPath, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [patchKey]: draftToApi(draft) }),
+      });
+      const bodyText = await res.text();
+      if (!res.ok) {
+        let msg = `Ошибка ${res.status}`;
+        try {
+          const j = JSON.parse(bodyText) as { error?: string };
+          if (j?.error) msg = j.error;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+      onSaved(draftToApi(draft));
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Сохранение не удалось");
+    } finally {
+      setSaving(false);
+    }
   }
-  const v = row.verdict ?? "";
-  let color = "#64748B";
-  let label = row.coverageState || v || "проверено";
-  if (v === "PASS") {
-    color = "#15803D";
-    label = "В индексе";
-  } else if (v === "FAIL") {
-    color = "#B91C1C";
-    label = "Нет в индексе";
-  } else if (v === "PARTIAL") {
-    color = "#B45309";
-    label = "Частично";
-  } else if (v === "NEUTRAL") {
-    color = "#475569";
-    label = "Нейтрально";
-  }
-  const tip = [row.verdict, row.coverageState].filter(Boolean).join(" · ");
+
+  const saveCls = `${engine === "google" ? styles.indexSaveGoogle : styles.indexSaveYandex} ${
+    dirty ? saveDirtyClass : ""
+  }`;
+
   return (
-    <div style={{ fontSize: "0.78rem", lineHeight: 1.35 }} title={tip || undefined}>
-      <div style={{ fontWeight: 700, color }}>{label}</div>
-      {row.lastCheck && (
-        <div style={{ color: "#94A3B8", marginTop: 2 }}>{new Date(row.lastCheck).toLocaleString("ru-RU")}</div>
+    <div className={outerClass}>
+      <div className={styles.indexEngineLabel}>{openLabel}</div>
+      {searchHref ? (
+        <a
+          className={openClass}
+          href={searchHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`${openLabel}: site:${fullUrl}`}
+        >
+          Проверить в {openLabel} ↗
+        </a>
+      ) : (
+        <span className={styles.indexOpenDisabled}>Нет URL</span>
       )}
+      <select
+        className={styles.indexSearchSelect}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value as DraftIndexed)}
+        aria-label={ariaLabel}
+      >
+        <option value="__unset__">Не задано</option>
+        <option value="yes">В выдаче: да</option>
+        <option value="no">В выдаче: нет</option>
+      </select>
+      <button type="button" className={saveCls} disabled={!dirty || saving} onClick={save}>
+        {saving ? "…" : "Сохранить"}
+      </button>
+      {err ? <span className={styles.indexSearchErr}>{err}</span> : null}
     </div>
   );
 }
@@ -66,8 +154,6 @@ async function parseAdminFetch<T>(response: Response): Promise<T> {
   return JSON.parse(bodyText) as T;
 }
 
-/* ── Вкладка SeoPage ── */
-
 type SeoRow = {
   id: number;
   slug: string;
@@ -80,9 +166,10 @@ type SeoRow = {
   fullUrl: string;
   previewLen: number;
   bodyLen: number;
+  adminInSearchGoogle: boolean | null;
+  adminInSearchYandex: boolean | null;
   createdAt: string;
   updatedAt: string;
-  indexGoogle: IndexGoogleRow | null;
 };
 
 type SeoApiPayload = {
@@ -94,18 +181,17 @@ type SeoApiPayload = {
   byWorkType: { workType: string; count: number; label: string }[];
 };
 
-/* ── Вкладка публичных превью (sitemap) ── */
-
 type PreviewRow = {
   id: string;
   slug: string;
   topic: string;
   workType: string;
   pages: number;
+  adminInSearchGoogle: boolean | null;
+  adminInSearchYandex: boolean | null;
   createdAt: string;
   path: string;
   fullUrl: string;
-  indexGoogle: IndexGoogleRow | null;
 };
 
 type PreviewApiPayload = {
@@ -123,16 +209,14 @@ const PREVIEW_WORK_TYPES = Object.keys(WORK_PRICES)
 
 export default function AdminSeoPages() {
   const [tab, setTab] = useState<TabKey>("templates");
-  const [gscSyncBusy, setGscSyncBusy] = useState(false);
-  const [gscSyncMsg, setGscSyncMsg] = useState<string | null>(null);
-  const [gscBatchLimit, setGscBatchLimit] = useState(30);
 
-  /* SeoPage */
   const [seoData, setSeoData] = useState<SeoApiPayload | null>(null);
   const [seoLoading, setSeoLoading] = useState(true);
   const [seoLoadError, setSeoLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [workType, setWorkType] = useState("");
+  const [indexedGoogleFilter, setIndexedGoogleFilter] = useState("");
+  const [indexedYandexFilter, setIndexedYandexFilter] = useState("");
   const [seoPage, setSeoPage] = useState(1);
   const seoSearchRef = useRef(search);
   seoSearchRef.current = search;
@@ -146,6 +230,8 @@ export default function AdminSeoPages() {
       const s = seoSearchRef.current.trim();
       if (s) p.set("search", s);
       if (workType) p.set("workType", workType);
+      if (indexedGoogleFilter) p.set("indexedGoogle", indexedGoogleFilter);
+      if (indexedYandexFilter) p.set("indexedYandex", indexedYandexFilter);
       p.set("page", String(pageNum));
       p.set("pageSize", "100");
       fetch(`/api/admin/seo-pages?${p}`)
@@ -164,7 +250,7 @@ export default function AdminSeoPages() {
           setSeoLoading(false);
         });
     },
-    [seoPage, workType]
+    [seoPage, workType, indexedGoogleFilter, indexedYandexFilter]
   );
 
   useEffect(() => {
@@ -172,12 +258,13 @@ export default function AdminSeoPages() {
     loadSeo();
   }, [tab, seoPage, workType, loadSeo]);
 
-  /* Превью в sitemap */
   const [prevData, setPrevData] = useState<PreviewApiPayload | null>(null);
   const [prevLoading, setPrevLoading] = useState(false);
   const [prevLoadError, setPrevLoadError] = useState<string | null>(null);
   const [prevSearch, setPrevSearch] = useState("");
   const [prevWorkType, setPrevWorkType] = useState("");
+  const [prevIndexedGoogleFilter, setPrevIndexedGoogleFilter] = useState("");
+  const [prevIndexedYandexFilter, setPrevIndexedYandexFilter] = useState("");
   const [prevPage, setPrevPage] = useState(1);
   const prevSearchRef = useRef(prevSearch);
   prevSearchRef.current = prevSearch;
@@ -191,6 +278,8 @@ export default function AdminSeoPages() {
       const s = prevSearchRef.current.trim();
       if (s) p.set("search", s);
       if (prevWorkType) p.set("workType", prevWorkType);
+      if (prevIndexedGoogleFilter) p.set("indexedGoogle", prevIndexedGoogleFilter);
+      if (prevIndexedYandexFilter) p.set("indexedYandex", prevIndexedYandexFilter);
       p.set("page", String(pageNum));
       p.set("pageSize", "50");
       fetch(`/api/admin/public-previews?${p}`)
@@ -209,7 +298,7 @@ export default function AdminSeoPages() {
           setPrevLoading(false);
         });
     },
-    [prevPage, prevWorkType]
+    [prevPage, prevWorkType, prevIndexedGoogleFilter, prevIndexedYandexFilter]
   );
 
   useEffect(() => {
@@ -228,50 +317,11 @@ export default function AdminSeoPages() {
 
   const typeOptionsSeo = Object.entries(SEO_WORK_TYPE_LABELS).sort((a, b) => a[1].localeCompare(b[1], "ru"));
 
-  const runGscSync = () => {
-    const source = tab === "templates" ? "seo" : "preview";
-    setGscSyncBusy(true);
-    setGscSyncMsg(null);
-    fetch("/api/admin/index-status/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source, limit: gscBatchLimit }),
-    })
-      .then(async (r) => {
-        const text = await r.text();
-        type SyncErr = { error?: string; processed?: number; results?: unknown; setupSteps?: string[] };
-        let j: SyncErr = {};
-        try {
-          j = JSON.parse(text) as SyncErr;
-        } catch {
-          /* ignore */
-        }
-        if (!r.ok) {
-          let msg = j.error || `Ошибка ${r.status}`;
-          if (Array.isArray(j.setupSteps) && j.setupSteps.length) {
-            msg += `\n\n${j.setupSteps.join("\n")}`;
-          }
-          throw new Error(msg);
-        }
-        const n = j.processed ?? 0;
-        setGscSyncMsg(`Google: обработано запросов: ${n} (ещё есть лимит ~2000 URL/день на сайт в GSC). Обновите список — колонка «GSC» заполнится.`);
-        if (tab === "templates") loadSeo();
-        else loadPreviews();
-      })
-      .catch((e: unknown) => {
-        setGscSyncMsg(e instanceof Error ? e.message : "Сбой синхронизации");
-      })
-      .finally(() => setGscSyncBusy(false));
-  };
-
-  const prevWaitingFirstFetch =
-    tab === "previews" && prevData === null && !prevLoadError;
-  const loading =
-    tab === "templates" ? seoLoading : prevLoading || prevWaitingFirstFetch;
+  const prevWaitingFirstFetch = tab === "previews" && prevData === null && !prevLoadError;
+  const loading = tab === "templates" ? seoLoading : prevLoading || prevWaitingFirstFetch;
   const loadError = tab === "templates" ? seoLoadError : prevLoadError;
   const pageNumActive = tab === "templates" ? seoPage : prevPage;
-  const totalPagesActive =
-    tab === "templates" ? seoData?.totalPages : prevData?.totalPages;
+  const totalPagesActive = tab === "templates" ? seoData?.totalPages : prevData?.totalPages;
   const data = tab === "templates" ? seoData : prevData;
 
   return (
@@ -330,7 +380,6 @@ export default function AdminSeoPages() {
           </div>
         )}
 
-        {/* Сводка */}
         {tab === "templates" && seoData && (
           <div
             style={{
@@ -342,9 +391,7 @@ export default function AdminSeoPages() {
           >
             <div className={styles.statCard} style={{ gridColumn: "span 2" }}>
               <div className={styles.statLabel}>Всего SEO-шаблонов</div>
-              <div className={`${styles.statValue} ${styles.statAccent}`}>
-                {seoData.total.toLocaleString("ru-RU")}
-              </div>
+              <div className={`${styles.statValue} ${styles.statAccent}`}>{seoData.total.toLocaleString("ru-RU")}</div>
             </div>
             {seoData.byWorkType.map((x) => (
               <div key={x.workType} className={styles.statCard}>
@@ -369,9 +416,7 @@ export default function AdminSeoPages() {
           >
             <div className={styles.statCard} style={{ gridColumn: "span 2" }}>
               <div className={styles.statLabel}>Страниц в sitemap</div>
-              <div className={`${styles.statValue} ${styles.statAccent}`}>
-                {prevData.total.toLocaleString("ru-RU")}
-              </div>
+              <div className={`${styles.statValue} ${styles.statAccent}`}>{prevData.total.toLocaleString("ru-RU")}</div>
               <div className={styles.statSub} style={{ marginTop: 8 }}>
                 только <code style={{ fontSize: "0.78em" }}>isPublic + slug</code>
               </div>
@@ -387,33 +432,13 @@ export default function AdminSeoPages() {
 
         {(tab === "templates" ? seoData : prevData) && (
           <p className={styles.seoIndexHint}>
-            <strong>GSC</strong> — данные из Google Search Console (<em>URL Inspection API</em>): нужны переменные{" "}
-            <code style={{ fontSize: "0.82em" }}>GSC_SITE_PROPERTY</code>,{" "}
-            <code style={{ fontSize: "0.82em" }}>GOOGLE_APPLICATION_CREDENTIALS</code> или{" "}
-            <code style={{ fontSize: "0.82em" }}>GSC_SERVICE_ACCOUNT_JSON</code>; сервисный аккаунт добавьте в GSC с
-            правами на сайт. Лимит ~2000 проверок/сутки. <strong>G / Я</strong> — ручная проверка через запрос{" "}
-            <code style={{ fontSize: "0.82em" }}>site:URL</code> (Яндекс так в API официально не отдаёт — только вручную
-            или в кабинете).
+            <strong>Google</strong> и <strong>Яндекс</strong> считаются отдельно: откройте выдачу по{" "}
+            <code style={{ fontSize: "0.82em" }}>site:полный_URL</code>, затем для каждой системы выберите статус и
+            нажмите свою кнопку <strong>Сохранить</strong> (синяя — только Google, красная — только Яндекс). Фильтры в
+            панели тоже раздельные.
           </p>
         )}
 
-        {gscSyncMsg && (
-          <div
-            className={styles.statCard}
-            style={{
-              marginBottom: 14,
-              borderColor: gscSyncMsg.startsWith("Google:") ? "#86EFAC" : "#FCA5A5",
-              background: gscSyncMsg.startsWith("Google:") ? "rgba(34,197,94,0.08)" : "rgba(248,113,113,0.09)",
-            }}
-          >
-            <div className={styles.statLabel}>Синхронизация GSC</div>
-            <div style={{ marginTop: 6, fontSize: "0.88rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-              {gscSyncMsg}
-            </div>
-          </div>
-        )}
-
-        {/* Панель */}
         <div className={styles.toolbar}>
           {tab === "templates" ? (
             <>
@@ -449,6 +474,36 @@ export default function AdminSeoPages() {
                   </option>
                 ))}
               </select>
+              <select
+                className={styles.filterInput}
+                value={indexedGoogleFilter}
+                onChange={(e) => {
+                  setIndexedGoogleFilter(e.target.value);
+                  setSeoPage(1);
+                }}
+                title="Фильтр по отметке в Google"
+                style={{ minWidth: 154 }}
+              >
+                <option value="">Google — все</option>
+                <option value="yes">Google: да</option>
+                <option value="no">Google: нет</option>
+                <option value="unset">Google: не задано</option>
+              </select>
+              <select
+                className={styles.filterInput}
+                value={indexedYandexFilter}
+                onChange={(e) => {
+                  setIndexedYandexFilter(e.target.value);
+                  setSeoPage(1);
+                }}
+                title="Фильтр по отметке в Яндексе"
+                style={{ minWidth: 164 }}
+              >
+                <option value="">Яндекс — все</option>
+                <option value="yes">Яндекс: да</option>
+                <option value="no">Яндекс: нет</option>
+                <option value="unset">Яндекс: не задано</option>
+              </select>
               <button
                 type="button"
                 className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
@@ -458,28 +513,6 @@ export default function AdminSeoPages() {
                 }}
               >
                 Применить
-              </button>
-              <select
-                className={styles.filterInput}
-                title="Сколько URL проверить за один запрос (старые в очереди — первые)"
-                value={gscBatchLimit}
-                onChange={(e) => setGscBatchLimit(Number(e.target.value))}
-                style={{ minWidth: 72 }}
-              >
-                {[15, 30, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    GSC ×{n}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className={styles.actionBtn}
-                disabled={gscSyncBusy || tab !== "templates"}
-                onClick={() => tab === "templates" && runGscSync()}
-                title="Обновить кэш индекса Google для типа «шаблоны»"
-              >
-                {gscSyncBusy ? "Запрос GSC…" : "Синхр. Google (шаблоны)"}
               </button>
               {seoData && (
                 <span className={styles.toolbarCount}>
@@ -521,6 +554,36 @@ export default function AdminSeoPages() {
                   </option>
                 ))}
               </select>
+              <select
+                className={styles.filterInput}
+                value={prevIndexedGoogleFilter}
+                onChange={(e) => {
+                  setPrevIndexedGoogleFilter(e.target.value);
+                  setPrevPage(1);
+                }}
+                title="Фильтр по отметке в Google"
+                style={{ minWidth: 154 }}
+              >
+                <option value="">Google — все</option>
+                <option value="yes">Google: да</option>
+                <option value="no">Google: нет</option>
+                <option value="unset">Google: не задано</option>
+              </select>
+              <select
+                className={styles.filterInput}
+                value={prevIndexedYandexFilter}
+                onChange={(e) => {
+                  setPrevIndexedYandexFilter(e.target.value);
+                  setPrevPage(1);
+                }}
+                title="Фильтр по отметке в Яндексе"
+                style={{ minWidth: 164 }}
+              >
+                <option value="">Яндекс — все</option>
+                <option value="yes">Яндекс: да</option>
+                <option value="no">Яндекс: нет</option>
+                <option value="unset">Яндекс: не задано</option>
+              </select>
               <button
                 type="button"
                 className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
@@ -531,28 +594,6 @@ export default function AdminSeoPages() {
               >
                 Применить
               </button>
-              <select
-                className={styles.filterInput}
-                title="Сколько URL проверить за один запрос"
-                value={gscBatchLimit}
-                onChange={(e) => setGscBatchLimit(Number(e.target.value))}
-                style={{ minWidth: 72 }}
-              >
-                {[15, 30, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    GSC ×{n}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className={styles.actionBtn}
-                disabled={gscSyncBusy || tab !== "previews"}
-                onClick={() => tab === "previews" && runGscSync()}
-                title="Обновить кэш индекса Google для превью в sitemap"
-              >
-                {gscSyncBusy ? "Запрос GSC…" : "Синхр. Google (превью)"}
-              </button>
               {prevData && (
                 <span className={styles.toolbarCount}>
                   Стр. {prevPage} / {prevData.totalPages} · на странице {prevData.pages.length}
@@ -562,7 +603,6 @@ export default function AdminSeoPages() {
           )}
         </div>
 
-        {/* Таблица */}
         <div className={styles.tableWrap}>
           {loading ? (
             <div className={styles.loading}>
@@ -583,8 +623,8 @@ export default function AdminSeoPages() {
                     <th>Meta title</th>
                     <th>Объём текста</th>
                     <th>Обновлено</th>
-                    <th title="URL Inspection API, кэш в БД">GSC индекс</th>
-                    <th title="Проверка через site: в Google и Яндексе">site:</th>
+                    <th title="Отметки по выдаче Google">Индекс: Google</th>
+                    <th title="Отметки по выдаче Яндекса">Индекс: Яндекс</th>
                     <th />
                   </tr>
                 </thead>
@@ -592,7 +632,11 @@ export default function AdminSeoPages() {
                   {seoData.pages.length === 0 ? (
                     <tr className={styles.emptyRow}>
                       <td colSpan={9}>
-                        {seoData.total === 0 && !seoSearchRef.current.trim() && !workType ? (
+                        {seoData.total === 0 &&
+                        !seoSearchRef.current.trim() &&
+                        !workType &&
+                        !indexedGoogleFilter &&
+                        !indexedYandexFilter ? (
                           <>
                             В базе нет строк в{" "}
                             <code style={{ fontSize: "0.85em" }}>SeoPage</code>. На сервере из{" "}
@@ -632,10 +676,48 @@ export default function AdminSeoPages() {
                           body {r.bodyLen.toLocaleString("ru-RU")} зн.
                         </td>
                         <td style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{fmt(r.updatedAt)}</td>
-                        <td style={{ maxWidth: 120 }}>
-                          <GoogleGscBadge row={r.indexGoogle} />
+                        <td style={{ verticalAlign: "top" }}>
+                          <EngineIndexEditor
+                            engine="google"
+                            rowKey={`seo-${r.id}-g`}
+                            apiPath={`/api/admin/seo-pages/${r.id}`}
+                            saved={r.adminInSearchGoogle}
+                            fullUrl={r.fullUrl}
+                            onSaved={(v) =>
+                              setSeoData((d) =>
+                                !d
+                                  ? d
+                                  : {
+                                      ...d,
+                                      pages: d.pages.map((x) =>
+                                        x.id === r.id ? { ...x, adminInSearchGoogle: v } : x
+                                      ),
+                                    }
+                              )
+                            }
+                          />
                         </td>
-                        <td>{r.fullUrl ? <IndexCheckLinks fullUrl={r.fullUrl} /> : "—"}</td>
+                        <td style={{ verticalAlign: "top" }}>
+                          <EngineIndexEditor
+                            engine="yandex"
+                            rowKey={`seo-${r.id}-y`}
+                            apiPath={`/api/admin/seo-pages/${r.id}`}
+                            saved={r.adminInSearchYandex}
+                            fullUrl={r.fullUrl}
+                            onSaved={(v) =>
+                              setSeoData((d) =>
+                                !d
+                                  ? d
+                                  : {
+                                      ...d,
+                                      pages: d.pages.map((x) =>
+                                        x.id === r.id ? { ...x, adminInSearchYandex: v } : x
+                                      ),
+                                    }
+                              )
+                            }
+                          />
+                        </td>
                         <td>
                           <Link href={r.path} className={styles.tableLink} target="_blank" rel="noopener noreferrer">
                             Открыть →
@@ -658,8 +740,8 @@ export default function AdminSeoPages() {
                   <th>Slug / URL</th>
                   <th>Страниц</th>
                   <th>Создана</th>
-                  <th title="URL Inspection API">GSC</th>
-                  <th title="site: в выдаче">site:</th>
+                  <th>Индекс: Google</th>
+                  <th>Индекс: Яндекс</th>
                   <th />
                 </tr>
               </thead>
@@ -667,7 +749,11 @@ export default function AdminSeoPages() {
                 {prevData.pages.length === 0 ? (
                   <tr className={styles.emptyRow}>
                     <td colSpan={8}>
-                      {prevData.total === 0 && !prevSearchRef.current.trim() && !prevWorkType ? (
+                      {prevData.total === 0 &&
+                      !prevSearchRef.current.trim() &&
+                      !prevWorkType &&
+                      !prevIndexedGoogleFilter &&
+                      !prevIndexedYandexFilter ? (
                         <>
                           Нет публичных превью с slug. После сохранения работы они появятся здесь и в{" "}
                           <code style={{ fontSize: "0.85em" }}>sitemap.xml</code>.
@@ -696,10 +782,48 @@ export default function AdminSeoPages() {
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>{r.pages}</td>
                       <td style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{fmt(r.createdAt)}</td>
-                      <td style={{ maxWidth: 120 }}>
-                        <GoogleGscBadge row={r.indexGoogle} />
+                      <td style={{ verticalAlign: "top" }}>
+                        <EngineIndexEditor
+                          engine="google"
+                          rowKey={`prev-${r.id}-g`}
+                          apiPath={`/api/admin/public-previews/${r.id}`}
+                          saved={r.adminInSearchGoogle}
+                          fullUrl={r.fullUrl}
+                          onSaved={(v) =>
+                            setPrevData((d) =>
+                              !d
+                                ? d
+                                : {
+                                    ...d,
+                                    pages: d.pages.map((x) =>
+                                      x.id === r.id ? { ...x, adminInSearchGoogle: v } : x
+                                    ),
+                                  }
+                            )
+                          }
+                        />
                       </td>
-                      <td>{r.fullUrl ? <IndexCheckLinks fullUrl={r.fullUrl} /> : "—"}</td>
+                      <td style={{ verticalAlign: "top" }}>
+                        <EngineIndexEditor
+                          engine="yandex"
+                          rowKey={`prev-${r.id}-y`}
+                          apiPath={`/api/admin/public-previews/${r.id}`}
+                          saved={r.adminInSearchYandex}
+                          fullUrl={r.fullUrl}
+                          onSaved={(v) =>
+                            setPrevData((d) =>
+                              !d
+                                ? d
+                                : {
+                                    ...d,
+                                    pages: d.pages.map((x) =>
+                                      x.id === r.id ? { ...x, adminInSearchYandex: v } : x
+                                    ),
+                                  }
+                            )
+                          }
+                        />
+                      </td>
                       <td>
                         <Link href={r.path} className={styles.tableLink} target="_blank" rel="noopener noreferrer">
                           Открыть →
@@ -720,9 +844,7 @@ export default function AdminSeoPages() {
               className={styles.actionBtn}
               disabled={pageNumActive <= 1}
               onClick={() =>
-                tab === "templates"
-                  ? setSeoPage((p) => Math.max(1, p - 1))
-                  : setPrevPage((p) => Math.max(1, p - 1))
+                tab === "templates" ? setSeoPage((p) => Math.max(1, p - 1)) : setPrevPage((p) => Math.max(1, p - 1))
               }
             >
               ← Назад
@@ -734,11 +856,7 @@ export default function AdminSeoPages() {
               type="button"
               className={styles.actionBtn}
               disabled={pageNumActive >= (totalPagesActive ?? 1)}
-              onClick={() =>
-                tab === "templates"
-                  ? setSeoPage((p) => p + 1)
-                  : setPrevPage((p) => p + 1)
-              }
+              onClick={() => (tab === "templates" ? setSeoPage((p) => p + 1) : setPrevPage((p) => p + 1))}
             >
               Вперёд →
             </button>

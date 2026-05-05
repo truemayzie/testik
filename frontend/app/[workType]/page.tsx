@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getSeoPagesByType } from '@/lib/seo-pages'
 import { safeJsonLd } from '@/lib/safeJsonLd'
@@ -130,6 +131,16 @@ export default async function HubPage({ params }: { params: { workType: string }
         {meta.h1Prefix} {topSubjects.join(', ')}
       </h1>
       <p className={styles.about}>{meta.about}</p>
+      {params.workType === 'kursovaya' && (
+        <p className={styles.commercialCue}>
+          <Link href="/kursovaya-zakaz">Курсовая под заказ — цена и оформление по ГОСТ →</Link>
+        </p>
+      )}
+      {params.workType === 'vkr' && (
+        <p className={styles.commercialCue}>
+          <Link href="/vkr-zakaz">ВКР и дипломная на заказ — цена, ИИ и ГОСТ →</Link>
+        </p>
+      )}
 
       {/* Счётчик */}
       <div className={styles.stats}>

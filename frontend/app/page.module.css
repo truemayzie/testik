@@ -705,8 +705,10 @@
 .progressTop {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 6px;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .progressStepCount {
@@ -718,12 +720,17 @@
 }
 
 .progressPercent {
-  font-size: 2.4rem;
+  font-size: clamp(1.25rem, 5vw, 2.4rem);
   font-weight: 700;
   font-family: 'PT Serif', Georgia, serif;
   color: #FBBF24;
-  line-height: 1;
+  line-height: 1.18;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  margin-left: auto;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 /* Тема работы */
@@ -828,6 +835,8 @@
   color: rgba(255, 255, 255, 0.9);
   letter-spacing: 0.01em;
   margin: 0 0 24px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
   animation: stepLabelIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -3240,6 +3249,50 @@
 
   .featuresRow {
     gap: 8px;
+  }
+
+  .progressSection {
+    padding: 22px 12px;
+  }
+
+  .progressCard {
+    padding: 18px 14px;
+    border-radius: 16px;
+  }
+
+  .progressTop {
+    align-items: flex-start;
+    gap: 6px 10px;
+  }
+
+  .progressStepCount {
+    font-size: 0.62rem;
+    letter-spacing: 0.07em;
+    max-width: 100%;
+  }
+
+  .progressPercent {
+    font-size: clamp(1rem, 4.8vw, 1.28rem);
+    line-height: 1.25;
+    max-width: 100%;
+  }
+
+  .progressTopic {
+    font-size: 0.75rem;
+    margin-bottom: 12px;
+  }
+
+  .progressBar {
+    margin-bottom: 12px;
+  }
+
+  .progressCurrentLabel {
+    font-size: 0.86rem;
+    margin-bottom: 12px;
+  }
+
+  .progressHint {
+    font-size: 0.72rem;
   }
 
   .stepsSection,

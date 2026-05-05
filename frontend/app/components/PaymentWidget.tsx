@@ -242,7 +242,7 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
         {screen === "select" && (
           <>
             <h2 id="payment-widget-title" className={styles.title}>Оплата заказа</h2>
-            <p className={styles.subtitle}>Безопасная оплата через ЮКассу</p>
+            <p className={styles.subtitle}>Безопасная оплата через ЮKassa и/или Robokassa</p>
             {error && <p className={styles.errorBanner}>⚠ {error}</p>}
             <div className={styles.methods}>
               <button
@@ -370,7 +370,7 @@ function YookassaBadge() {
         <path d="M12 2L4 7v5c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V7l-8-5z" fill="#6366f1" fillOpacity=".15" stroke="#6366f1" strokeWidth="1.5"/>
         <path d="M9 12l2 2 4-4" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
-      <span>Безопасная оплата · ЮКасса</span>
+      <span>Безопасная оплата · ЮKassa / Robokassa</span>
     </div>
   );
 }

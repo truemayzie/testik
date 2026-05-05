@@ -41,6 +41,20 @@
   margin: 0 0 24px;
 }
 
+.commercialCue {
+  font-size: 0.93rem;
+  margin: -8px 0 24px;
+  max-width: 680px;
+}
+.commercialCue a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.commercialCue a:hover {
+  text-decoration: underline;
+}
+
 /* ── Счётчик ── */
 .stats {
   display: inline-flex;

@@ -115,7 +115,7 @@ function PaymentPageContent() {
 
         <a href="/" className={styles.backLink}>← Вернуться назад</a>
 
-        <p className={styles.secure}>🔒 Безопасная оплата через ЮКассу</p>
+        <p className={styles.secure}>🔒 Безопасная оплата через ЮKassa и/или Robokassa</p>
       </div>
     </div>
   );

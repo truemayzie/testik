@@ -27,6 +27,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }))
 
+  const commercialLanding = [
+    {
+      url: 'https://ref-ai.ru/kursovaya-zakaz',
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.92,
+    },
+    {
+      url: 'https://ref-ai.ru/vkr-zakaz',
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.92,
+    },
+  ]
+
   const seoPageUrls = seoPages.map((page) => ({
     url: `https://ref-ai.ru/${page.workType}/${page.slug}`,
     lastModified: page.createdAt,
@@ -41,5 +56,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...hubPages, ...seoPageUrls, ...previewUrls]
+  return [...staticPages, ...hubPages, ...commercialLanding, ...seoPageUrls, ...previewUrls]
 }

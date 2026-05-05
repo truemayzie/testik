@@ -47,9 +47,11 @@ export default function Footer() {
               <ul className={styles.footerLinks}>
                 <li><Link href="/referat">Рефераты</Link></li>
                 <li><Link href="/kursovaya">Курсовые работы</Link></li>
+                <li><Link href="/kursovaya-zakaz">Курсовая на заказ</Link></li>
                 <li><Link href="/esse">Эссе</Link></li>
                 <li><Link href="/doklad">Доклады</Link></li>
                 <li><Link href="/vkr">ВКР</Link></li>
+                <li><Link href="/vkr-zakaz">ВКР на заказ</Link></li>
                 <li><Link href="/sochinenie">Сочинения</Link></li>
               </ul>
             </div>

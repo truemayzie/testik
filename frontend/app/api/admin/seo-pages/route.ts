@@ -1,17 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAdminUser } from "@/lib/adminGuard";
 import { prisma } from "@/lib/prisma";
 import { SEO_WORK_TYPE_LABELS } from "@/lib/seo-work-type-labels";
-import { absolutePublicUrl } from "@/lib/siteOrigin";
-import { loadIndexStatusMap } from "@/lib/indexStatusMap";
+import { canonicalPublicUrl } from "@/lib/siteOrigin";
 
 export const dynamic = "force-dynamic";
 
 const MAX_PAGE_SIZE = 200;
 
+function applyIndexedTriState(
+  where: Prisma.SeoPageWhereInput,
+  indexedRaw: string | null,
+  field: "adminInSearchGoogle" | "adminInSearchYandex"
+) {
+  if (indexedRaw == null) return;
+  const v = indexedRaw.trim().toLowerCase();
+  if (!v || v === "all") return;
+  if (v === "yes" || v === "1" || v === "true") {
+    where[field] = true;
+    return;
+  }
+  if (v === "no" || v === "0" || v === "false") {
+    where[field] = false;
+    return;
+  }
+  if (v === "unset") {
+    where[field] = null;
+  }
+}
+
 /**
  * Список SEO-страниц (Prisma `SeoPage`) для админки:
- * сколько страниц, фильтр по типу, поиск по slug/title/subject/meta.
+ * фильтры по типу, поиск, отдельно Google / Яндекс.
  */
 export async function GET(req: NextRequest) {
   if (!(await getAdminUser())) {
@@ -24,15 +45,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(10, parseInt(sp.get("pageSize") || "100", 10)));
 
-  const where: {
-    workType?: string;
-    OR?: Array<{
-      slug?: { contains: string };
-      title?: { contains: string };
-      subject?: { contains: string };
-      metaTitle?: { contains: string };
-    }>;
-  } = {};
+  const where: Prisma.SeoPageWhereInput = {};
 
   if (workType) where.workType = workType;
   if (search) {
@@ -43,6 +56,9 @@ export async function GET(req: NextRequest) {
       { metaTitle: { contains: search } },
     ];
   }
+
+  applyIndexedTriState(where, sp.get("indexedGoogle"), "adminInSearchGoogle");
+  applyIndexedTriState(where, sp.get("indexedYandex"), "adminInSearchYandex");
 
   const [total, rows, byWorkType] = await Promise.all([
     prisma.seoPage.count({ where }),
@@ -61,12 +77,15 @@ export async function GET(req: NextRequest) {
         metaDescription: true,
         previewText: true,
         bodyText: true,
+        adminInSearchGoogle: true,
+        adminInSearchYandex: true,
         createdAt: true,
         updatedAt: true,
       },
     }),
     prisma.seoPage.groupBy({
       by: ["workType"],
+      where,
       _count: { _all: true },
     }),
   ]);
@@ -79,33 +98,19 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const pageRows = rows.map((p) => {
+  const pages = rows.map((p) => {
     const path = `/${p.workType}/${p.slug}`;
     return {
       ...p,
       path,
-      fullUrl: absolutePublicUrl(path),
+      fullUrl: canonicalPublicUrl(path),
       previewLen: p.previewText?.length ?? 0,
       bodyLen: p.bodyText?.length ?? 0,
     };
   });
-  const idxMap = await loadIndexStatusMap(pageRows.map((r) => r.fullUrl));
 
   return NextResponse.json({
-    pages: pageRows.map((r) => {
-      const idx = idxMap.get(r.fullUrl);
-      return {
-        ...r,
-        indexGoogle:
-          idx && (idx.googleVerdict != null || idx.googleCoverageState != null || idx.googleLastCheck != null)
-            ? {
-                verdict: idx.googleVerdict,
-                coverageState: idx.googleCoverageState,
-                lastCheck: idx.googleLastCheck?.toISOString() ?? null,
-              }
-            : null,
-      };
-    }),
+    pages,
     total,
     page,
     pageSize,

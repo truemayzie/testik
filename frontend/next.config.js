@@ -17,6 +17,17 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Админка: не кэшировать HTML документ — иначе после деплоя старый HTML
+        // ссылается на несуществующие /_next/static/chunks/* и даёт 404.
+        source: '/admin/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+      {
         // Шрифты — долгосрочный кэш (1 год), имена стабильны
         source: '/fonts/:path*',
         headers: [

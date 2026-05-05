@@ -44,6 +44,18 @@ WORK_SLOTS: dict[str, int] = {
 }
 MAX_SLOTS = 8  # суммарный лимит слотов (2 Курсовых = 8, 1 ВКР + 1 Реферат = 7, итд)
 
+# Ожидаемая длительность генерации (сек) для более стабильного ETA.
+# Это оценка, но она гораздо лучше раннего ratio по шагам.
+WORK_ETA_SECONDS: dict[str, int] = {
+    "Сочинение": 70,
+    "Эссе": 70,
+    "Доклад": 120,
+    "Реферат": 180,
+    "Курсовая": 260,
+    "ВКР": 420,
+    "Тест": 20,
+}
+
 
 def _used_slots() -> int:
     """Считает занятые слоты по всем активным заданиям."""
@@ -62,14 +74,67 @@ def _available_types() -> list[str]:
 
 
 def _job_start(job_id: str, work_type: str = "Реферат"):
+    now = time.time()
+    expected_total = WORK_ETA_SECONDS.get(work_type, 180)
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "result": None, "error": None, "work_type": work_type}
+        _jobs[job_id] = {
+            "status": "running",
+            "result": None,
+            "error": None,
+            "work_type": work_type,
+            "started_at": now,
+            "expected_total_seconds": expected_total,
+            "progress": {
+                "step": 0,
+                "total_steps": 0,
+                "label": "Запуск задачи",
+                "percent": 1,
+                "eta_seconds": None,
+            },
+        }
+
+
+def _job_progress(job_id: str, step: int, total_steps: int, label: str):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job or job.get("status") != "running":
+            return
+        started_at = float(job.get("started_at") or time.time())
+        expected_total = int(job.get("expected_total_seconds") or 0)
+        elapsed = max(1.0, time.time() - started_at)
+        ratio = max(0.0, min(1.0, (step / total_steps) if total_steps > 0 else 0.0))
+        percent = max(1, min(99, int(round(ratio * 100))))
+        eta_seconds = None
+        if expected_total > 0:
+            eta_seconds = max(0, int(round(expected_total - elapsed)))
+        elif ratio > 0:
+            total_est = elapsed / ratio
+            eta_seconds = max(0, int(round(total_est - elapsed)))
+        job["progress"] = {
+            "step": step,
+            "total_steps": total_steps,
+            "label": label,
+            "percent": percent,
+            "eta_seconds": eta_seconds,
+        }
 
 
 def _job_done(job_id: str, result: dict):
     with _jobs_lock:
         if job_id in _jobs:
-            _jobs[job_id] = {"status": "done", "result": result, "error": None}
+            prev = _jobs[job_id]
+            _jobs[job_id] = {
+                "status": "done",
+                "result": result,
+                "error": None,
+                "progress": {
+                    "step": prev.get("progress", {}).get("total_steps", 0),
+                    "total_steps": prev.get("progress", {}).get("total_steps", 0),
+                    "label": "Готово",
+                    "percent": 100,
+                    "eta_seconds": 0,
+                },
+            }
 
 
 def _job_fail(job_id: str, error: str):
@@ -155,6 +220,7 @@ def create_referat(request: ReferatRequest):
                 pages=request.pages,
                 work_type=request.work_type,
                 profile=request.profile,
+                progress_cb=lambda s, t, label: _job_progress(job_id, s, t, label),
             )
             _job_done(job_id, result)
         except Exception as exc:
@@ -173,7 +239,11 @@ def get_job_status(job_id: str):
     job = _job_get(job_id)
     if not job:
         return {"status": "not_found"}
-    return {"status": job["status"], "error": job.get("error")}
+    return {
+        "status": job["status"],
+        "error": job.get("error"),
+        "progress": job.get("progress"),
+    }
 
 
 @app.get("/api/generate/result/{job_id}", response_model=ReferatResponse)

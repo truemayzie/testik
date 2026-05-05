@@ -12,6 +12,48 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import copy, io
 
+DOC_LANG_LABELS = {
+    "ru": {
+        "toc": "СОДЕРЖАНИЕ",
+        "intro": "Введение",
+        "conclusion": "Заключение",
+        "sources": "Список литературы",
+        "appendix": "Приложения",
+    },
+    "kz": {
+        "toc": "МАЗМҰНЫ",
+        "intro": "Кіріспе",
+        "conclusion": "Қорытынды",
+        "sources": "Пайдаланылған әдебиеттер",
+        "appendix": "Қосымшалар",
+    },
+    "en": {
+        "toc": "CONTENTS",
+        "intro": "Introduction",
+        "conclusion": "Conclusion",
+        "sources": "References",
+        "appendix": "Appendices",
+    },
+}
+
+
+def _doc_labels(doc_lang: str) -> dict[str, str]:
+    return DOC_LANG_LABELS.get(doc_lang, DOC_LANG_LABELS["ru"])
+
+
+def _canonical_service_key(name: str) -> str:
+    s = (name or "").strip().lower()
+    variants = {
+        "intro": {"введение", "кіріспе", "introduction"},
+        "conclusion": {"заключение", "қорытынды", "conclusion"},
+        "sources": {"список литературы", "пайдаланылған әдебиеттер", "references"},
+        "appendix": {"приложения", "қосымшалар", "appendix", "appendices"},
+    }
+    for key, names in variants.items():
+        if s in names:
+            return key
+    return ""
+
 
 # ── Утилиты ──────────────────────────────────────────────────────────────────
 
@@ -603,9 +645,9 @@ def add_body(doc, text, table_counter: list):
 
 # ── Список литературы ────────────────────────────────────────────────────────
 
-def add_sources(doc, sources):
+def add_sources(doc, sources, sources_title: str):
     """Список литературы по ГОСТ: номер прямо в тексте, без висячего отступа."""
-    add_service_heading(doc, "Список литературы")
+    add_service_heading(doc, sources_title)
 
     for i, src in enumerate(sources):
         src = src.strip()
@@ -678,6 +720,8 @@ def create_docx(referat_data: dict) -> bytes:
     from generator import WORK_RULES
 
     work_type = referat_data.get("meta", {}).get("Тип работы", "Реферат")
+    doc_lang = referat_data.get("meta", {}).get("doc_lang", "ru")
+    labels = _doc_labels(doc_lang)
 
     # Сочинение и Эссе — особая логика без титульника/оглавления
     if work_type in ("Сочинение", "Эссе"):
@@ -717,8 +761,6 @@ def create_docx(referat_data: dict) -> bytes:
             break
     topic = topic.strip("«» ")
 
-    SERVICE_HEADINGS = {"Введение", "Заключение", "Вступление"}
-
     # ── Предварительный расчёт оглавления ────────────────────────────────────
     toc_entries = []
     if rules["has_toc"]:
@@ -726,7 +768,7 @@ def create_docx(referat_data: dict) -> bytes:
         # содержательные разделы начинаются со страницы 3
         cur_page = 3
         for name in referat_data["structure"]:
-            if name in ("Список литературы", "Приложения"):
+            if _canonical_service_key(name) in ("sources", "appendix"):
                 continue
             text = referat_data["content"].get(name, "")
             level = 2 if is_subheading(name) else 1
@@ -736,7 +778,7 @@ def create_docx(referat_data: dict) -> bytes:
             cur_page += pages_used
 
         if rules["has_sources"] and referat_data.get("sources"):
-            toc_entries.append(("Список литературы", 1, cur_page))
+            toc_entries.append((labels["sources"], 1, cur_page))
 
     # 1. Титульная страница — только для Реферат/Курсовая/ВКР
     if rules["has_title_page"]:
@@ -745,7 +787,7 @@ def create_docx(referat_data: dict) -> bytes:
 
     # 2. Оглавление — только для Реферат/Курсовая/ВКР
     if rules["has_toc"]:
-        toc_title = TOC_TITLES.get(work_type, "СОДЕРЖАНИЕ")
+        toc_title = labels["toc"] if doc_lang != "ru" else TOC_TITLES.get(work_type, "СОДЕРЖАНИЕ")
         add_toc(doc, toc_entries, title=toc_title)
 
     # Счётчик таблиц — сквозная нумерация по всему документу
@@ -753,13 +795,14 @@ def create_docx(referat_data: dict) -> bytes:
 
     # 3. Разделы
     for name in referat_data["structure"]:
-        if name in ("Список литературы", "Приложения"):
+        canonical = _canonical_service_key(name)
+        if canonical in ("sources", "appendix"):
             continue
 
         text = referat_data["content"].get(name, "")
 
-        if name in SERVICE_HEADINGS:
-            add_service_heading(doc, name)
+        if canonical in ("intro", "conclusion"):
+            add_service_heading(doc, labels[canonical])
         elif is_subheading(name):
             add_subchapter_heading(doc, name)
         else:
@@ -770,12 +813,16 @@ def create_docx(referat_data: dict) -> bytes:
 
     # 4. Список литературы — только для Реферат/Курсовая/ВКР
     if rules["has_sources"] and referat_data.get("sources"):
-        add_sources(doc, referat_data["sources"])
+        add_sources(doc, referat_data["sources"], labels["sources"])
 
     # 5. Приложения (ВКР)
-    if "Приложения" in referat_data["structure"]:
-        add_service_heading(doc, "Приложения")
-        appendix_text = referat_data["content"].get("Приложения", "")
+    appendix_name = next(
+        (n for n in referat_data["structure"] if _canonical_service_key(n) == "appendix"),
+        None,
+    )
+    if appendix_name:
+        add_service_heading(doc, labels["appendix"] if doc_lang != "ru" else "Приложения")
+        appendix_text = referat_data["content"].get(appendix_name, "")
         if appendix_text:
             add_body(doc, appendix_text, table_counter)
 

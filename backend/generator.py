@@ -20,6 +20,68 @@ MODEL  = "claude-sonnet-4-5"
 _session_cost: float = 0.0
 
 
+LANG_LABELS = {
+    "ru": {
+        "name": "русский",
+        "intro": "Введение",
+        "conclusion": "Заключение",
+        "sources": "Список литературы",
+    },
+    "kz": {
+        "name": "казахский",
+        "intro": "Кіріспе",
+        "conclusion": "Қорытынды",
+        "sources": "Пайдаланылған әдебиеттер",
+    },
+    "en": {
+        "name": "English",
+        "intro": "Introduction",
+        "conclusion": "Conclusion",
+        "sources": "References",
+    },
+}
+
+
+def detect_language_from_topic(topic: str) -> str:
+    """Auto-script определение языка темы: kz | en | ru (fallback)."""
+    text = (topic or "").strip()
+    if not text:
+        return "ru"
+    low = text.lower()
+    if any(tag in low for tag in ("[kz]", "kz:", "қаз", "каз")):
+        return "kz"
+    if any(tag in low for tag in ("[en]", "en:", "english", "англ")):
+        return "en"
+    if re.search(r"[әіңғүұқөһ]", low):
+        return "kz"
+    letters = re.findall(r"[A-Za-zА-Яа-яЁёӘәІіҢңҒғҮүҰұҚқӨөҺһ]", text)
+    if not letters:
+        return "ru"
+    latin = sum(ch.isascii() and ch.isalpha() for ch in letters)
+    cyril = len(letters) - latin
+    if latin > cyril:
+        return "en"
+    return "ru"
+
+
+def _lang_labels(doc_lang: str) -> dict[str, str]:
+    return LANG_LABELS.get(doc_lang, LANG_LABELS["ru"])
+
+
+def _canonical_service_key(name: str) -> str:
+    s = (name or "").strip().lower()
+    variants = {
+        "intro": {"введение", "кіріспе", "introduction"},
+        "conclusion": {"заключение", "қорытынды", "conclusion"},
+        "sources": {"список литературы", "пайдаланылған әдебиеттер", "references"},
+        "appendix": {"приложения", "қосымшалар", "appendix", "appendices"},
+    }
+    for key, names in variants.items():
+        if s in names:
+            return key
+    return ""
+
+
 def ask(prompt: str, max_tokens: int = 8000) -> str:
     """Запрос к Claude API через GitHub Actions прокси."""
     global _session_cost
@@ -188,10 +250,74 @@ WORK_RULES = {
 
 # ── Генерация источников через Claude ───────────────────────────────────────
 
-def generate_sources(topic: str, count: int = 10) -> list[str]:
-    """Генерирует реальные русскоязычные источники по теме через Claude."""
-    print(f"Генерирую {count} источников для темы: {topic}")
-    prompt = f"""Составь {count} реальных русскоязычных источников по теме «{topic}» для списка литературы.
+def _looks_kz_source(src: str) -> bool:
+    low = src.lower()
+    markers = (
+        ".kz",
+        "gov.kz",
+        "egov.kz",
+        "stat.gov.kz",
+        "қазақстан",
+        "казахстан",
+        "республика казахстан",
+    )
+    return any(m in low for m in markers)
+
+
+def _normalize_kz_source_line(src: str) -> str:
+    """Нормализует стиль библиографической строки для KZ-режима."""
+    s = re.sub(r'^\d+\.\s*', '', (src or "").strip())
+    if not s:
+        return s
+    # Единые пробелы и тире
+    s = re.sub(r'\s+', ' ', s)
+    s = s.replace(" – ", " — ").replace(" - ", " — ")
+    # Нормализуем URL-блок
+    s = re.sub(r'\b(?:URL|Url|url)\s*[:：]\s*', 'URL: ', s)
+    if re.search(r'https?://', s) and "URL:" not in s:
+        s = re.sub(r'\s*(https?://\S+)\s*$', r' URL: \1', s)
+    # Единое окончание пунктом (кроме строк, оканчивающихся URL)
+    if not re.search(r'https?://\S+\s*$', s) and not s.endswith("."):
+        s += "."
+    return s
+
+
+def generate_sources(topic: str, count: int = 10, doc_lang: str = "ru") -> list[str]:
+    """Генерирует реальные источники для списка литературы."""
+    print(f"Генерирую {count} источников для темы: {topic} | язык: {doc_lang}")
+    if doc_lang == "kz":
+        prompt = f"""Составь {count} реальных источников по теме «{topic}» для списка литературы.
+
+Требования:
+- Годы публикации строго 2021-2026
+- НЕ включай отозванные статьи (WITHDRAWN, Retracted)
+- Смешанный набор:
+  1) 2-4 источника Казахстана (законы РК, eGov, gov.kz, stat.gov.kz, локальные журналы/вузы)
+  2) 2-4 научных источника RU/EN
+- Источники должны быть реалистичными и проверяемыми
+
+Формат:
+- Для книг и статей допускается ГОСТ-подобный формат
+- Для нормативных/веб-источников: Название документа/страницы, год (или дата), URL
+
+Верни ТОЛЬКО нумерованный список без пояснений и без markdown."""
+    elif doc_lang == "en":
+        prompt = f"""Create {count} real references on the topic "{topic}".
+
+Requirements:
+- Real, citable sources only
+- Publication years: 2021-2026
+- Mix books, journal papers, and institutional reports
+- Exclude withdrawn/retracted papers
+
+Format:
+Book: Author. Title. City: Publisher, Year.
+Article: Author. Title. Journal, Year, Issue, Pages.
+Web: Organization. Title. Year. URL.
+
+Return ONLY a numbered list without markdown."""
+    else:
+        prompt = f"""Составь {count} реальных русскоязычных источников по теме «{topic}» для списка литературы.
 
 Требования:
 - ТОЛЬКО реально существующие российские источники
@@ -208,13 +334,43 @@ def generate_sources(topic: str, count: int = 10) -> list[str]:
 
     result = ask_text(prompt)
     lines = [l.strip() for l in result.split("\n") if l.strip() and l.strip()[0].isdigit()]
+    if doc_lang == "kz":
+        kz_count = sum(1 for l in lines if _looks_kz_source(l))
+        if kz_count < 2:
+            refill = ask_text(
+                f"""Дай дополнительно 3-4 реальных источника Казахстана по теме «{topic}».
+Обязательно используй источники уровня gov.kz / eGov / stat.gov.kz / вузы РК / журналы РК.
+Верни только нумерованный список без пояснений."""
+            )
+            refill_lines = [l.strip() for l in refill.split("\n") if l.strip() and l.strip()[0].isdigit()]
+            lines.extend(refill_lines)
+            uniq = []
+            seen = set()
+            for line in lines:
+                key = re.sub(r'^\d+\.\s*', '', line).strip().lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                uniq.append(line)
+            lines = uniq[:count]
+        # Нормализация стиля источников только для KZ.
+        normalized_lines = []
+        for line in lines:
+            normalized = _normalize_kz_source_line(line)
+            if normalized:
+                normalized_lines.append(normalized)
+        lines = [f"{i + 1}. {line}" for i, line in enumerate(normalized_lines)]
     print(f"Получено {len(lines)} источников")
     return lines
 
 
 # ── Промпты структуры ───────────────────────────────────────────────────────
 
-def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
+def get_structure_prompt(topic: str, work_type: str, rules: dict, doc_lang: str) -> str:
+    labels = _lang_labels(doc_lang)
+    intro = labels["intro"]
+    conclusion = labels["conclusion"]
+    sources = labels["sources"]
 
     if work_type in ("Сочинение", "Эссе"):
         return f"""Создай структуру {work_type.lower()} на тему «{topic}».
@@ -233,15 +389,15 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
 Верни JSON с 2 главами и подглавами:
 {{
   "structure": [
-    "Введение",
+    "{intro}",
     "1. [конкретное название главы]",
     "1.1. [конкретное название подглавы]",
     "1.2. [конкретное название подглавы]",
     "2. [конкретное название главы]",
     "2.1. [конкретное название подглавы]",
     "2.2. [конкретное название подглавы]",
-    "Заключение",
-    "Список литературы"
+    "{conclusion}",
+    "{sources}"
   ]
 }}
 
@@ -253,7 +409,7 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
 Верни JSON с 3 главами и 2 подглавами в каждой:
 {{
   "structure": [
-    "Введение",
+    "{intro}",
     "1. [конкретное название главы]",
     "1.1. [конкретное название подглавы]",
     "1.2. [конкретное название подглавы]",
@@ -263,8 +419,8 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
     "3. [конкретное название главы]",
     "3.1. [конкретное название подглавы]",
     "3.2. [конкретное название подглавы]",
-    "Заключение",
-    "Список литературы"
+    "{conclusion}",
+    "{sources}"
   ]
 }}
 
@@ -276,7 +432,7 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
 Верни JSON строго с 3 главами:
 {{
   "structure": [
-    "Введение",
+    "{intro}",
     "Глава 1. Теоретические основы [конкретное название]",
     "1.1. [конкретное название подглавы]",
     "1.2. [конкретное название подглавы]",
@@ -286,8 +442,8 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
     "Глава 3. Практические рекомендации [конкретное название]",
     "3.1. [конкретное название подглавы]",
     "3.2. [конкретное название подглавы]",
-    "Заключение",
-    "Список литературы"
+    "{conclusion}",
+    "{sources}"
   ]
 }}
 
@@ -299,7 +455,7 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
 Верни JSON строго с 3 главами по 3 подглавы:
 {{
   "structure": [
-    "Введение",
+    "{intro}",
     "Глава 1. Теоретические и методологические основы [название]",
     "1.1. [подглава]",
     "1.2. [подглава]",
@@ -312,8 +468,8 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
     "3.1. [подглава]",
     "3.2. [подглава]",
     "3.3. [подглава]",
-    "Заключение",
-    "Список литературы",
+    "{conclusion}",
+    "{sources}",
     "Приложения"
   ]
 }}
@@ -321,12 +477,12 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict) -> str:
 Замени [название] и [подглава] на конкретные названия по теме «{topic}». Верни ТОЛЬКО JSON."""
 
     # Реферат по умолчанию
-    return get_structure_prompt(topic, "Реферат", rules)
+    return get_structure_prompt(topic, "Реферат", rules, doc_lang)
 
 
 # ── Промпты введения ────────────────────────────────────────────────────────
 
-def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction: str) -> str:
+def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction: str, doc_lang: str) -> str:
 
     INTRO_ELEMENTS = {
         "Доклад":   "актуальность темы, цель доклада, краткое содержание разделов",
@@ -337,6 +493,7 @@ def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction
 
     elements = INTRO_ELEMENTS.get(work_type, INTRO_ELEMENTS["Реферат"])
 
+    lang_name = _lang_labels(doc_lang)["name"]
     return f"""Напиши введение {work_type.lower()} на тему «{topic}».
 Объём: строго {words} слов — считай слова точно.
 
@@ -346,16 +503,15 @@ def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction
 {sources_instruction}
 
 Требования:
-- ТОЛЬКО русский язык
-- Иностранные имена — только в русской транслитерации
+- Язык текста: {lang_name}
+- Используй корректные имена/термины в норме выбранного языка
 - Академический стиль
 - Конкретные формулировки, не общие фразы
 - В введении ссылки НЕ используются совсем — введение это авторский текст без цитирования источников. Не ставь [1], [2] и никакие другие ссылки во введении
 
 - НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков с точкой
 - Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
-- Все иностранные имена и названия — ТОЛЬКО в русской транслитерации
-- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов (DOI, pH и т.п.)
+- Пиши единообразно на выбранном языке, без смешивания языков в одном абзаце
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -371,7 +527,7 @@ def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction
 
 def get_section_prompt(topic: str, section: str, parent: str,
                        words: int, work_type: str,
-                       sources_instruction: str) -> str:
+                       sources_instruction: str, doc_lang: str) -> str:
 
     parts  = section.split(".")
     is_sub = len(parts) >= 3 and parts[1].strip()[:1].isdigit()
@@ -401,12 +557,12 @@ def get_section_prompt(topic: str, section: str, parent: str,
         not is_sub
     )
     if is_chapter_intro:
+        lang_name = _lang_labels(doc_lang)["name"]
         return f"""Напиши краткое вступление к главе «{section}» {work_type.lower()} на тему «{topic}».
 {f"Контекст: {chapter_context}" if chapter_context else ""}
 Объём: 80-100 слов.
 Обозначь что будет рассмотрено в этой главе.
-Только русский язык. Академический стиль. Никакого markdown.
-Все иностранные имена — только в русской транслитерации.
+Язык текста: {lang_name}. Академический стиль. Никакого markdown.
 Верни ТОЛЬКО текст без заголовка."""
 
     # Основная часть для Эссе/Сочинения
@@ -416,10 +572,12 @@ def get_section_prompt(topic: str, section: str, parent: str,
             "Сочинение": "живой личный стиль, примеры из жизни и литературы, эмоциональность",
         }
         style = TYPE_STYLE.get(work_type, "академический стиль")
+        lang_name = _lang_labels(doc_lang)["name"]
         return f"""Напиши основную часть {work_type.lower()} на тему «{topic}».
 Объём: СТРОГО {words} слов.
 Стиль: {style}
 Без заголовков и глав — только связный текст абзацами.
+Язык текста: {lang_name}
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -453,6 +611,7 @@ def get_section_prompt(topic: str, section: str, parent: str,
 [/TABLE]
 Если таблица не нужна — не добавляй."""
 
+    lang_name = _lang_labels(doc_lang)["name"]
     return f"""Напиши раздел «{section}» для {work_type.lower()} на тему «{topic}».
 {parent_text}
 Объём: строго {words} слов — считай слова точно.
@@ -462,8 +621,8 @@ def get_section_prompt(topic: str, section: str, parent: str,
 {tables_instruction}
 
 ТРЕБОВАНИЯ:
-- ТОЛЬКО русский язык — никаких иностранных слов кроме устоявшихся терминов
-- Иностранные имена учёных — только в русской транслитерации
+- Язык текста: {lang_name}
+- Не смешивай языки в одном абзаце
 - Никаких артефактов, пустых квадратов □, непечатных символов
 - Конкретные факты, цифры, примеры
 - Авторская позиция и собственные выводы
@@ -471,8 +630,6 @@ def get_section_prompt(topic: str, section: str, parent: str,
 - В конце главы (не подглавы) — краткий вывод 2-3 предложения
 - НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков
 - Никаких мини-заголовков внутри текста подглавы — только связный текст без внутренних заголовков
-- Все иностранные имена и названия — ТОЛЬКО в русской транслитерации
-- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов (DOI, pH и т.п.)
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -486,7 +643,7 @@ def get_section_prompt(topic: str, section: str, parent: str,
 
 # ── Промпты заключения ──────────────────────────────────────────────────────
 
-def get_conclusion_prompt(topic: str, work_type: str, words: int) -> str:
+def get_conclusion_prompt(topic: str, work_type: str, words: int, doc_lang: str) -> str:
 
     CONCLUSION_ELEMENTS = {
         "Доклад":   "основные выводы по каждому разделу, значимость темы, практические рекомендации",
@@ -497,6 +654,7 @@ def get_conclusion_prompt(topic: str, work_type: str, words: int) -> str:
 
     elements = CONCLUSION_ELEMENTS.get(work_type, CONCLUSION_ELEMENTS["Реферат"])
 
+    lang_name = _lang_labels(doc_lang)["name"]
     return f"""Напиши заключение {work_type.lower()} на тему «{topic}».
 Объём: строго {words} слов — считай слова точно.
 
@@ -504,15 +662,14 @@ def get_conclusion_prompt(topic: str, work_type: str, words: int) -> str:
 {elements}
 
 Требования:
-- ТОЛЬКО русский язык
+- Язык текста: {lang_name}
 - Не добавляй новую информацию — только обобщай результаты
 - Конкретные выводы, не общие фразы
 - Академический стиль
 - В заключении ссылки НЕ используются совсем — это только выводы автора. Не ставь [1], [2] и никакие другие ссылки в заключении
 - НИКАКОГО markdown: никаких #, ##, **, *, ---
 - Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
-- Все иностранные имена — ТОЛЬКО в русской транслитерации
-- Каждое слово — только русскими буквами: перед выводом проверь каждое слово, латиница недопустима кроме устоявшихся терминов
+- Пиши единообразно на выбранном языке без смешения языков
 
 КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
 - Целевой объём: {words} слов — это обязательное минимальное требование
@@ -526,13 +683,16 @@ def get_conclusion_prompt(topic: str, work_type: str, words: int) -> str:
 
 # ── Специальная генерация для Сочинения и Эссе ─────────────────────────────
 
-def generate_essay_or_composition(topic: str, pages: int, work_type: str) -> dict:
+def generate_essay_or_composition(topic: str, pages: int, work_type: str, progress_cb=None) -> dict:
     """Генерация сочинения или эссе — единым текстом без глав."""
 
     rules = WORK_RULES[work_type]
     pages = max(rules["pages_min"], min(pages, rules["pages_max"]))
     total_words = pages * rules["words_per_page"]
     print(f"Пишу {work_type.lower()} (~{total_words} слов)...")
+
+    if progress_cb:
+        progress_cb(1, 3, "Подготавливаем структуру текста")
 
     if work_type == "Сочинение":
         prompt = f"""Напиши сочинение на тему «{topic}».
@@ -607,8 +767,12 @@ def generate_essay_or_composition(topic: str, pages: int, work_type: str) -> dic
 
 Верни ТОЛЬКО текст эссе — без заголовка, без пояснений."""
 
+    if progress_cb:
+        progress_cb(2, 3, "Генерируем основной текст")
     text = ask_text(prompt)
     _check_volume(work_type, text, total_words)
+    if progress_cb:
+        progress_cb(3, 3, "Финализируем результат")
 
     meta = {
         "Тип работы": work_type,
@@ -645,7 +809,7 @@ def _check_volume(label: str, text: str, expected_words: int) -> None:
 # ── Главная функция генерации ───────────────────────────────────────────────
 
 def generate_work(topic: str, pages: int, work_type: str = "Реферат",
-                  profile: dict | None = None) -> dict:
+                  profile: dict | None = None, progress_cb=None) -> dict:
     """Генерирует работу нужного типа через Claude API."""
     global _session_cost
     _session_cost = 0.0
@@ -654,6 +818,9 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     print(f"Начало генерации: {work_type}")
     print(f"Тема: {topic}")
     print(f"Страниц: {pages}")
+    doc_lang = detect_language_from_topic(topic)
+    labels = _lang_labels(doc_lang)
+    print(f"Язык документа: {doc_lang}")
     print(f"{'='*60}\n")
 
     rules = WORK_RULES.get(work_type, WORK_RULES["Реферат"])
@@ -663,6 +830,8 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Тест — минимальная генерация для проверки pipeline
     if work_type == "Тест":
+        if progress_cb:
+            progress_cb(1, 1, "Тестовая генерация")
         print("Тестовая генерация: минимальный промпт...")
         text = clean_text(ask(f"Напиши ровно 2-3 предложения на тему: {topic}. Только сам текст, без заголовков.", max_tokens=200))
         result = {
@@ -679,7 +848,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Сочинение и Эссе — отдельная логика
     if work_type in ("Сочинение", "Эссе"):
-        result = generate_essay_or_composition(topic, pages, work_type)
+        result = generate_essay_or_composition(topic, pages, work_type, progress_cb=progress_cb)
         result["profile"] = profile or {}
         result["_cost_usd"] = round(_session_cost, 4)
         print(f"{'='*50}")
@@ -704,7 +873,9 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Шаг 0: Источники через Claude
     print("Шаг 0: Генерирую источники...")
-    sources = generate_sources(topic, count=sources_min)
+    if progress_cb:
+        progress_cb(1, 5, "Подбираем источники")
+    sources = generate_sources(topic, count=sources_min, doc_lang=doc_lang)
 
     if sources:
         sources_instruction = f"""ИСПОЛЬЗУЙ ЭТИ ИСТОЧНИКИ для ссылок [1]-[{len(sources)}]:
@@ -720,11 +891,15 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Шаг 1: Структура
     print("Шаг 1: Генерирую структуру...")
-    data1     = ask_json(get_structure_prompt(topic, work_type, rules))
+    if progress_cb:
+        progress_cb(2, 5, "Собираем структуру работы")
+    data1     = ask_json(get_structure_prompt(topic, work_type, rules, doc_lang))
     structure = data1["structure"]
 
-    SKIP_KEYS     = {"Введение", "Заключение", "Список литературы", "Приложения"}
-    section_names = [s for s in structure if s not in SKIP_KEYS]
+    section_names = [
+        s for s in structure
+        if _canonical_service_key(s) not in {"intro", "conclusion", "sources", "appendix"}
+    ]
 
     # Подглавы — только секции вида "X.Y. Название"
     sub_sections = [
@@ -737,12 +912,16 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Шаг 2: Введение
     print("Шаг 2: Пишу введение...")
-    content["Введение"] = ask_text(
-        get_intro_prompt(topic, work_type, intro_words, sources_instruction)
+    if progress_cb:
+        progress_cb(3, 5, "Пишем введение")
+    content[labels["intro"]] = ask_text(
+        get_intro_prompt(topic, work_type, intro_words, sources_instruction, doc_lang)
     )
-    _check_volume("Введение", content["Введение"], intro_words)
+    _check_volume(labels["intro"], content[labels["intro"]], intro_words)
 
     # Шаг 3: Разделы
+    if progress_cb:
+        progress_cb(4, 5, "Пишем основные разделы")
     for i, section in enumerate(section_names):
         print(f"Шаг {i+3}: Пишу «{section}»...")
 
@@ -763,17 +942,19 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         words            = sub_words if is_sub else 80
         content[section] = ask_text(
             get_section_prompt(topic, section, parent,
-                               words, work_type, sources_instruction)
+                               words, work_type, sources_instruction, doc_lang)
         )
         _check_volume(section, content[section], words)
         time.sleep(0.5)
 
     # Шаг 4: Заключение
     print("Пишу заключение...")
-    content["Заключение"] = ask_text(
-        get_conclusion_prompt(topic, work_type, conclusion_words)
+    if progress_cb:
+        progress_cb(5, 5, "Пишем заключение")
+    content[labels["conclusion"]] = ask_text(
+        get_conclusion_prompt(topic, work_type, conclusion_words, doc_lang)
     )
-    _check_volume("Заключение", content["Заключение"], conclusion_words)
+    _check_volume(labels["conclusion"], content[labels["conclusion"]], conclusion_words)
 
     total_chars     = sum(len(v) for v in content.values())
     estimated_pages = round(total_chars / 1800)
@@ -793,6 +974,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         "Объём":       f"~{estimated_pages} страниц",
         "Разделов":    str(len(structure)),
         "Источников":  str(len(sources)),
+        "doc_lang":    doc_lang,
     }
 
     return {

@@ -3,14 +3,34 @@ import type { Prisma } from "@prisma/client";
 import { getAdminUser } from "@/lib/adminGuard";
 import { prisma } from "@/lib/prisma";
 import { WORK_PRICES } from "@/lib/prices";
-import { absolutePublicUrl } from "@/lib/siteOrigin";
-import { loadIndexStatusMap } from "@/lib/indexStatusMap";
+import { canonicalPublicUrl } from "@/lib/siteOrigin";
 
 export const dynamic = "force-dynamic";
 
 const MAX_PAGE_SIZE = 200;
 
-/** Продающие страницы `/preview/{slug}` из генераций (`isPublic` + `slug`) — те же записи, что попадают в sitemap.xml. */
+function applyIndexedTriState(
+  where: Prisma.GenerationWhereInput,
+  indexedRaw: string | null,
+  field: "adminInSearchGoogle" | "adminInSearchYandex"
+) {
+  if (indexedRaw == null) return;
+  const v = indexedRaw.trim().toLowerCase();
+  if (!v || v === "all") return;
+  if (v === "yes" || v === "1" || v === "true") {
+    where[field] = true;
+    return;
+  }
+  if (v === "no" || v === "0" || v === "false") {
+    where[field] = false;
+    return;
+  }
+  if (v === "unset") {
+    where[field] = null;
+  }
+}
+
+/** Продающие страницы `/preview/{slug}` из генераций (`isPublic` + `slug`). */
 export async function GET(req: NextRequest) {
   if (!(await getAdminUser())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -32,6 +52,9 @@ export async function GET(req: NextRequest) {
     where.OR = [{ topic: { contains: search } }, { slug: { contains: search } }];
   }
 
+  applyIndexedTriState(where, sp.get("indexedGoogle"), "adminInSearchGoogle");
+  applyIndexedTriState(where, sp.get("indexedYandex"), "adminInSearchYandex");
+
   const [total, rows, byWorkType] = await Promise.all([
     prisma.generation.count({ where }),
     prisma.generation.findMany({
@@ -45,12 +68,14 @@ export async function GET(req: NextRequest) {
         topic: true,
         workType: true,
         pages: true,
+        adminInSearchGoogle: true,
+        adminInSearchYandex: true,
         createdAt: true,
       },
     }),
     prisma.generation.groupBy({
       by: ["workType"],
-      where: { isPublic: true, slug: { not: null } },
+      where,
       _count: { _all: true },
     }),
   ]);
@@ -63,7 +88,7 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const pageRows = rows
+  const pages = rows
     .filter((r): r is typeof r & { slug: string } => r.slug != null)
     .map((r) => {
       const path = `/preview/${r.slug}`;
@@ -73,29 +98,16 @@ export async function GET(req: NextRequest) {
         topic: r.topic,
         workType: r.workType,
         pages: r.pages,
+        adminInSearchGoogle: r.adminInSearchGoogle,
+        adminInSearchYandex: r.adminInSearchYandex,
         createdAt: r.createdAt,
         path,
-        fullUrl: absolutePublicUrl(path),
+        fullUrl: canonicalPublicUrl(path),
       };
     });
 
-  const idxMap = await loadIndexStatusMap(pageRows.map((r) => r.fullUrl));
-
   return NextResponse.json({
-    pages: pageRows.map((r) => {
-      const idx = idxMap.get(r.fullUrl);
-      return {
-        ...r,
-        indexGoogle:
-          idx && (idx.googleVerdict != null || idx.googleCoverageState != null || idx.googleLastCheck != null)
-            ? {
-                verdict: idx.googleVerdict,
-                coverageState: idx.googleCoverageState,
-                lastCheck: idx.googleLastCheck?.toISOString() ?? null,
-              }
-            : null,
-      };
-    }),
+    pages,
     total,
     page,
     pageSize,
