@@ -419,3 +419,11 @@ Referrer-Policy: strict-origin-when-cross-origin
 - **`github_proxy.py`**: запуск GitHub Actions (`repository_dispatch`) без системного HTTPS-прокси + ретраи — устранён обрыв TLS к `api.github.com` через Privoxy на длинных работах (курсовые и т.д.).
 - **Учёт скачиваний**: модель **`WorkActivity`**, `POST /api/work-activity`, запись DOCX-потоков через **`_activity`** в `POST /api/download`, серверная запись для **`POST /api/preview/[slug]/download`**, `GET /api/admin/work-activity` для поддержки (`app/lib/trackWorkActivity.ts` на клиенте для PPTX/Speech).
 - Деплой: после изменения схемы — `npm run db:push` в `frontend/`; оплата и цепочка `generate → poll → saveGeneration` не затрагиваются (кроме косметики состояния `generationSlug` на главной).
+
+### Изменения 2026-05-05
+- **KZ/EN локализация генерации**: в `backend/generator.py` добавлено auto-script определение языка темы (`ru|kz|en`), локализованы служебные секции структуры (`Введение/Заключение/Список литературы`), а `Заключение` теперь генерируется на языке темы.
+- **Источники для KZ**: реализован mixed-пул (KZ + RU/EN) с минимальной валидацией наличия KZ-источников и отдельной нормализацией стиля библиографии только в KZ-ветке; RU-ветка источников оставлена без изменений.
+- **DOCX-локализация**: в `backend/formatter.py` добавлен выбор локализованных заголовков `TOC` и служебных разделов по `meta.doc_lang`, с canonical-сопоставлением (`intro/conclusion/sources/appendix`) для устойчивой сборки документа.
+- **Реальный прогресс генерации**: в `backend/main.py` добавлен прогресс job (`step/total_steps/percent/eta_seconds`) и прокидывание в `/api/generate/status/*`; во `frontend` (`/api/generate/poll` + `app/page.tsx`) UI теперь использует backend-прогресс и ETA вместо чисто таймерной заглушки.
+- **Стабилизация прогресс-бара**: убран конфликт клиентского таймера и backend-прогресса (исправлены скачки к 100% и обратно), улучшена оценка времени до конца на основе ожидаемой длительности типа работы.
+- **UX-обновления**: переработана адаптивность карточки прогресса (процент + ETA + переносы), добавлена верхняя языковая промо-плашка под навигацией в стилистике сайта (`Header.tsx`, `Header.module.css`) с сохранением скрытия в `localStorage`.
