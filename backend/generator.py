@@ -427,6 +427,30 @@ def get_structure_prompt(topic: str, work_type: str, rules: dict, doc_lang: str)
 Замени [конкретное название] на реальные названия по теме «{topic}». Верни ТОЛЬКО JSON."""
 
     if work_type == "Курсовая":
+        if doc_lang == "kz":
+            return f"""«{topic}» тақырыбы бойынша курстық жұмыстың құрылымын құр.
+
+JSON-ды қатаң түрде 3 тараумен қайтар:
+{{
+  "structure": [
+    "{intro}",
+    "1-тарау. [нақты атау] теориялық негіздері",
+    "1.1. [нақты бөлімше атауы]",
+    "1.2. [нақты бөлімше атауы]",
+    "2-тарау. [нақты атау] талдауы",
+    "2.1. [нақты бөлімше атауы]",
+    "2.2. [нақты бөлімше атауы]",
+    "3-тарау. [нақты атау] бойынша практикалық ұсыныстар",
+    "3.1. [нақты бөлімше атауы]",
+    "3.2. [нақты бөлімше атауы]",
+    "{conclusion}",
+    "{sources}"
+  ]
+}}
+
+[нақты атау] және [нақты бөлімше атауы] орнына тақырыпқа сәйкес нақты атауларды қой.
+Барлық тарау/бөлімше атаулары тек қазақ тілінде болсын.
+ТЕК JSON қайтар."""
         return f"""Создай структуру курсовой работы на тему «{topic}».
 
 Верни JSON строго с 3 главами:
@@ -871,11 +895,20 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     sources_min = rules.get("sources_min", 8)
 
+    # Взвешенные "юниты" прогресса: тяжёлые этапы дают больше вклада.
+    SOURCES_UNITS = 8
+    STRUCTURE_UNITS = 8
+    INTRO_UNITS = 12
+    BODY_TOTAL_UNITS = 60
+    CONCLUSION_UNITS = 8
+
     # Шаг 0: Источники через Claude
     print("Шаг 0: Генерирую источники...")
+    progress_done = 0
     if progress_cb:
-        progress_cb(1, 5, "Подбираем источники")
+        progress_cb(progress_done + SOURCES_UNITS, 100, "Подбираем источники")
     sources = generate_sources(topic, count=sources_min, doc_lang=doc_lang)
+    progress_done += SOURCES_UNITS
 
     if sources:
         sources_instruction = f"""ИСПОЛЬЗУЙ ЭТИ ИСТОЧНИКИ для ссылок [1]-[{len(sources)}]:
@@ -892,9 +925,10 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     # Шаг 1: Структура
     print("Шаг 1: Генерирую структуру...")
     if progress_cb:
-        progress_cb(2, 5, "Собираем структуру работы")
+        progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
     data1     = ask_json(get_structure_prompt(topic, work_type, rules, doc_lang))
     structure = data1["structure"]
+    progress_done += STRUCTURE_UNITS
 
     section_names = [
         s for s in structure
@@ -910,20 +944,28 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     content = {}
 
+    sections_count = max(len(section_names), 1)
+    per_section_units = max(1, BODY_TOTAL_UNITS // sections_count)
+    body_units = per_section_units * sections_count
     # Шаг 2: Введение
     print("Шаг 2: Пишу введение...")
     if progress_cb:
-        progress_cb(3, 5, "Пишем введение")
+        intro_start = progress_done + max(1, INTRO_UNITS // 3)
+        progress_cb(intro_start, 100, "Пишем введение")
     content[labels["intro"]] = ask_text(
         get_intro_prompt(topic, work_type, intro_words, sources_instruction, doc_lang)
     )
     _check_volume(labels["intro"], content[labels["intro"]], intro_words)
+    progress_done += INTRO_UNITS
+    if progress_cb:
+        progress_cb(progress_done, 100, "Введение готово")
 
     # Шаг 3: Разделы
-    if progress_cb:
-        progress_cb(4, 5, "Пишем основные разделы")
     for i, section in enumerate(section_names):
         print(f"Шаг {i+3}: Пишу «{section}»...")
+        if progress_cb:
+            section_start = min(99, progress_done + 1)
+            progress_cb(section_start, 100, f"Пишем раздел {i + 1} из {len(section_names)}")
 
         parts  = section.split(".")
         is_sub = len(parts) >= 3 and parts[1].strip()[:1].isdigit()
@@ -945,12 +987,15 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
                                words, work_type, sources_instruction, doc_lang)
         )
         _check_volume(section, content[section], words)
+        progress_done += per_section_units
+        if progress_cb:
+            progress_cb(progress_done, 100, f"Раздел {i + 1} из {len(section_names)} готов")
         time.sleep(0.5)
 
     # Шаг 4: Заключение
     print("Пишу заключение...")
     if progress_cb:
-        progress_cb(5, 5, "Пишем заключение")
+        progress_cb(progress_done + CONCLUSION_UNITS, 100, "Пишем заключение")
     content[labels["conclusion"]] = ask_text(
         get_conclusion_prompt(topic, work_type, conclusion_words, doc_lang)
     )

@@ -6,6 +6,9 @@ import styles from "../admin.module.css";
 type Payment = {
   id: string; amount: number; status: string;
   workType: string; createdAt: string; yokassaId: string | null;
+  provider: string;
+  providerPaymentId: string | null;
+  usedAt: string | null;
   user: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
@@ -19,6 +22,7 @@ export default function AdminPayments() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(true);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/payments")
@@ -50,16 +54,26 @@ export default function AdminPayments() {
                   <th>Сумма</th>
                   <th>Статус</th>
                   <th>Дата</th>
-                  <th>ЮКасса ID</th>
+                  <th>Провайдер / ID</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {payments.length === 0 ? (
-                  <tr className={styles.emptyRow}><td colSpan={6}>Платежей нет</td></tr>
+                  <tr className={styles.emptyRow}><td colSpan={7}>Платежей нет</td></tr>
                 ) : (
                   <>
                     {payments.map(p => {
                       const st = STATUS_MAP[p.status] ?? { label: p.status, cls: styles.badgeUser };
+                      const providerLabel =
+                        p.provider === "yookassa" ? "ЮKassa" :
+                        p.provider === "robokassa" ? "Robokassa" :
+                        p.provider === "dev" ? "dev" :
+                        p.provider || "—";
+                      const providerId =
+                        p.provider === "yookassa"
+                          ? (p.yokassaId ?? p.providerPaymentId ?? "—")
+                          : (p.providerPaymentId ?? "—");
                       return (
                         <tr key={p.id}>
                           <td>
@@ -83,7 +97,30 @@ export default function AdminPayments() {
                           <td><span className={`${styles.badge} ${st.cls}`}>{st.label}</span></td>
                           <td suppressHydrationWarning style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>{fmt(p.createdAt)}</td>
                           <td style={{ fontSize: "0.75rem", color: "#94A3B8", fontFamily: "monospace" }}>
-                            {p.yokassaId ?? "dev"}
+                            {providerLabel}: {providerId}
+                          </td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            {p.status === "succeeded" && p.usedAt ? (
+                              <button
+                                className={styles.smallBtn}
+                                onClick={async () => {
+                                  if (!confirm("Вернуть оплату (сбросить usedAt), чтобы пользователь смог повторить генерацию?")) return;
+                                  setRestoringId(p.id);
+                                  try {
+                                    const r = await fetch(`/api/admin/payments/${p.id}/restore`, { method: "POST" });
+                                    if (!r.ok) throw new Error();
+                                    setPayments(prev => prev.map(x => x.id === p.id ? { ...x, usedAt: null } : x));
+                                  } catch {
+                                    alert("Не удалось вернуть оплату");
+                                  } finally {
+                                    setRestoringId(null);
+                                  }
+                                }}
+                                disabled={restoringId === p.id}
+                              >
+                                {restoringId === p.id ? "..." : "Вернуть"}
+                              </button>
+                            ) : null}
                           </td>
                         </tr>
                       );
@@ -91,7 +128,7 @@ export default function AdminPayments() {
                     <tr className={styles.totalRow}>
                       <td colSpan={2}>Итого (успешные платежи)</td>
                       <td>{total.toLocaleString("ru-RU")} ₽</td>
-                      <td colSpan={3}></td>
+                      <td colSpan={4}></td>
                     </tr>
                   </>
                 )}

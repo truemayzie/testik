@@ -8,6 +8,7 @@ import styles from "./dashboard.module.css";
 import PresentationViewer, { type Slide } from "../components/PresentationViewer";
 import { useModalA11y } from "../lib/useModalA11y";
 import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
+import { detectPaymentMarket } from "@/lib/paymentMarket";
 
 type Generation = {
   id: string;
@@ -547,7 +548,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/payment/extras", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ items }),
+        body:    JSON.stringify({ items, market: detectPaymentMarket() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -956,17 +957,21 @@ export default function DashboardPage() {
                 const extrasData = parseExtras(gen.extras);
                 const hasPresentation = !!extrasData?.presentation;
                 const hasSpeech = !!extrasData?.speech;
+                const isCompleted = gen.status === "completed";
                 return (
                   <div key={gen.id} className={styles.card}>
                     <div
                       className={styles.cardLeft}
-                      onClick={() => handleOpen(gen.id)}
+                      onClick={() => { if (isCompleted) handleOpen(gen.id); }}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={e => e.key === "Enter" && handleOpen(gen.id)}
+                      onKeyDown={e => e.key === "Enter" && isCompleted && handleOpen(gen.id)}
                     >
                       <div className={styles.cardBadges}>
                         <span className={styles.workType}>{gen.workType}</span>
+                        {!isCompleted && (
+                          <span className={styles.extrasBadgeSpeech}>Генерация…</span>
+                        )}
                         {hasPresentation && (
                           <span className={styles.extrasBadgePres}>Презентация</span>
                         )}
@@ -982,6 +987,26 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className={styles.cardActions}>
+                      {!isCompleted ? (
+                        <button
+                          className={styles.openBtn}
+                          onClick={async () => {
+                            setLoadingView(gen.id);
+                            try {
+                              // Попытка финализировать running-работу: poll умеет доставать jobId из extras._jobId
+                              await fetch(`/api/generate/poll?generationId=${encodeURIComponent(gen.id)}&includeResult=0`, { cache: "no-store" });
+                              const listRes = await fetch("/api/generations", { cache: "no-store" });
+                              const list = await listRes.json();
+                              if (Array.isArray(list)) setGenerations(list);
+                            } finally {
+                              setLoadingView(null);
+                            }
+                          }}
+                          disabled={loadingView === gen.id}
+                        >
+                          {loadingView === gen.id ? <span className={styles.btnSpinner} /> : "Проверить"}
+                        </button>
+                      ) : (
                       <button
                         className={styles.openBtn}
                         onClick={() => handleOpen(gen.id)}
@@ -991,6 +1016,7 @@ export default function DashboardPage() {
                           ? <span className={styles.btnSpinner} />
                           : "Открыть"}
                       </button>
+                      )}
                       <button
                         className={styles.downloadBtn}
                         onClick={async () => {
@@ -1021,10 +1047,10 @@ export default function DashboardPage() {
                             a.download = `${result.title.replace(/[«»:]/g, "").trim()}.docx`;
                             document.body.appendChild(a); a.click(); a.remove();
                             window.URL.revokeObjectURL(url);
-                          } catch { alert("Не удалось скачать файл"); }
+                          } catch { alert("Файл пока не готов. Нажмите «Проверить» и попробуйте снова."); }
                           finally { setDownloading(null); }
                         }}
-                        disabled={downloading === gen.id}
+                        disabled={!isCompleted || downloading === gen.id}
                       >
                         {downloading === gen.id
                           ? <span className={styles.btnSpinner} />

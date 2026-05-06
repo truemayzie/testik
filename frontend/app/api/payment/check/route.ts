@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
-  const devMode = !process.env.YOKASSA_SHOP_ID;
+  const hasYookassa = !!(process.env.YOKASSA_SHOP_ID && process.env.YOKASSA_SECRET_KEY);
+  const hasRobokassa = !!(process.env.ROBOKASSA_MERCHANT_LOGIN && process.env.ROBOKASSA_PASSWORD1);
+  const devMode = !hasYookassa && !hasRobokassa;
 
   return NextResponse.json({
     hasPaid: !!payment,

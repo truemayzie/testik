@@ -6,6 +6,7 @@ import styles from "./ExamplesSection.module.css";
 import { useModalA11y } from "../lib/useModalA11y";
 
 type Example = {
+  lang: "ru" | "kz";
   type: string;
   topic: string;
   pages: number;
@@ -15,8 +16,9 @@ type Example = {
   preview: string;
 };
 
-const EXAMPLES: Example[] = [
+const EXAMPLES_RU: Example[] = [
   {
+    lang: "ru",
     type: "Реферат",
     topic: "Искусственный интеллект в современном мире",
     pages: 20,
@@ -26,6 +28,7 @@ const EXAMPLES: Example[] = [
     preview: "Искусственный интеллект — одна из наиболее динамично развивающихся областей науки, оказывающая влияние на трансформацию экономических, социальных и культурных процессов...",
   },
   {
+    lang: "ru",
     type: "Доклад",
     topic: "Социальные сети и психология молодёжи",
     pages: 15,
@@ -35,6 +38,7 @@ const EXAMPLES: Example[] = [
     preview: "Современная цифровая реальность кардинально изменила способы коммуникации молодого поколения. Социальные сети превратились в полноценную среду социализации...",
   },
   {
+    lang: "ru",
     type: "Курсовая",
     topic: "Анализ финансового рынка России",
     pages: 35,
@@ -44,6 +48,41 @@ const EXAMPLES: Example[] = [
     preview: "Финансовый рынок России является ключевым элементом национальной экономики, обеспечивающим перераспределение капитала между секторами и формирование инвестиционного климата...",
   },
 ];
+
+const EXAMPLES_KZ: Example[] = [
+  {
+    lang: "kz",
+    type: "Реферат",
+    topic: "Жасанды интеллектті Қазақстанның білім беру жүйесінде қолдану",
+    pages: 20,
+    hasToc: true,
+    hasSources: true,
+    file: "/examples/referat-kz.docx",
+    preview: "Жасанды интеллект білім беру саласын жаңғыртудың негізгі факторына айналып отыр. Қазақстан мектептері мен ЖОО-ларда AI құралдарын енгізу оқу сапасын арттыруға ықпал етеді...",
+  },
+  {
+    lang: "kz",
+    type: "Доклад",
+    topic: "Қазақстандағы цифрлық теңге: енгізу кезеңдері, артықшылықтары мен тәуекелдері",
+    pages: 15,
+    hasToc: true,
+    hasSources: true,
+    file: "/examples/doklad-kz.docx",
+    preview: "Цифрлық теңге төлем инфрақұрылымын дамытуда маңызды қадам болып саналады. Жоба қаржы нарығының ашықтығын арттырып, көлеңкелі операцияларды азайтуға мүмкіндік береді...",
+  },
+  {
+    lang: "kz",
+    type: "Курсовая",
+    topic: "Қазақстан Республикасында eGov қызметтерінің тиімділігін талдау",
+    pages: 35,
+    hasToc: true,
+    hasSources: true,
+    file: "/examples/kursovaya-kz.docx",
+    preview: "Электрондық үкімет азаматтарға мемлекеттік қызметтерді жедел алуға жағдай жасайды. eGov экожүйесінің тиімділігі қолжетімділік, жылдамдық және пайдаланушы тәжірибесі арқылы бағаланады...",
+  },
+];
+
+const LANG_PREF_KEY = "refai_examples_lang";
 
 const BADGE_COLORS: Record<string, string> = {
   "Реферат":  "#3B82F6",
@@ -66,6 +105,7 @@ type Props = {
 export default function ExamplesSection({ onSelectWorkType }: Props) {
   const [selected, setSelected]     = useState<Example | null>(null);
   const [closing, setClosing]       = useState(false);
+  const [lang, setLang]             = useState<"ru" | "kz">("ru");
   const [docxBuf, setDocxBuf]       = useState<ArrayBuffer | null>(null); // конвертируем в Blob перед renderAsync
   const [prevLoading, setPrevLoading] = useState(false);
   const previewRef                  = useRef<HTMLDivElement>(null);
@@ -75,6 +115,20 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
   const closeBtnRef                 = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(LANG_PREF_KEY);
+    if (stored === "ru" || stored === "kz") {
+      setLang(stored);
+      return;
+    }
+    const qp = new URLSearchParams(window.location.search);
+    const utmCampaign = (qp.get("utm_campaign") || "").toLowerCase();
+    const utmSource = (qp.get("utm_source") || "").toLowerCase();
+    const isKzTraffic = utmCampaign.includes("kz") || utmSource.includes("kz") || utmSource.includes("kaz");
+    if (isKzTraffic) setLang("kz");
+  }, []);
 
   // Загружаем .docx при выборе примера
   useEffect(() => {
@@ -189,6 +243,15 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
     setTimeout(() => onSelectWorkType(ex.type), 400);
   }
 
+  function handleLangToggle(next: "ru" | "kz") {
+    setLang(next);
+    try {
+      localStorage.setItem(LANG_PREF_KEY, next);
+    } catch {}
+  }
+
+  const examples = lang === "kz" ? EXAMPLES_KZ : EXAMPLES_RU;
+
   const modal = selected && mounted && createPortal(
     <div
       className={`${styles.overlay} ${closing ? styles.overlayClosing : ""}`}
@@ -277,7 +340,7 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
                 Создать такую же работу
               </button>
               <p className={styles.ctaNote}>
-                от {PRICES[selected.type] ?? 299} ₽ · готово за 3 минуты
+                от {PRICES[selected.type] ?? 299} ₽ · в среднем 7–10 минут
               </p>
             </div>
           </div>
@@ -293,7 +356,7 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
             Создать такую же работу
           </button>
           <p className={styles.ctaNote}>
-            от {PRICES[selected.type] ?? 299} ₽ · готово за 3 минуты
+            от {PRICES[selected.type] ?? 299} ₽ · в среднем 7–10 минут
           </p>
         </div>
       </div>
@@ -305,30 +368,56 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
     <>
       <section className={styles.section}>
         <div className={styles.inner}>
-          <div className={styles.head} data-reveal>
+          <div className={styles.head}>
             <h2 className={styles.heading}>
               Примеры <span className={styles.accent}>готовых работ</span>
             </h2>
             <p className={styles.sub}>Посмотрите что получают наши пользователи</p>
+            <div className={styles.langToggle} role="tablist" aria-label="Язык примеров работ">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={lang === "ru"}
+                className={`${styles.langBtn} ${lang === "ru" ? styles.langBtnActive : ""}`}
+                onClick={() => handleLangToggle("ru")}
+              >
+                <span className={`${styles.langFlag} ${styles.langFlagRu}`} aria-hidden="true" />
+                RU
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={lang === "kz"}
+                className={`${styles.langBtn} ${lang === "kz" ? styles.langBtnActive : ""}`}
+                onClick={() => handleLangToggle("kz")}
+              >
+                <span className={`${styles.langFlag} ${styles.langFlagKz}`} aria-hidden="true" />
+                KZ
+              </button>
+            </div>
+            {lang === "kz" && <p className={styles.kzHint}>Қазақ тіліндегі жұмыстар</p>}
           </div>
 
-          <div className={styles.grid}>
-            {EXAMPLES.map((ex, i) => (
+          <div key={lang} className={`${styles.grid} ${styles.gridFade}`}>
+            {examples.map((ex, i) => (
               <button
                 key={ex.type}
                 className={styles.card}
-                data-reveal
-                data-delay={String(i + 1)}
                 onClick={() => openModal(ex)}
                 aria-label={`Открыть пример: ${ex.topic}`}
               >
                 <div className={styles.cardTop}>
-                  <span
-                    className={styles.cardBadge}
-                    style={{ color: BADGE_COLORS[ex.type] ?? "#1B3A6B", borderColor: BADGE_COLORS[ex.type] ?? "#1B3A6B" }}
-                  >
-                    {ex.type}
-                  </span>
+                  <div className={styles.cardBadges}>
+                    <span
+                      className={styles.cardBadge}
+                      style={{ color: BADGE_COLORS[ex.type] ?? "#1B3A6B", borderColor: BADGE_COLORS[ex.type] ?? "#1B3A6B" }}
+                    >
+                      {ex.type}
+                    </span>
+                    {ex.lang === "kz" && (
+                      <span className={styles.cardLang}>KZ</span>
+                    )}
+                  </div>
                   <span className={styles.cardPages}>{ex.pages} стр.</span>
                 </div>
 
@@ -339,7 +428,9 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
                 <div className={styles.cardMeta}>
                   {ex.hasToc && <span className={styles.cardMetaItem}>✓ Оглавление</span>}
                   {ex.hasSources && <span className={styles.cardMetaItem}>✓ Источники</span>}
-                  <span className={styles.cardMetaItem}>✓ ГОСТ</span>
+                  <span className={styles.cardMetaItem}>
+                    {ex.lang === "kz" ? "✓ Стандарт" : "✓ ГОСТ"}
+                  </span>
                 </div>
 
                 <div className={styles.cardBtn}>

@@ -11,6 +11,8 @@ export interface GenState {
   topic: string;
   pages: number;
   startedAt: number;
+  /** id записи Generation в БД (для восстановления и финализации) */
+  generationId?: string;
 }
 
 const LS_KEY = "refai_gen";

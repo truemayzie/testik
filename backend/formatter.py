@@ -19,6 +19,7 @@ DOC_LANG_LABELS = {
         "conclusion": "Заключение",
         "sources": "Список литературы",
         "appendix": "Приложения",
+        "table": "Таблица",
     },
     "kz": {
         "toc": "МАЗМҰНЫ",
@@ -26,6 +27,7 @@ DOC_LANG_LABELS = {
         "conclusion": "Қорытынды",
         "sources": "Пайдаланылған әдебиеттер",
         "appendix": "Қосымшалар",
+        "table": "Кесте",
     },
     "en": {
         "toc": "CONTENTS",
@@ -33,6 +35,7 @@ DOC_LANG_LABELS = {
         "conclusion": "Conclusion",
         "sources": "References",
         "appendix": "Appendices",
+        "table": "Table",
     },
 }
 
@@ -217,11 +220,9 @@ def setup_heading_styles(doc):
 
 _WORDS_PER_PAGE = 500  # ~500 слов на страницу (14pt TNR, интервал 1.5, поля ГОСТ)
 
-# Tab stop для оглавления: 8640 twips ≈ 15.24 см от левого поля параграфа.
-# Все уровни (главы и подглавы) используют одну позицию — номера страниц
-# выровнены одинаково. Подглавы не вычитают свой w:left, иначе при длинных
-# заголовках \t рисует слишком мало точек и номер прилипает к тексту.
-TOC_TAB_TWIPS = 8640
+# Tab stop для оглавления по правой границе основного текстового поля.
+# При полях Л=3см и П=1см ширина текста 17см ≈ 9640 twips.
+TOC_TAB_TWIPS = 9640
 
 def _count_words(text: str) -> int:
     """Подсчёт слов в тексте (без таблиц)."""
@@ -232,20 +233,14 @@ def _count_words(text: str) -> int:
 
 
 def _set_toc_tab(paragraph, pos_twips: int):
-    """Устанавливает tab stop с точками-лидерами через XML напрямую.
-    ВАЖНО: вызывать ПОСЛЕ добавления всех run-ов в параграф.
-    pos_twips — позиция от левого поля параграфа в твипах.
-    """
-    pPr = paragraph._p.get_or_add_pPr()
-    for old in pPr.findall(qn("w:tabs")):
-        pPr.remove(old)
-    tabs_el = OxmlElement("w:tabs")
-    tab = OxmlElement("w:tab")
-    tab.set(qn("w:val"), "right")
-    tab.set(qn("w:leader"), "dot")
-    tab.set(qn("w:pos"), str(pos_twips))
-    tabs_el.append(tab)
-    pPr.append(tabs_el)
+    """Устанавливает правый tab stop с точками-лидером через API python-docx."""
+    pf = paragraph.paragraph_format
+    pf.tab_stops.clear_all()
+    pf.tab_stops.add_tab_stop(
+        Twips(pos_twips),
+        alignment=WD_TAB_ALIGNMENT.RIGHT,
+        leader=WD_TAB_LEADER.DOTS,
+    )
 
 
 _TOC_LEFT_L2 = 567  # отступ подглав в твипах (≈1.0 см)
@@ -264,6 +259,8 @@ def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB
     p.paragraph_format.line_spacing      = Pt(21)
     p.paragraph_format.first_line_indent = Cm(0)
     p.paragraph_format.keep_together     = True
+    p.paragraph_format.right_indent      = Cm(0)
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # keepLines — запрещает разрыв строк внутри параграфа.
     # Это не даёт \t оказаться в начале новой строки при переносе длинного заголовка.
@@ -282,8 +279,6 @@ def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB
         ind_el.set(qn("w:firstLine"), "0")
 
     # Все уровни используют одну позицию tab stop.
-    # Не вычитаем w:left для подглав: Word считает w:pos от левого поля страницы,
-    # а не от левого края параграфа — номера выровнены одинаково для всех уровней.
     effective_tab = tab_pos
 
     # Runs добавляем СНАЧАЛА — затем tab stop
@@ -294,7 +289,9 @@ def _toc_line(doc, title: str, level: int, page_num: int, tab_pos: int = TOC_TAB
     r_tab = p.add_run("\t")
     set_run_font(r_tab, bold=False, size=14)
 
-    r2 = p.add_run(str(page_num))
+    # Добавляем небольшой префикс-пробел, чтобы номер не "лип" к последнему слову
+    # в редких viewer-кейсах при очень длинной строке.
+    r2 = p.add_run(f" {page_num}")
     set_run_font(r2, bold=False, size=14)
     r2.font.color.rgb = RGBColor(0, 0, 0)
 
@@ -485,7 +482,7 @@ def add_subchapter_heading(doc, title):
 
 # ── Таблица по ГОСТ ─────────────────────────────────────────────────────────
 
-def add_gost_table(doc, table_data: dict, table_counter: list):
+def add_gost_table(doc, table_data: dict, table_counter: list, doc_lang: str = "ru"):
     """
     Добавляет таблицу по ГОСТ 7.32-2017.
     table_counter — список [n] для сквозной нумерации.
@@ -502,10 +499,15 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
 
     # Берём описание из caption, убираем старый номер
     raw_caption = table_data.get("caption", "")
-    # Убираем "Таблица N — " если модель уже добавила
+    # Убираем префикс "Таблица|Кесте|Table N — " если модель уже добавила
     import re as _re
-    clean_desc = _re.sub(r'^[Тт]аблица\s+\d+\s*[—-]\s*', '', raw_caption).strip()
-    caption = f"Таблица {n} — {clean_desc}" if clean_desc else f"Таблица {n}"
+    clean_desc = _re.sub(
+        r'^(?:[Тт]аблица|[Кк]есте|[Tt]able)\s+\d+\s*[—-]\s*',
+        '',
+        raw_caption,
+    ).strip()
+    table_label = _doc_labels(doc_lang).get("table", "Таблица")
+    caption = f"{table_label} {n} — {clean_desc}" if clean_desc else f"{table_label} {n}"
 
     from docx.oxml import OxmlElement as _OE
     from docx.oxml.ns import qn as _qn
@@ -609,7 +611,7 @@ def add_gost_table(doc, table_data: dict, table_counter: list):
 
 # ── Основной текст с поддержкой таблиц ──────────────────────────────────────
 
-def add_body(doc, text, table_counter: list):
+def add_body(doc, text, table_counter: list, doc_lang: str = "ru"):
     """
     Текст абзацами с поддержкой таблиц.
     Таблицы помечены маркерами [TABLE]...[/TABLE].
@@ -628,7 +630,7 @@ def add_body(doc, text, table_counter: list):
             try:
                 json_str = part.replace('[TABLE]', '').replace('[/TABLE]', '').strip()
                 table_data = _json.loads(json_str)
-                add_gost_table(doc, table_data, table_counter)
+                add_gost_table(doc, table_data, table_counter, doc_lang=doc_lang)
             except Exception as e:
                 print(f"Ошибка парсинга таблицы: {e}")
                 # Если не удалось — просто пропускаем таблицу
@@ -680,6 +682,7 @@ def add_sources(doc, sources, sources_title: str):
 def create_essay_docx(referat_data: dict) -> bytes:
     """Создаёт DOCX для сочинения или эссе: только заголовок и текст."""
     work_type = referat_data.get("meta", {}).get("Тип работы", "Сочинение")
+    doc_lang = referat_data.get("meta", {}).get("doc_lang", "ru")
     raw_title = referat_data["title"]
     topic = raw_title
     for prefix in (f"{work_type} на тему: «", f"{work_type} на тему:"):
@@ -706,7 +709,7 @@ def create_essay_docx(referat_data: dict) -> bytes:
     for section_name in referat_data["structure"]:
         text = referat_data["content"].get(section_name, "")
         if text:
-            add_body(doc, text, table_counter)
+            add_body(doc, text, table_counter, doc_lang=doc_lang)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -809,7 +812,7 @@ def create_docx(referat_data: dict) -> bytes:
             add_chapter_heading(doc, name)
 
         if text:
-            add_body(doc, text, table_counter)
+            add_body(doc, text, table_counter, doc_lang=doc_lang)
 
     # 4. Список литературы — только для Реферат/Курсовая/ВКР
     if rules["has_sources"] and referat_data.get("sources"):
@@ -824,7 +827,7 @@ def create_docx(referat_data: dict) -> bytes:
         add_service_heading(doc, labels["appendix"] if doc_lang != "ru" else "Приложения")
         appendix_text = referat_data["content"].get(appendix_name, "")
         if appendix_text:
-            add_body(doc, appendix_text, table_counter)
+            add_body(doc, appendix_text, table_counter, doc_lang=doc_lang)
 
     buf = io.BytesIO()
     doc.save(buf)

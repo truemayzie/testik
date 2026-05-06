@@ -146,8 +146,10 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> tuple[str, di
 
     print(f"[Proxy] Workflow запущен, ждём ответ...")
 
-    if not event.wait(timeout=300):
-        raise Exception("Timeout: GitHub Actions не ответил за 5 минут")
+    # GitHub Actions может быть в очереди, особенно в пиковые часы.
+    # 5 минут часто недостаточно и приводит к ложным падениям генерации.
+    if not event.wait(timeout=900):
+        raise Exception("Timeout: GitHub Actions не ответил за 15 минут")
 
     entry = _responses.pop(request_id, None)
     _events.pop(request_id, None)

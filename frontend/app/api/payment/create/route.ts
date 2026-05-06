@@ -5,6 +5,22 @@ import { prisma } from "@/lib/prisma";
 import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
 import crypto from "crypto";
 
+type Market = "ru" | "kz";
+function makeRoboInvoiceId(): string {
+  return `${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
+}
+
+function md5(input: string): string {
+  return crypto.createHash("md5").update(input).digest("hex");
+}
+
+function getRobokassaPass1(isTest: boolean): string | undefined {
+  if (isTest) {
+    return process.env.ROBOKASSA_TEST_PASSWORD1 || process.env.ROBOKASSA_PASSWORD1;
+  }
+  return process.env.ROBOKASSA_PASSWORD1;
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const sessionUserId = (session?.user as { id?: string } | null)?.id;
@@ -12,11 +28,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { workType, extras, method } = await request.json() as {
+  const { workType, extras, method, market } = await request.json() as {
     workType: string;
     extras?: string[];
     method?: "sbp" | "card";
+    market?: "ru" | "kz";
   };
+  const effectiveMarket: Market = market === "kz" ? "kz" : "ru";
   const priceInfo = WORK_PRICES[workType];
   if (!priceInfo) {
     return NextResponse.json({ error: "Неизвестный тип работы" }, { status: 400 });
@@ -26,12 +44,15 @@ export async function POST(request: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUserId },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   const shopId = process.env.YOKASSA_SHOP_ID;
   const secretKey = process.env.YOKASSA_SECRET_KEY;
+  const roboLogin = process.env.ROBOKASSA_MERCHANT_LOGIN;
+  const roboTestMode = String(process.env.ROBOKASSA_TEST_MODE || "").toLowerCase() === "true";
+  const roboPass1 = getRobokassaPass1(roboTestMode);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   // Отменяем старые pending-платежи этого пользователя за этот тип работы
@@ -45,14 +66,16 @@ export async function POST(request: NextRequest) {
     data: { status: "canceled" },
   });
 
-  // Dev mode: no real YooKassa keys — auto-succeed
-  if (!shopId || !secretKey) {
+  // Dev mode: no real payment keys — auto-succeed
+  if ((!shopId || !secretKey) && (!roboLogin || !roboPass1)) {
     const payment = await prisma.payment.create({
       data: {
         userId: user.id,
         workType,
         amount: totalAmount,
         status: "succeeded",
+        provider: "dev",
+        providerPaymentId: `dev_${crypto.randomUUID()}`,
         yokassaId: `dev_${crypto.randomUUID()}`,
       },
     });
@@ -62,7 +85,68 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Real YooKassa
+  const useRobokassa = effectiveMarket === "kz";
+  const useYookassa = effectiveMarket === "ru";
+
+  if (useRobokassa && (!roboLogin || !roboPass1)) {
+    return NextResponse.json(
+      { error: "Для KZ-платежей Robokassa не настроена (логин/пароль #1)" },
+      { status: 500 }
+    );
+  }
+
+  if (useYookassa && (!shopId || !secretKey)) {
+    return NextResponse.json(
+      { error: "Для RU-платежей ЮKassa не настроена" },
+      { status: 500 }
+    );
+  }
+
+  if (useRobokassa && roboLogin && roboPass1) {
+    const invId = makeRoboInvoiceId();
+    const payment = await prisma.payment.create({
+      data: {
+        userId: user.id,
+        workType,
+        amount: totalAmount,
+        status: "pending",
+        provider: "robokassa",
+        providerPaymentId: invId,
+      },
+    });
+
+    const outSum = totalAmount.toFixed(2);
+    // Robokassa recommends avoiding special chars in Description.
+    const desc = `Генерация ${workType}`.slice(0, 95);
+    // Minimal signature per Robokassa docs (MD5):
+    // MerchantLogin:OutSum:InvId:Password#1
+    const signature = md5(`${roboLogin}:${outSum}:${invId}:${roboPass1}`);
+
+    const base = roboTestMode
+      ? "https://auth.robokassa.ru/Merchant/Index.aspx"
+      : "https://auth.robokassa.ru/Merchant/Index.aspx";
+
+    const params = new URLSearchParams({
+      MerchantLogin: roboLogin,
+      OutSum: outSum,
+      InvId: invId,
+      Description: desc,
+      SignatureValue: signature,
+      IsTest: roboTestMode ? "1" : "0",
+      Culture: "ru",
+    });
+    if (user.email) {
+      params.set("Email", user.email);
+    }
+
+    return NextResponse.json({
+      paymentUrl: `${base}?${params.toString()}`,
+      paymentId: payment.id,
+      provider: "robokassa",
+    });
+  }
+
+  // Real YooKassa (RU)
   const idempotenceKey = crypto.randomUUID();
   const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
   const extrasDesc = (extras ?? []).map(i => i === "presentation" ? "+ Презентация" : "+ Текст выступления").join(" ");
@@ -101,6 +185,8 @@ export async function POST(request: NextRequest) {
       workType,
       amount: totalAmount,
       status: "pending",
+      provider: "yookassa",
+      providerPaymentId: yokassaData.id,
       yokassaId: yokassaData.id,
     },
   });

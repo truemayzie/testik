@@ -47,12 +47,12 @@ MAX_SLOTS = 8  # суммарный лимит слотов (2 Курсовых 
 # Ожидаемая длительность генерации (сек) для более стабильного ETA.
 # Это оценка, но она гораздо лучше раннего ratio по шагам.
 WORK_ETA_SECONDS: dict[str, int] = {
-    "Сочинение": 70,
-    "Эссе": 70,
-    "Доклад": 120,
-    "Реферат": 180,
-    "Курсовая": 260,
-    "ВКР": 420,
+    "Сочинение": 180,
+    "Эссе": 180,
+    "Доклад": 480,
+    "Реферат": 720,
+    "Курсовая": 1200,
+    "ВКР": 2400,
     "Тест": 20,
 }
 
@@ -102,13 +102,43 @@ def _job_progress(job_id: str, step: int, total_steps: int, label: str):
         started_at = float(job.get("started_at") or time.time())
         expected_total = int(job.get("expected_total_seconds") or 0)
         elapsed = max(1.0, time.time() - started_at)
-        ratio = max(0.0, min(1.0, (step / total_steps) if total_steps > 0 else 0.0))
-        percent = max(1, min(99, int(round(ratio * 100))))
+        step_ratio = max(0.0, min(1.0, (step / total_steps) if total_steps > 0 else 0.0))
+        # Адаптивная оценка общей длительности:
+        # если фактический темп медленнее baseline, расширяем expected_total,
+        # чтобы процент не упирался в 90-99% задолго до готовности.
+        adaptive_total = expected_total
+        if expected_total > 0 and step_ratio >= 0.08:
+            pace_total = int(elapsed / step_ratio)
+            adaptive_total = max(expected_total, int(pace_total * 1.12))
+            if adaptive_total != expected_total:
+                job["expected_total_seconds"] = adaptive_total
+
+        time_ratio = max(0.0, min(1.0, (elapsed / adaptive_total) if adaptive_total > 0 else 0.0))
+
+        # Гибрид: прогресс по этапам + фактическое время.
+        # Так шкала не "застывает", но и не улетает в 90% слишком рано.
+        if adaptive_total > 0:
+            mixed_ratio = (step_ratio * 0.60) + (time_ratio * 0.40)
+            # На ранних этапах ограничиваем "перелёт" по процентам относительно времени.
+            if step_ratio < 0.95:
+                mixed_ratio = min(mixed_ratio, time_ratio + 0.12)
+            percent = max(1, min(99, int(round(mixed_ratio * 100))))
+        else:
+            percent = max(1, min(99, int(round(step_ratio * 100))))
+
+        prev_percent = int((job.get("progress") or {}).get("percent") or 0)
+        percent = max(prev_percent, percent)
         eta_seconds = None
-        if expected_total > 0:
-            eta_seconds = max(0, int(round(expected_total - elapsed)))
-        elif ratio > 0:
-            total_est = elapsed / ratio
+        if adaptive_total > 0:
+            eta_by_time = max(0, int(round(adaptive_total - elapsed)))
+            if step_ratio > 0.03:
+                total_est_by_step = elapsed / step_ratio
+                eta_by_step = max(0, int(round(total_est_by_step - elapsed)))
+                eta_seconds = int(round((eta_by_time * 0.65) + (eta_by_step * 0.35)))
+            else:
+                eta_seconds = eta_by_time
+        elif step_ratio > 0:
+            total_est = elapsed / step_ratio
             eta_seconds = max(0, int(round(total_est - elapsed)))
         job["progress"] = {
             "step": step,

@@ -14,6 +14,7 @@ import { getProgressSteps, type Step } from "./lib/progressSteps";
 import { useModalContext } from "./lib/ModalContext";
 import { useModalA11y } from "./lib/useModalA11y";
 import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
+import { detectPaymentMarket } from "@/lib/paymentMarket";
 import { safeJsonLd } from "@/lib/safeJsonLd";
 import styles from "./page.module.css";
 import PresentationViewer, { type Slide } from "./components/PresentationViewer";
@@ -113,7 +114,7 @@ let _pendingExtrasItems: string[] | null = null;
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
 
 const WHY_FEATURES = [
-  { label: "Скорость",       value: "2–4 минуты",          note: "Готово быстрее, чем вы додумаете структуру сами" },
+  { label: "Скорость",       value: "7–10 минут",          note: "Реалистичный срок с учетом объемных работ" },
   { label: "Простота",       value: "Только тема",          note: "Структуру и источники находит ИИ — вы просто ждёте" },
   { label: "Цена",           value: "от 99 ₽",              note: "Без подписки — платите за каждую работу отдельно" },
   { label: "Доп. материалы", value: "Презентация + доклад", note: "Добавьте слайды и текст выступления после генерации" },
@@ -427,6 +428,7 @@ export default function Home() {
 
   const [totalProgress, setTotalProgress] = useState(0);
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  const [backendStageLabel, setBackendStageLabel] = useState<string>("");
   const [dots, setDots] = useState(".");
 
   const [factIndex, setFactIndex]   = useState(0);
@@ -436,7 +438,7 @@ export default function Home() {
   );
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasBackendProgressRef = useRef(false);
+  const smoothProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef        = useRef<Step[]>(getProgressSteps("Реферат"));
   const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
@@ -539,6 +541,7 @@ export default function Home() {
 
   function stopProgress() {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
     setTotalProgress(100);
     setStepIndex(stepsRef.current.length - 1);
     setEtaSeconds(0);
@@ -554,24 +557,35 @@ export default function Home() {
 
   function applyBackendProgress(progress?: BackendProgress) {
     if (!progress) return;
-    if (!hasBackendProgressRef.current) {
-      hasBackendProgressRef.current = true;
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    if (typeof progress.label === "string" && progress.label.trim()) {
+      setBackendStageLabel(progress.label.trim());
+      patchGenState({ stepLabel: progress.label.trim() });
     }
     if (typeof progress.percent === "number") {
       const percent = Math.min(99, progress.percent);
       setTotalProgress(prev => Math.max(prev, percent));
       patchGenState({ percent });
-    }
-    if (typeof progress.step === "number" && progress.step > 0) {
-      const idx = Math.min(Math.max(progress.step - 1, 0), Math.max(stepsRef.current.length - 1, 0));
-      setStepIndex(idx);
+      // Синхронизируем шаг по проценту прогресса (а не по грубому backend step),
+      // чтобы не было несоответствия вида "шаг 4/8, но уже 80%".
+      const stepsTotal = Math.max(stepsRef.current.length, 1);
+      const mappedIdx = Math.min(stepsTotal - 1, Math.floor((percent / 100) * stepsTotal));
+      setStepIndex(prev => Math.max(prev, mappedIdx));
     }
     if (typeof progress.eta_seconds === "number") {
       setEtaSeconds(Math.max(0, progress.eta_seconds));
+      if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
+      // Плавная интерполяция между poll-ответами: каждую 1с аккуратно
+      // поднимаем процент на основе ETA, не перескакивая в 100 до факта done.
+      if (progress.eta_seconds > 0) {
+        smoothProgressRef.current = setInterval(() => {
+          setTotalProgress(prev => {
+            if (prev >= 99) return prev;
+            const remaining = Math.max(1, progress.eta_seconds ?? 1);
+            const delta = Math.max(0.05, (99 - prev) / remaining);
+            return Math.min(99, prev + delta);
+          });
+        }, 1000);
+      }
     }
   }
 
@@ -910,7 +924,7 @@ export default function Home() {
 
     // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
     _gen.start(t, p, wt);
-    currentGenRef.current = { topic: t, pages: p, workType: wt, startedAt: _gen.startedAt };
+    currentGenRef.current = { topic: t, pages: p, workType: wt, startedAt: _gen.startedAt } as typeof currentGenRef.current & { generationId?: string };
     writeGenState({ active: true, percent: 0, stepLabel: stepsRef.current[0]?.label ?? "", workType: wt, topic: t, pages: p, startedAt: _gen.startedAt });
     sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: _gen.startedAt }));
 
@@ -923,7 +937,8 @@ export default function Home() {
     setTotalProgress(0);
     setStepIndex(0);
     setEtaSeconds(null);
-    hasBackendProgressRef.current = false;
+    setBackendStageLabel("");
+    if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
     startProgress();
 
     try {
@@ -966,10 +981,23 @@ export default function Home() {
         _gen.resolve(null, errMsg);
         setError({ message: errMsg, status: response.status });
       } else {
+        // Сервер мог создать running-запись в БД (для «Мои работы») — сохраняем её id,
+        // чтобы поллинг мог финализировать даже после F5/закрытия вкладки.
+        try {
+          const genId = typeof data.generationId === "string" ? data.generationId : "";
+          if (genId && currentGenRef.current) {
+            (currentGenRef.current as unknown as { generationId?: string }).generationId = genId;
+            sessionStorage.setItem("activeGeneration", JSON.stringify({ ...currentGenRef.current, generationId: genId }));
+            const st = readGenState();
+            if (st) writeGenState({ ...st, generationId: genId });
+          }
+        } catch {}
+
         const deadline = Date.now() + GENERATE_MAX_WAIT_MS;
         while (Date.now() < deadline) {
           const pollRes = await fetch(
-            `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${_gen.startedAt}&includeResult=1`,
+            `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${_gen.startedAt}&includeResult=1` +
+            ((currentGenRef.current as unknown as { generationId?: string })?.generationId ? `&generationId=${encodeURIComponent((currentGenRef.current as unknown as { generationId?: string }).generationId!)}` : ""),
             { cache: "no-store" }
           );
           const pollData = await pollRes.json();
@@ -1086,7 +1114,7 @@ export default function Home() {
       const res = await fetch("/api/payment/extras", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ items }),
+        body:    JSON.stringify({ items, market: detectPaymentMarket() }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Ошибка создания платежа"); return; }
@@ -1217,13 +1245,17 @@ export default function Home() {
           const devCheckRes = await fetch("/api/payment/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ workType, extras: formExtrasItems.length > 0 ? formExtrasItems : undefined }),
+            body: JSON.stringify({
+              workType,
+              extras: formExtrasItems.length > 0 ? formExtrasItems : undefined,
+              market: detectPaymentMarket(),
+            }),
           }).catch(() => null);
           setPaymentLoading(false);
 
           if (devCheckRes?.ok) {
             const devData = await devCheckRes.json();
-            if (devData.paymentUrl) {
+            if (devData.provider === "dev" && devData.paymentUrl) {
               // Dev-режим: платёж уже succeeded, сразу запускаем генерацию
               sessionStorage.removeItem("pendingGeneration");
               if (formExtrasItems.length > 0) {
@@ -1231,6 +1263,10 @@ export default function Home() {
                 sessionStorage.removeItem("pendingExtrasChoice");
               }
               runGeneration(topic, pages, workType);
+              return;
+            }
+            if (typeof devData.paymentUrl === "string" && devData.paymentUrl) {
+              window.location.href = devData.paymentUrl;
               return;
             }
           }
@@ -2017,10 +2053,19 @@ export default function Home() {
             </div>
 
             {/* Текущий шаг — key вызывает re-mount → анимация каждый раз */}
-            <p key={stepIndex} className={styles.progressCurrentLabel}>
-              {stepsRef.current[stepIndex]?.label}
+            <p key={`${stepIndex}-${backendStageLabel}`} className={styles.progressCurrentLabel}>
+              {backendStageLabel || stepsRef.current[stepIndex]?.label}
               <span className={styles.progressDots}>{dots}</span>
             </p>
+            {(() => {
+              const match = (backendStageLabel || "").match(/раздел\s+(\d+)\s+из\s+(\d+)/i);
+              if (!match) return null;
+              return (
+                <p className={styles.progressSectionMeta}>
+                  Раздел {match[1]} / {match[2]}
+                </p>
+              );
+            })()}
 
             {f5Recovery ? (
               <div className={styles.f5RecoveryHint}>
@@ -2102,7 +2147,7 @@ export default function Home() {
                 </div>
                 <div className={styles.stepTitle}>ИИ пишет работу</div>
                 <p className={styles.stepText}>
-                  Алгоритм формирует структуру, введение, все главы, заключение и источники за 2–4 минуты
+                  Алгоритм формирует структуру, введение, все главы, заключение и источники в среднем за 7–10 минут
                 </p>
               </div>
               <div className={styles.stepCard} data-reveal data-delay="3">
@@ -2234,7 +2279,7 @@ export default function Home() {
                 <div className={styles.compareHeaderCell}>Refai</div>
               </div>
               {[
-                { label: 'Время',             bad: '3–7 дней',           good: '2 минуты' },
+                { label: 'Время',             bad: '3–7 дней',           good: '7–10 минут' },
                 { label: 'Оформление по ГОСТ', bad: 'Вручную',            good: 'Автоматически' },
                 { label: 'Источники',          bad: 'Поиск вручную',      good: 'Реальные, с DOI' },
                 { label: 'Уникальность',       bad: '< 50%',              good: '70–90%' },

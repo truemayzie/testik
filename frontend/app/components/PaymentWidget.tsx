@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { QRCodeSVG } from "qrcode.react";
 import styles from "./PaymentWidget.module.css";
+import { detectPaymentMarket } from "@/lib/paymentMarket";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -19,6 +20,7 @@ interface Props {
 }
 
 type Screen = "select" | "sbp" | "card";
+type Provider = "yookassa" | "robokassa";
 
 const SBP_TIMEOUT_SEC = 600; // 10 минут
 
@@ -26,6 +28,7 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
   const [mounted, setMounted]           = useState(false);
   const [screen, setScreen]             = useState<Screen>("select");
   const [methodLoading, setMethodLoading] = useState<"sbp" | "card" | null>(null);
+  const [provider, setProvider]         = useState<Provider>("yookassa");
   const [error, setError]               = useState("");
 
   // SBP state
@@ -48,6 +51,7 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
   useEffect(() => {
     setMounted(true);
     setIsMobile(window.innerWidth < 768 || /Android|iPhone|iPad/i.test(navigator.userAgent));
+    setProvider(detectPaymentMarket() === "kz" ? "robokassa" : "yookassa");
   }, []);
 
   // Чистка при анмаунте
@@ -143,7 +147,12 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
       const res = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workType, extras: extras.length > 0 ? extras : undefined, method }),
+        body: JSON.stringify({
+          workType,
+          extras: extras.length > 0 ? extras : undefined,
+          method,
+          market: provider === "robokassa" ? "kz" : "ru",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -157,6 +166,12 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
         const pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");
         sessionStorage.setItem("pendingGeneration", JSON.stringify({ ...pending, paymentId: data.paymentId }));
       } catch {}
+
+      // Robokassa (redirect flow)
+      if (typeof data.paymentUrl === "string" && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+        return;
+      }
 
       if (method === "sbp") {
         setSbpUrl(data.confirmationUrl);
@@ -172,6 +187,40 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
       setError("Не удалось создать платёж");
     }
     setMethodLoading(null);
+  }
+
+  async function handleRobokassaPay() {
+    setError("");
+    setMethodLoading("card");
+    try {
+      const res = await fetch("/api/payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workType,
+          extras: extras.length > 0 ? extras : undefined,
+          market: "kz",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка создания платежа");
+        return;
+      }
+      try {
+        const pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");
+        sessionStorage.setItem("pendingGeneration", JSON.stringify({ ...pending, paymentId: data.paymentId }));
+      } catch {}
+      if (typeof data.paymentUrl === "string" && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        setError("Не удалось открыть форму оплаты");
+      }
+    } catch {
+      setError("Не удалось создать платёж");
+    } finally {
+      setMethodLoading(null);
+    }
   }
 
   function startSbpPolling(payId: string) {
@@ -242,48 +291,95 @@ export default function PaymentWidget({ workType, extras, returnUrl, onSuccess, 
         {screen === "select" && (
           <>
             <h2 id="payment-widget-title" className={styles.title}>Оплата заказа</h2>
-            <p className={styles.subtitle}>Безопасная оплата через ЮKassa и/или Robokassa</p>
+            <p className={styles.subtitle}>Выберите способ оплаты</p>
             {error && <p className={styles.errorBanner}>⚠ {error}</p>}
-            <div className={styles.methods}>
+            <div className={styles.providers}>
               <button
-                className={`${styles.method} ${styles.methodSbp}`}
-                onClick={() => handleSelectMethod("sbp")}
+                className={`${styles.providerCard} ${provider === "yookassa" ? styles.providerCardActive : ""}`}
+                onClick={() => setProvider("yookassa")}
                 disabled={!!methodLoading}
               >
-                <div className={styles.methodLeft}>
-                  <span className={styles.methodIcon}>
-                    <SbpIcon />
-                  </span>
-                  <div>
-                    <span className={styles.methodName}>СБП</span>
-                    <span className={styles.methodDesc}>Приложение вашего банка</span>
-                  </div>
+                <div className={styles.providerTop}>
+                  <span className={styles.providerFlags} aria-hidden="true"><FlagRU /></span>
+                  <span className={styles.providerTitle}>ЮKassa (ЮMoney)</span>
                 </div>
-                <div className={styles.methodRight}>
-                  {methodLoading === "sbp"
-                    ? <span className={styles.methodSpinner} />
-                    : <span className={styles.badgeBest}>Лучший способ</span>
-                  }
-                </div>
+                <div className={styles.providerDesc}>Для пользователей из России: СБП и карты</div>
               </button>
 
               <button
-                className={`${styles.method} ${styles.methodCard}`}
-                onClick={() => handleSelectMethod("card")}
+                className={`${styles.providerCard} ${provider === "robokassa" ? styles.providerCardActive : ""}`}
+                onClick={() => setProvider("robokassa")}
                 disabled={!!methodLoading}
               >
-                <div className={styles.methodLeft}>
-                  <span className={styles.methodIcon}>💳</span>
-                  <div>
-                    <span className={styles.methodName}>Банковская карта</span>
-                    <span className={styles.methodDesc}>SberPay, T‑Pay и другие</span>
-                  </div>
+                <div className={styles.providerTop}>
+                  <span className={styles.providerFlags} aria-hidden="true"><FlagKZ /></span>
+                  <span className={styles.providerTitle}>Robokassa</span>
                 </div>
-                <div className={styles.methodRight}>
-                  {methodLoading === "card" && <span className={styles.methodSpinner} />}
-                </div>
+                <div className={styles.providerDesc}>Для Казахстана и зарубежных карт</div>
               </button>
             </div>
+
+            {provider === "yookassa" ? (
+              <div className={styles.methods}>
+                <button
+                  className={`${styles.method} ${styles.methodSbp}`}
+                  onClick={() => handleSelectMethod("sbp")}
+                  disabled={!!methodLoading}
+                >
+                  <div className={styles.methodLeft}>
+                    <span className={styles.methodIcon}>
+                      <SbpIcon />
+                    </span>
+                    <div>
+                      <span className={styles.methodName}>СБП</span>
+                      <span className={styles.methodDesc}>Приложение вашего банка</span>
+                    </div>
+                  </div>
+                  <div className={styles.methodRight}>
+                    {methodLoading === "sbp"
+                      ? <span className={styles.methodSpinner} />
+                      : <span className={styles.badgeBest}>Рекомендуем</span>
+                    }
+                  </div>
+                </button>
+
+                <button
+                  className={`${styles.method} ${styles.methodCard}`}
+                  onClick={() => handleSelectMethod("card")}
+                  disabled={!!methodLoading}
+                >
+                  <div className={styles.methodLeft}>
+                    <span className={styles.methodIcon}>💳</span>
+                    <div>
+                      <span className={styles.methodName}>Банковская карта</span>
+                      <span className={styles.methodDesc}>Встроенная форма ЮKassa</span>
+                    </div>
+                  </div>
+                  <div className={styles.methodRight}>
+                    {methodLoading === "card" && <span className={styles.methodSpinner} />}
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className={styles.methods}>
+                <button
+                  className={`${styles.method} ${styles.methodRobokassa}`}
+                  onClick={handleRobokassaPay}
+                  disabled={!!methodLoading}
+                >
+                  <div className={styles.methodLeft}>
+                    <span className={styles.methodIcon}>💳</span>
+                    <div>
+                      <span className={styles.methodName}>Оплатить через Robokassa</span>
+                      <span className={styles.methodDesc}>Откроется защищённая страница оплаты</span>
+                    </div>
+                  </div>
+                  <div className={styles.methodRight}>
+                    {methodLoading && <span className={styles.methodSpinner} />}
+                  </div>
+                </button>
+              </div>
+            )}
             <div className={styles.footer}>
               <YookassaBadge />
             </div>
@@ -372,5 +468,26 @@ function YookassaBadge() {
       </svg>
       <span>Безопасная оплата · ЮKassa / Robokassa</span>
     </div>
+  );
+}
+
+function FlagRU() {
+  return (
+    <svg width="22" height="16" viewBox="0 0 22 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0.75" y="0.75" width="20.5" height="14.5" rx="3" fill="#fff" stroke="#E5E7EB" strokeWidth="1.5" />
+      <path d="M2.5 5.33H19.5V10.67H2.5V5.33Z" fill="#1D4ED8" />
+      <path d="M2.5 10.67H19.5V13.5C19.5 14.3284 18.8284 15 18 15H4C3.17157 15 2.5 14.3284 2.5 13.5V10.67Z" fill="#DC2626" />
+    </svg>
+  );
+}
+
+function FlagKZ() {
+  return (
+    <svg width="22" height="16" viewBox="0 0 22 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0.75" y="0.75" width="20.5" height="14.5" rx="3" fill="#16A34A" stroke="#E5E7EB" strokeWidth="1.5" />
+      <path d="M2.5 2.5H19.5V13.5H2.5V2.5Z" fill="#06B6D4" />
+      <circle cx="11" cy="8" r="2.2" fill="#FBBF24" />
+      <path d="M11 4.6l.5 1.1 1.2.1-.9.8.3 1.2-1.1-.6-1.1.6.3-1.2-.9-.8 1.2-.1.5-1.1z" fill="#FBBF24" />
+    </svg>
   );
 }

@@ -37,13 +37,17 @@ npm run db:studio    # GUI Prisma Studio
 Пользователь вводит тему + выбирает тип работы
 → handleSubmit → GET /api/payment/check?workType=X
 → Нет платежа → sessionStorage.pendingGeneration → открывается PaymentWidget (модальное окно)
-→ PaymentWidget → POST /api/payment/create → ЮКасса embedded checkout (или dev-succeeded)
-→ Успешная оплата → виджет закрывается → runGeneration() запускается напрямую
+→ PaymentWidget → POST /api/payment/create → выбор провайдера:
+    - ЮKassa (для РФ): embedded checkout (карта) или redirect (СБП)
+    - Robokassa (для KZ/зарубежных карт): redirect на auth.robokassa.ru
+    - dev-succeeded (только когда платежи не настроены)
+→ Успешная оплата → переход на /payment/success → polling /api/payment/status?id=... → redirect на /?autoGenerate=1
 → page.tsx читает pendingGeneration из sessionStorage → runGeneration()
 → POST /api/generate → проверяет Payment (status=succeeded, usedAt=null)
 → прокси на FastAPI POST /api/generate/referat → возвращает { jobId }
-→ `/api/generate` сразу отвечает `{status:"running", jobId}` (без long-wait)
-→ frontend поллит GET /api/generate/poll?workType=X&startedAt=Y&includeResult=1 каждые 5с
+→ `/api/generate` сразу отвечает `{status:"running", jobId, generationId}` (без long-wait)
+   - **важно:** `Generation` создаётся сразу со статусом `running`, чтобы работа попала в «Мои работы»
+→ frontend поллит GET /api/generate/poll?generationId=...&includeResult=1 (и/или workType+startedAt) каждые 5с
 → FastAPI генерирует в фоновом потоке: generator.py (Claude API) → JSON
 → `/api/generate/poll` при `done` забирает result из FastAPI, сохраняет Generation в БД (+slug), отправляет email/TG
 → frontend получает `{status:"done", id, slug, result}` и показывает модал результата
@@ -123,6 +127,7 @@ npm run db:studio    # GUI Prisma Studio
 - `PROXY_SECRET` обязателен (insecure fallback удалён, при отсутствии backend падает на старте callback-сервера)
 - **`POST https://api.github.com/.../dispatches`**: `requests.Session` с **`trust_env = False`** — запуск workflow **не идёт через `HTTPS_PROXY`/Privoxy**. Иначе CONNECT-туннель к GitHub периодически давал `SSLEOFError` и обрывал длинную генерацию посредине процесса.
 - До **5 повторных попыток** при `SSLError`, `ConnectionError`, `Timeout`, `OSError` с нарастающей паузой.
+- Ожидание callback от workflow: **до 15 минут** (GitHub Actions может стоять в очереди).
 
 ## Фронтенд (Next.js)
 
@@ -163,6 +168,10 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 **`app/dashboard/page.tsx`** — «Мои работы»
 - Журнал скачиваний: см. `WorkActivity` (`_activity` в `POST /api/download` для DOCX + `trackWorkActivityClient` после PPTX/Speech)
 - Список карточек с бейджами типа работы
+- Если `Generation.status !== "completed"`:
+  - карточка помечается «Генерация…»
+  - «Открыть»/скачивание недоступны
+  - доступна кнопка «Проверить» — вызывает `/api/generate/poll?generationId=...` и обновляет список
 - Extras-бейджи: Презентация (красный `#EF4444`), Выступление (янтарный `#F59E0B`)
 - Модальное окно через `createPortal`: DOCX-превью слева + info-панель справа (десктоп), bottom-sheet (мобиль)
 - Кнопки скачивания с иконками: DOCX (`/docx-icon.png`), Презентация (`/pptx-icon.svg`), Выступление (`/txt-icon.svg`)
@@ -174,7 +183,10 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 **`app/components/PreFooter.tsx`** — CTA-секция с анимированными карточками документов (якорь `#generator`)
 
-**`app/components/PaymentWidget.tsx`** — модальное окно оплаты (embedded ЮКасса или dev-succeeded). Открывается из главной страницы вместо редиректа на /payment.
+**`app/components/PaymentWidget.tsx`** — модальное окно оплаты:
+- провайдер: ЮKassa (РФ) / Robokassa (KZ) — выбор с флагами (SVG)
+- ЮKassa: СБП + embedded карта
+- Robokassa: redirect-flow на Robokassa, подтверждение по ResultURL
 
 **`app/components/AuthModal.tsx`** — модалка авторизации для неавторизованных пользователей
 
@@ -208,6 +220,8 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 | `/api/payment/extras` | POST | Платёж за extras |
 | `/api/payment/check` | GET | Проверить наличие оплаченного платежа |
 | `/api/payment/webhook` | POST | Вебхук ЮКассы |
+| `/api/payment/robokassa/result` | GET/POST | ResultURL Robokassa: проверка подписи (Password#2) и перевод Payment → succeeded |
+| `/api/payment/status` | GET | Получить статус Payment по id (для /payment/success) |
 | `/api/download` | POST | Скачать DOCX результата; опционально `_activity` в JSON (служебное поле, вырезается до прокси на FastAPI) — запись в `WorkActivity` |
 | `/api/work-activity` | POST | Fire-and-forget: фиксация PPTX/Speech download (клиент после успешного blob) |
 | `/api/download/presentation/[jobId]` | GET | Прокси PPTX с бэкенда |
@@ -256,6 +270,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - **`User`** — NextAuth + профильные поля титульника (university, faculty, department, speciality, discipline, course, groupNumber, fullName, teacherName, city), `role: "user"|"admin"|"yukassa_test"`, `banned: Boolean`, `password: String?` (bcrypt, для тестовых аккаунтов)
 - **`Generation`** — `result` (JSON-строка), `isPublic`, `slug` (уникальный), `extras` (JSON: `{"presentation":"jobId","speech":"jobId"}`), `rating Int?` (1–5, из письма)
 - **`Payment`** — `usedAt: null` = не использован; `workType` привязан к типу работы
+- `provider` / `providerPaymentId`: поддержка `yookassa` и `robokassa` (Robokassa InvId хранится в `providerPaymentId`)
 - **`ExtrasJob`** — ownership `extrasJobId -> userId` для защиты `/api/generate/extras/status/*`
 - **`HealthCheck`** — лог проверок состояния системы
 - **`SeoPage`** — SEO-страницы по типу работы + предмету

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { activeJobs } from "@/app/lib/activeJobs";
 import { tgNotify } from "@/lib/tgNotify";
+import { createRunningGeneration } from "@/lib/db";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
 
   // ── Шаг 1: запускаем задание на backend (быстрый запрос) ──────────────────
   let jobId: string;
+  let generationId: string | null = null;
   try {
     const { id: _id, role: _role, ...profile } = user;
     const backendBody = {
@@ -163,8 +165,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Backend не вернул jobId" }, { status: 502 });
     }
     jobId = id;
-    // Регистрируем задание — для poll-эндпоинта при восстановлении после F5
-    activeJobs.set(user.id, { jobId, topic: body.topic, pages: body.pages, workType, paymentId });
+    // Важно: создаём запись в БД сразу, чтобы работа появилась в «Мои работы»
+    // даже если пользователь закрыл вкладку и не дождался финального поллинга.
+    const running = await createRunningGeneration({
+      userId: user.id,
+      topic: body.topic,
+      pages: body.pages,
+      workType,
+      jobId,
+    });
+    generationId = running.id;
+
+    // Регистрируем задание в памяти — ускоряет поллинг без доп. запросов к БД
+    activeJobs.set(user.id, { jobId, generationId: running.id, topic: body.topic, pages: body.pages, workType, paymentId });
     console.info("[generate] job started", { userId: user.id, jobId, workType });
     tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»\n📃 ${body.pages} стр.`);
   } catch (err) {
@@ -177,5 +190,5 @@ export async function POST(request: NextRequest) {
   }
 
   // Возвращаемся сразу, без long-wait. Дальше фронтенд опрашивает /api/generate/poll.
-  return NextResponse.json({ status: "running", jobId });
+  return NextResponse.json({ status: "running", jobId, generationId });
 }

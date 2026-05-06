@@ -12,6 +12,18 @@ export type ReferatResult = {
   meta: Record<string, string | number>;
 };
 
+type ExtrasJson = Record<string, unknown>;
+
+function safeParseExtras(raw: string | null | undefined): ExtrasJson {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === "object" ? (v as ExtrasJson) : {};
+  } catch {
+    return {};
+  }
+}
+
 // ── Сохранить генерацию ──────────────────────────────────────────
 export async function saveGeneration(
   userId: string,
@@ -33,6 +45,62 @@ export async function saveGeneration(
       isPublic: true,
       slug,
     },
+  });
+}
+
+// ── Создать запись о запущенной генерации (чтобы она появилась в «Мои работы») ─
+export async function createRunningGeneration(params: {
+  userId: string;
+  topic: string;
+  pages: number;
+  workType: string;
+  jobId: string;
+}) {
+  const extras = { _jobId: params.jobId };
+  return await prisma.generation.create({
+    data: {
+      userId: params.userId,
+      topic: params.topic,
+      pages: params.pages,
+      workType: params.workType,
+      result: JSON.stringify({}),
+      status: "running",
+      isPublic: false,
+      slug: null,
+      extras: JSON.stringify(extras),
+    },
+    select: { id: true, createdAt: true },
+  });
+}
+
+// ── Завершить ранее созданную running-генерацию ─────────────────────────────
+export async function finalizeRunningGeneration(params: {
+  id: string;
+  userId: string;
+  result: ReferatResult;
+}) {
+  const slug = randomBytes(6).toString("hex");
+  const gen = await prisma.generation.findFirst({
+    where: { id: params.id, userId: params.userId },
+    select: { id: true, slug: true, extras: true },
+  });
+  if (!gen) return null;
+
+  const extras = safeParseExtras(gen.extras);
+  // удаляем служебный _jobId, оставляем возможные presentation/speech и т.п.
+  delete extras._jobId;
+  const extrasStr = Object.keys(extras).length ? JSON.stringify(extras) : null;
+
+  return await prisma.generation.update({
+    where: { id: params.id },
+    data: {
+      result: JSON.stringify(params.result),
+      status: "completed",
+      isPublic: true,
+      slug: gen.slug || slug,
+      extras: extrasStr,
+    },
+    select: { id: true, slug: true },
   });
 }
 
@@ -70,6 +138,12 @@ export async function getGeneration(id: string, userId: string) {
     where: { id, userId },
   });
   if (!generation) return null;
+  if (generation.status !== "completed") {
+    return {
+      ...generation,
+      result: null,
+    };
+  }
   return {
     ...generation,
     result: JSON.parse(generation.result) as ReferatResult,

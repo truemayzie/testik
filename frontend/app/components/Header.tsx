@@ -27,6 +27,7 @@ export default function Header() {
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const isAuthPage = pathname?.startsWith("/auth");
+  const isHomePage = pathname === "/";
   const { isModalOpen } = useModalContext();
 
   useEffect(() => { setMounted(true); }, []);
@@ -133,7 +134,7 @@ export default function Header() {
           )}
         </div>
       </header>
-      {!bannerHidden && (
+      {!bannerHidden && isHomePage && (
         <div className={styles.langBanner} role="status" aria-live="polite">
           <div className={styles.langBannerInner}>
             <span className={styles.langBannerIcon} aria-hidden="true">

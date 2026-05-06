@@ -13,6 +13,9 @@ export async function GET() {
     select: {
       id: true, amount: true, status: true,
       workType: true, createdAt: true, yokassaId: true,
+      provider: true,
+      providerPaymentId: true,
+      usedAt: true,
       user: { select: { id: true, name: true, email: true, image: true } },
     },
   });

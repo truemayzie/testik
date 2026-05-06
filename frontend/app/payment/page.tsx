@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
+import { detectPaymentMarket } from "@/lib/paymentMarket";
 import styles from "./payment.module.css";
 
 function PaymentPageContent() {
@@ -37,7 +38,11 @@ function PaymentPageContent() {
       const res = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workType, extras: extrasItems.length > 0 ? extrasItems : undefined }),
+        body: JSON.stringify({
+          workType,
+          extras: extrasItems.length > 0 ? extrasItems : undefined,
+          market: detectPaymentMarket(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -94,7 +99,7 @@ function PaymentPageContent() {
           <li>✓ Соответствие ГОСТ 7.32-2017</li>
           <li>✓ Реальные источники 2020–2025</li>
           <li>✓ Скачивание в DOCX</li>
-          <li>✓ Готово за 2–4 минуты</li>
+          <li>✓ Готово в среднем за 7–10 минут</li>
           {extrasItems.includes("presentation") && <li>✓ Презентация PPTX</li>}
           {extrasItems.includes("speech") && <li>✓ Текст выступления DOCX</li>}
         </ul>

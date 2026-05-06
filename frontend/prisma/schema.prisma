@@ -152,10 +152,14 @@ model Payment {
   workType  String
   amount    Int
   status    String    @default("pending")
+  provider  String    @default("yookassa")
+  providerPaymentId String?
   yokassaId String?
   createdAt DateTime  @default(now())
   usedAt    DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([provider, providerPaymentId])
 }
 
 model ExtrasJob {

@@ -545,6 +545,27 @@
 
 .table tbody tr:hover td { background: #FAFBFF; }
 
+.smallBtn {
+  background: #EEF2FF;
+  border: 1px solid #E0E7FF;
+  color: #1B3A6B;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.smallBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #E0E7FF;
+  border-color: #C7D2FE;
+}
+.smallBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ── User cell ── */
 .userCell {
   display: flex;

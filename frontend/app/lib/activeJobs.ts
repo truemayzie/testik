@@ -5,6 +5,7 @@
 
 interface JobInfo {
   jobId:    string;
+  generationId?: string;
   topic:    string;
   pages:    number;
   workType: string;

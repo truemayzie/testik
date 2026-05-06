@@ -8,8 +8,8 @@ import TelegramSupport from "./components/TelegramSupport";
 import { safeJsonLd } from "@/lib/safeJsonLd";
 
 export const metadata: Metadata = {
-  title: "Refai — Генератор учебных работ на ИИ | Реферат за 2 минуты",
-  description: "Генератор рефератов, курсовых и дипломов на ИИ. Уникальный текст 80%+, оформление по ГОСТ 7.32-2017, реальные источники 2020–2025. Готово за 2 минуты.",
+  title: "Refai — Генератор учебных работ на ИИ | Готово за 7–10 минут",
+  description: "Генератор рефератов, курсовых и дипломов на ИИ. Уникальный текст 80%+, оформление по ГОСТ 7.32-2017, реальные источники 2020–2025. Готово в среднем за 7–10 минут.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },

@@ -840,6 +840,22 @@
   animation: stepLabelIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.progressSectionMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -14px 0 18px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #FDE68A;
+  background: rgba(217, 119, 6, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
 /* Анимированные точки "..." */
 .progressDots {
   display: inline-block;
@@ -3289,6 +3305,12 @@
   .progressCurrentLabel {
     font-size: 0.86rem;
     margin-bottom: 12px;
+  }
+
+  .progressSectionMeta {
+    margin: -6px 0 10px;
+    font-size: 0.66rem;
+    padding: 3px 8px;
   }
 
   .progressHint {

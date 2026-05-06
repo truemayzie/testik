@@ -338,7 +338,7 @@ export default async function SeoPage({ params }: { params: { workType: string; 
           Уникальный текст · Оформление по ГОСТ 7.32-2017 · Реальные источники 2020–2025
         </p>
         <GenerateButton workType={page.workType} title={page.title} />
-        <p className={styles.ctaNote}>Готово за 2 минуты</p>
+        <p className={styles.ctaNote}>Готово в среднем за 7–10 минут</p>
       </div>
 
       {/* Основной SEO-текст — не трогаем, нужен для индексации */}

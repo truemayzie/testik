@@ -33,11 +33,98 @@
   line-height: 1.5;
 }
 
+.langToggle {
+  margin: 14px auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid #D9E2EF;
+  background: #fff;
+}
+
+.langBtn {
+  border: none;
+  background: transparent;
+  color: #64748B;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.langBtn:hover {
+  background: #F1F5F9;
+}
+
+.langBtnActive {
+  color: #fff;
+  background: linear-gradient(135deg, #1B3A6B, #15305A);
+}
+
+.langFlag {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08) inset;
+}
+
+.langFlagRu {
+  background: linear-gradient(
+    to bottom,
+    #ffffff 0%,
+    #ffffff 33.333%,
+    #1f56b5 33.333%,
+    #1f56b5 66.666%,
+    #d92d27 66.666%,
+    #d92d27 100%
+  );
+}
+
+.langFlagKz {
+  background: #00a3dd;
+  position: relative;
+}
+
+.langFlagKz::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f4c430;
+  top: 3px;
+  left: 5px;
+}
+
+.kzHint {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: #64748B;
+}
+
 /* ── Cards grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+}
+
+.gridFade {
+  animation: gridFade 0.25s ease;
+}
+
+@keyframes gridFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Card ── */
@@ -72,6 +159,12 @@
   justify-content: space-between;
 }
 
+.cardBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .cardBadge {
   font-size: 0.72rem;
   font-weight: 700;
@@ -85,6 +178,17 @@
 .cardPages {
   font-size: 0.78rem;
   color: var(--ink-muted);
+}
+
+.cardLang {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #0F172A;
+  border: 1px solid #CBD5E1;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #F8FAFC;
 }
 
 .cardTitle {
