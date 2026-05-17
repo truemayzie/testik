@@ -1,7 +1,35 @@
 /* ── Section ── */
 .section {
-  padding: 72px 24px;
-  background: var(--paper);
+  position: relative;
+  z-index: 1;
+  padding: clamp(44px, 7vw, 56px) 24px clamp(56px, 9vw, 72px);
+  background: #f4f7fb;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.05);
+}
+
+.section::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+@media (max-width: 720px) {
+  .section {
+    border-radius: 22px 22px 0 0;
+    padding-top: 40px;
+  }
+
+  .section::before {
+    width: 36px;
+    top: 12px;
+  }
 }
 
 .inner {
@@ -14,13 +42,23 @@
   margin-bottom: 48px;
 }
 
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #1b3a6b;
+}
+
 .heading {
-  font-family: 'PT Serif', Georgia, serif;
-  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-family: "PT Serif", Georgia, serif;
+  font-size: clamp(1.45rem, 4.5vw, 2rem);
   font-weight: 700;
-  color: var(--ink);
+  color: #0f172a;
   line-height: 1.2;
   margin-bottom: 10px;
+  letter-spacing: -0.02em;
 }
 
 .accent {

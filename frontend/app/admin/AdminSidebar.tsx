@@ -11,7 +11,6 @@ const NAV = [
   { href: "/admin/works",     icon: "📄", label: "Работы" },
   { href: "/admin/payments",  icon: "💳", label: "Платежи" },
   { href: "/admin/feedback",  icon: "💬", label: "Отзывы" },
-  { href: "/admin/health",    icon: "🟢", label: "Статус системы" },
 ];
 
 export default function AdminSidebar() {

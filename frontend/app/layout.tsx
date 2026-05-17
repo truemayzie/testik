@@ -5,6 +5,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import GenerationWidget from "./components/GenerationWidget";
 import TelegramSupport from "./components/TelegramSupport";
+import CookieConsent from "./components/CookieConsent";
 import { safeJsonLd } from "@/lib/safeJsonLd";
 
 export const metadata: Metadata = {
@@ -58,7 +59,7 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/pt-serif-400-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/pt-serif-700-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
 
-        {/* Google Analytics */}
+        {/* Google Analytics — всегда (счётчики не зависят от баннера) */}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-G1QKHHT5Y9" />
         <script dangerouslySetInnerHTML={{ __html: `
           window.dataLayer = window.dataLayer || [];
@@ -104,6 +105,7 @@ export default function RootLayout({
           <Footer />
           <GenerationWidget />
           <TelegramSupport />
+          <CookieConsent />
         </Providers>
       </body>
     </html>

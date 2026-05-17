@@ -28,6 +28,12 @@ model User {
   role          String       @default("user")
   banned        Boolean      @default(false)
   password      String?
+  /// Первый/последний предпросмотр (дата; совместимость со старой схемой)
+  freePreviewUsedAt DateTime?
+  /// Сколько бесплатных предпросмотров уже использовано
+  freePreviewUses   Int      @default(0)
+  /// Лимит бесплатных предпросмотров до оплаты (по умолчанию 1)
+  freePreviewQuota  Int      @default(1)
   accounts      Account[]
   generations   Generation[]
   payments      Payment[]
@@ -118,16 +124,6 @@ model FeedbackComment {
   comment      String?
   createdAt    DateTime   @default(now())
   generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
-}
-
-model HealthCheck {
-  id        String   @id @default(cuid())
-  checkedAt DateTime @default(now())
-  frontend  Boolean
-  backend   Boolean
-  database  Boolean
-  groq      Boolean
-  details   String?
 }
 
 model SeoPage {

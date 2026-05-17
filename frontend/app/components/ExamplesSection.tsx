@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import styles from "./ExamplesSection.module.css";
 import { useModalA11y } from "../lib/useModalA11y";
+import { WORK_PRICES, WORK_GEN_TIME } from "../../lib/prices";
 
 type Example = {
   lang: "ru" | "kz";
@@ -90,19 +91,13 @@ const BADGE_COLORS: Record<string, string> = {
   "Курсовая": "#F59E0B",
 };
 
-const PRICES: Record<string, number> = {
-  "Реферат":  299,
-  "Доклад":   199,
-  "Курсовая": 699,
-};
-
 const DOC_WIDTH = 816;
 
 type Props = {
-  onSelectWorkType: (type: string) => void;
+  onCreateFromExample: (type: string) => void;
 };
 
-export default function ExamplesSection({ onSelectWorkType }: Props) {
+export default function ExamplesSection({ onCreateFromExample }: Props) {
   const [selected, setSelected]     = useState<Example | null>(null);
   const [closing, setClosing]       = useState(false);
   const [lang, setLang]             = useState<"ru" | "kz">("ru");
@@ -238,9 +233,9 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
   }
 
   function handleCreate(ex: Example) {
+    const type = ex.type;
     closeModal();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => onSelectWorkType(ex.type), 400);
+    window.setTimeout(() => onCreateFromExample(type), 220);
   }
 
   function handleLangToggle(next: "ru" | "kz") {
@@ -340,7 +335,7 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
                 Создать такую же работу
               </button>
               <p className={styles.ctaNote}>
-                от {PRICES[selected.type] ?? 299} ₽ · в среднем 7–10 минут
+                от {WORK_PRICES[selected.type]?.price ?? 299} ₽ · {WORK_GEN_TIME[selected.type] ?? "7–8 мин"}
               </p>
             </div>
           </div>
@@ -356,7 +351,7 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
             Создать такую же работу
           </button>
           <p className={styles.ctaNote}>
-            от {PRICES[selected.type] ?? 299} ₽ · в среднем 7–10 минут
+            от {WORK_PRICES[selected.type]?.price ?? 299} ₽ · {WORK_GEN_TIME[selected.type] ?? "7–8 мин"}
           </p>
         </div>
       </div>
@@ -366,13 +361,14 @@ export default function ExamplesSection({ onSelectWorkType }: Props) {
 
   return (
     <>
-      <section className={styles.section}>
+      <section id="examples" className={styles.section}>
         <div className={styles.inner}>
           <div className={styles.head}>
+            <p className={styles.eyebrow}>Примеры работ</p>
             <h2 className={styles.heading}>
               Примеры <span className={styles.accent}>готовых работ</span>
             </h2>
-            <p className={styles.sub}>Посмотрите что получают наши пользователи</p>
+            <p className={styles.sub}>Посмотрите, что получают наши пользователи</p>
             <div className={styles.langToggle} role="tablist" aria-label="Язык примеров работ">
               <button
                 type="button"

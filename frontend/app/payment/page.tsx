@@ -31,6 +31,14 @@ function PaymentPageContent() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("paymentWidgetRestore")) {
+        router.replace("/?restorePreview=1");
+      }
+    } catch { /* ignore */ }
+  }, [router]);
+
   async function handlePay() {
     setLoading(true);
     setError("");

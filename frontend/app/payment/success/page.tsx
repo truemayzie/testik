@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import styles from "./success.module.css";
+import { isAdminSessionRole, reachPaymentSuccessGoalOnce } from "@/lib/metrika";
 
 type State = "waiting" | "succeeded" | "cancelled" | "timeout";
 
 export default function PaymentSuccessPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const skipMetrikaRef = useRef(false);
+  useEffect(() => {
+    skipMetrikaRef.current = isAdminSessionRole(
+      (session?.user as { role?: string } | null)?.role
+    );
+  }, [session]);
   const [state, setState] = useState<State>("waiting");
   const [workType, setWorkType] = useState("");
 
@@ -41,6 +50,7 @@ export default function PaymentSuccessPage() {
           const data = await res.json();
           if (data.status === "succeeded") {
             clearInterval(id);
+            reachPaymentSuccessGoalOnce(`ym_pay_ok_${paymentId}`, { skip: skipMetrikaRef.current });
             setState("succeeded");
             setTimeout(() => router.push(extrasTarget), 1200);
             return;
@@ -83,6 +93,7 @@ export default function PaymentSuccessPage() {
 
         if (data.status === "succeeded") {
           clearInterval(id);
+          reachPaymentSuccessGoalOnce(`ym_pay_ok_${paymentId}`, { skip: skipMetrikaRef.current });
           setState("succeeded");
           setTimeout(() => router.push("/?autoGenerate=1"), 1200);
           return;

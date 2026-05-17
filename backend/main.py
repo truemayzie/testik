@@ -5,17 +5,18 @@ import time
 import subprocess
 import threading
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from pptx import Presentation
 from pptx.util import Emu
-from generator import generate_work
+from generator import generate_work, generate_payment_preview
 from github_proxy import start_callback_server
 
 start_callback_server()
 from formatter import create_docx
+from slots import MAX_SLOTS, compute_used_slots, list_available_work_types, slot_weight
 
 app = FastAPI(title="Academic Service API")
 
@@ -32,18 +33,6 @@ app.add_middleware(
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
-# Вес каждого типа работы в слотах (отражает нагрузку на RAM и Claude API)
-WORK_SLOTS: dict[str, int] = {
-    "Сочинение": 1,
-    "Эссе":      1,
-    "Доклад":    2,
-    "Реферат":   2,
-    "Курсовая":  4,
-    "ВКР":       5,
-    "Тест":      1,
-}
-MAX_SLOTS = 8  # суммарный лимит слотов (2 Курсовых = 8, 1 ВКР + 1 Реферат = 7, итд)
-
 # Ожидаемая длительность генерации (сек) для более стабильного ETA.
 # Это оценка, но она гораздо лучше раннего ratio по шагам.
 WORK_ETA_SECONDS: dict[str, int] = {
@@ -57,41 +46,25 @@ WORK_ETA_SECONDS: dict[str, int] = {
 }
 
 
-def _used_slots() -> int:
-    """Считает занятые слоты по всем активным заданиям."""
-    return sum(
-        WORK_SLOTS.get(j.get("work_type", "Реферат"), 2)
-        for j in _jobs.values()
-        if j["status"] == "running"
-    )
-
-
-def _available_types() -> list[str]:
-    """Возвращает типы работ, которые можно запустить прямо сейчас."""
-    used = _used_slots()
-    return [wt for wt, slots in WORK_SLOTS.items()
-            if wt != "Тест" and used + slots <= MAX_SLOTS]
-
-
-def _job_start(job_id: str, work_type: str = "Реферат"):
+def _job_start_unlocked(job_id: str, work_type: str = "Реферат"):
+    """Добавляет running-job; вызывать только под _jobs_lock."""
     now = time.time()
     expected_total = WORK_ETA_SECONDS.get(work_type, 180)
-    with _jobs_lock:
-        _jobs[job_id] = {
-            "status": "running",
-            "result": None,
-            "error": None,
-            "work_type": work_type,
-            "started_at": now,
-            "expected_total_seconds": expected_total,
-            "progress": {
-                "step": 0,
-                "total_steps": 0,
-                "label": "Запуск задачи",
-                "percent": 1,
-                "eta_seconds": None,
-            },
-        }
+    _jobs[job_id] = {
+        "status": "running",
+        "result": None,
+        "error": None,
+        "work_type": work_type,
+        "started_at": now,
+        "expected_total_seconds": expected_total,
+        "progress": {
+            "step": 0,
+            "total_steps": 0,
+            "label": "Запуск задачи",
+            "percent": 1,
+            "eta_seconds": None,
+        },
+    }
 
 
 def _job_progress(job_id: str, step: int, total_steps: int, label: str):
@@ -215,8 +188,8 @@ def root():
 def get_slots():
     """Возвращает доступные типы работ и занятость слотов."""
     with _jobs_lock:
-        used = _used_slots()
-        available = _available_types()
+        used = compute_used_slots(_jobs.values())
+        available = list_available_work_types(used)
     return {
         "used": used,
         "max": MAX_SLOTS,
@@ -230,18 +203,17 @@ def create_referat(request: ReferatRequest):
     Запускает генерацию в фоновом потоке и сразу возвращает jobId.
     Next.js опрашивает /api/generate/status/{jobId} каждые 5 секунд.
     """
-    needed = WORK_SLOTS.get(request.work_type, 2)
+    needed = slot_weight(request.work_type)
+    job_id = str(uuid.uuid4())
     with _jobs_lock:
-        used = _used_slots()
+        used = compute_used_slots(_jobs.values())
         if used + needed > MAX_SLOTS:
-            available = _available_types()
+            available = list_available_work_types(used)
             raise HTTPException(
                 status_code=503,
                 detail={"message": "Сервер перегружен", "available": available},
             )
-
-    job_id = str(uuid.uuid4())
-    _job_start(job_id, request.work_type)
+        _job_start_unlocked(job_id, request.work_type)
 
     def run():
         try:
@@ -261,6 +233,38 @@ def create_referat(request: ReferatRequest):
     thread.start()
 
     return {"jobId": job_id}
+
+
+class PreviewRequest(BaseModel):
+    topic: str
+    work_type: str = "Реферат"
+
+
+def _verify_internal_api(
+    request: Request,
+    x_internal_token: str | None = Header(None, alias="X-Internal-Token"),
+) -> None:
+    """Превью только через Next.js — не напрямую с /api/ (FastAPI без авторизации)."""
+    secret = os.getenv("INTERNAL_API_SECRET") or os.getenv("PROXY_SECRET")
+    if secret:
+        if x_internal_token != secret:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return
+    client = (request.client.host if request.client else "") or ""
+    if client not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@app.post("/api/generate/preview", dependencies=[Depends(_verify_internal_api)])
+def create_preview(req: PreviewRequest):
+    """Дешёвый предпросмотр перед оплатой (без DOCX, один вызов LLM)."""
+    try:
+        return generate_payment_preview(req.topic, req.work_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        print(f"[preview] {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/api/generate/status/{job_id}")

@@ -13,6 +13,17 @@ export const WORK_PRICES: Record<string, { price: number; label: string; pages: 
   "ВКР":       { price: 1199, label: "ВКР",              pages: "60-70 стр." },
 }
 
+/** Ориентир длительности генерации (по фактическим запускам на prod). */
+export const WORK_GEN_TIME: Record<string, string> = {
+  "Тест": "1 мин",
+  "Сочинение": "1–2 мин",
+  "Эссе": "~2 мин",
+  "Доклад": "5–7 мин",
+  "Реферат": "7–8 мин",
+  "Курсовая": "12–14 мин",
+  "ВКР": "20–25 мин",
+};
+
 export const WORK_PAGES: Record<string, { min: number; max: number; default: number }> = {
   "Тест":      { min: 1,  max: 1,  default: 1  },
   "Сочинение": { min: 3,  max: 5,  default: 3  },

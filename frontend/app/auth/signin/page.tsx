@@ -14,14 +14,14 @@ export default function SignInPage() {
 
   async function handleOAuth(provider: string) {
     setLoading(provider);
-    await signIn(provider, { callbackUrl: "/" });
+    await signIn(provider, { callbackUrl: "/?fromAuth=1" });
   }
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading("email");
-    await signIn("email", { email, callbackUrl: "/", redirect: false });
+    await signIn("email", { email, callbackUrl: "/?fromAuth=1", redirect: false });
     setSent(true);
     setLoading(null);
   }

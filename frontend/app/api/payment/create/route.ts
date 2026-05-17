@@ -138,6 +138,8 @@ export async function POST(request: NextRequest) {
     if (user.email) {
       params.set("Email", user.email);
     }
+    params.set("SuccessURL", `${appUrl}/payment/success`);
+    params.set("FailURL", `${appUrl}/?restorePreview=1`);
 
     return NextResponse.json({
       paymentUrl: `${base}?${params.toString()}`,

@@ -105,6 +105,17 @@ def ask_json(prompt: str) -> dict:
     return json.loads(raw)
 
 
+def ask_json_limited(prompt: str, max_tokens: int = 1200) -> dict:
+    """Claude → JSON с ограничением max_tokens (предпросмотр перед оплатой)."""
+    raw = ask(prompt + "\n\nВерни ТОЛЬКО валидный JSON без markdown и пояснений.", max_tokens=max_tokens)
+    if "```" in raw:
+        for part in raw.split("```"):
+            if "{" in part:
+                raw = part.lstrip("json").strip()
+                break
+    return json.loads(raw)
+
+
 def ask_text(prompt: str) -> str:
     """Запрос к Claude, возвращает текст."""
     return clean_text(ask(prompt))
@@ -1029,6 +1040,329 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         "sources":   sources,
         "meta":      meta,
         "profile":   profile or {},
+        "_cost_usd": round(_session_cost, 4),
+    }
+
+
+PREVIEW_WORK_TYPES = frozenset(
+    {"Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР", "Тест"}
+)
+
+
+def _first_chapter_heading_from_toc(toc_rows: list[dict]) -> str:
+    for row in toc_rows:
+        n = str(row.get("num", "") or "").strip()
+        if n == "1":
+            return str(row.get("title", "") or "").strip()[:300]
+    return ""
+
+
+def _split_legacy_excerpt(leg: str, intro_label: str, doc_lang: str) -> list[dict[str, str]]:
+    leg = (leg or "").strip()
+    if not leg:
+        return []
+    paras = [p.strip() for p in leg.split("\n\n") if p.strip()]
+    if len(paras) < 2:
+        return [{"title": intro_label, "text": leg}]
+    mid = max(1, len(paras) // 2)
+    a = "\n\n".join(paras[:mid])
+    b = "\n\n".join(paras[mid:])
+    ch = {"ru": "Глава 1", "kz": "1-бөлім", "en": "Chapter 1"}.get(doc_lang, "Глава 1")
+    return [{"title": intro_label, "text": a}, {"title": ch, "text": b}]
+
+
+def _rebuild_preview_toc_chapters(
+    ai_rows: list[dict],
+    chapters_count: int,
+    subchapters_count: int,
+    intro_w: str,
+    concl_w: str,
+    src_w: str,
+    doc_lang: str,
+) -> list[dict]:
+    """
+    Оглавление предпросмотра строго по WORK_RULES: N глав × M подглав + заключение + источники.
+    Заголовки подтягиваем из ответа модели по num, иначе — нейтральные заглушки.
+    """
+    by_num: dict[str, str] = {}
+    for r in ai_rows:
+        k = str(r.get("num", "")).strip()
+        t = str(r.get("title", "")).strip()
+        if not t:
+            continue
+        if k not in by_num or len(t) > len(by_num[k]):
+            by_num[k] = t[:200]
+
+    concl_title = concl_w
+    src_title = src_w
+    for r in ai_rows:
+        tt = str(r.get("title", "")).strip()
+        if not tt:
+            continue
+        ttl = tt.lower()
+        if any(x in ttl for x in ("заключ", "қорыт", "conclusion", "tynystau")):
+            concl_title = tt[:200]
+        if any(x in ttl for x in ("источн", "литератур", "references", "дереккөз", "bibliography")):
+            src_title = tt[:200]
+
+    ch_def = {
+        "ru": ("Теоретические аспекты темы", "Анализ ключевых положений", "Практическая значимость"),
+        "kz": ("Тақырыптың теориялық аспектілері", "Негізгі тұжырымдамалар", "Практикалық маңызы"),
+        "en": ("Theoretical aspects", "Analysis of key points", "Practical significance"),
+    }.get(doc_lang, ("Chapter I", "Chapter II", "Chapter III"))
+
+    sub_def = {
+        "ru": ("Положения раздела", "Развитие темы", "Обобщение и выводы"),
+        "kz": ("Бөлім сипаттамасы", "Тақырыпты дамыту", "Жинақтау"),
+        "en": ("Section outline", "Topic development", "Summary"),
+    }.get(doc_lang, ("Subsection A", "Subsection B", "Subsection C"))
+
+    rows: list[dict] = []
+    p = 3
+    rows.append({"num": "", "title": (by_num.get("", intro_w))[:200], "page": str(p)})
+    p += 2
+    for ch in range(1, chapters_count + 1):
+        nk = str(ch)
+        title = by_num.get(nk) or (ch_def[ch - 1] if ch <= len(ch_def) else ch_def[-1])
+        rows.append({"num": nk, "title": title[:200], "page": str(p)})
+        p += 2
+        for sub in range(1, subchapters_count + 1):
+            sk = f"{ch}.{sub}"
+            st = by_num.get(sk) or sub_def[(ch + sub - 1) % len(sub_def)]
+            rows.append({"num": sk, "title": st[:200], "page": str(p)})
+            p += 2
+
+    rows.append({"num": str(chapters_count + 1), "title": concl_title[:200], "page": str(p)})
+    p += 2
+    rows.append({"num": str(chapters_count + 2), "title": src_title[:200], "page": str(p)})
+    return rows
+
+
+def _rebuild_preview_toc_essay(ai_rows: list[dict], _intro_w: str, _concl_w: str, doc_lang: str) -> list[dict]:
+    """Сочинение/эссе: в содержании только основная часть (глава 1 и подпункты)."""
+    by_num: dict[str, str] = {}
+    for r in ai_rows:
+        k = str(r.get("num", "")).strip()
+        t = str(r.get("title", "")).strip()
+        if not t:
+            continue
+        if k not in by_num or len(t) > len(by_num[k]):
+            by_num[k] = t[:200]
+
+    b = {
+        "ru": ("Основная часть", "Аргументы и примеры", "Развитие мысли"),
+        "kz": ("Негізгі бөлім", "Дәлелдер мен мысалдар", "Ойды дамыту"),
+        "en": ("Main body", "Arguments and examples", "Developing the idea"),
+    }.get(doc_lang, ("Main body", "Arguments", "Development"))
+
+    return [
+        {"num": "1", "title": (by_num.get("1") or b[0])[:200], "page": "1"},
+        {"num": "1.1", "title": (by_num.get("1.1") or b[1])[:200], "page": "2"},
+        {"num": "1.2", "title": (by_num.get("1.2") or b[2])[:200], "page": "3"},
+    ]
+
+
+def generate_payment_preview(topic: str, work_type: str) -> dict:
+    """
+    Дешёвый предпросмотр: оглавление + начало первого раздела + названия остальных.
+    Без источников и без полного текста.
+    """
+    global _session_cost
+    _session_cost = 0.0
+
+    topic = (topic or "").strip()
+    if not topic:
+        raise ValueError("Пустая тема")
+
+    wt = (work_type or "").strip()
+    if wt not in PREVIEW_WORK_TYPES:
+        wt = "Реферат"
+
+    doc_lang = detect_language_from_topic(topic)
+    lab = _lang_labels(doc_lang)
+    intro_w = lab["intro"]
+    concl_w = lab["conclusion"]
+    src_w = lab["sources"]
+
+    rules = WORK_RULES.get(wt, WORK_RULES["Реферат"])
+    has_chapters = bool(rules.get("has_chapters", True))
+    split_preview = has_chapters and wt not in ("Сочинение", "Эссе")
+
+    if wt in ("Сочинение", "Эссе"):
+        structure_hint = (
+            f"Тип: {wt} — в toc для ответа можно дать строки «1», «1.1», «1.2» (основная часть с подпунктами); "
+            f"на сервере в предпросмотре останется только эта тройка. Заголовки на языке темы."
+        )
+    elif wt == "Тест":
+        structure_hint = f"Тип: {wt} — минимальное оглавление из 1–2 строк или одна строка с пустым num."
+    else:
+        cc = int(rules.get("chapters_count") or 3)
+        sc = int(rules.get("subchapters_count") or 2)
+        total_rows = 1 + cc + cc * sc + 2
+        structure_hint = (
+            f"Тип: {wt} — оглавление СТРОГО по стандарту: ровно {cc} главы с num «1»…«{cc}» (не больше), "
+            f"у каждой главы ровно {sc} подпунктов «N.1»…«N.{sc}». Затем «{concl_w}» (num «{cc + 1}») и «{src_w}» (num «{cc + 2}»). "
+            f"Сначала строка «{intro_w}» с пустым num. Всего ровно {total_rows} строк в toc; не добавляй четвёртую основную главу."
+        )
+
+    if split_preview:
+        json_spec = """{
+  "toc": [{"num": "строка — пусто для введения, иначе 1 / 1.1 / 1.2 / 2 / 2.1", "title": "только название без номера", "page": "строка"}, ...],
+  "introduction_excerpt": "строка — только ПЕРВАЯ ПОЛОВИНА полного введения (~600 токенов выхода): 2–3 законченных абзаца, всего до ~2400 знаков. Без markdown и без «ёлочек»; абзацы через \\n\\n",
+  "first_chapter_title": "строка — заголовок первой главы (тот же смысл, что у строки toc с num \\"1\\")",
+  "first_chapter_excerpt": "строка — только НАЧАЛО первой главы: примерно первая половина текста главы 1 (~600 токенов выхода), 2–4 абзаца, до ~2400 знаков, законченные мысли. Без markdown; абзацы через \\n\\n",
+  "locked_section_titles": ["строка", "строка", ...]
+}"""
+        cc = int(rules.get("chapters_count") or 3)
+        sc = int(rules.get("subchapters_count") or 2)
+        req_tail = f"""Требования:
+- toc: title БЕЗ дублирования номера (номер только в num). page — условная страница строкой.
+- Ровно {cc} нумерованных глав (num «1»…«{cc}»), у каждой ровно {sc} подглав; затем заключение (num «{cc + 1}») и источники (num «{cc + 2}»). Не вставляй лишнюю главу «{cc + 1}» в основную часть.
+- introduction_excerpt и first_chapter_excerpt — разный текст: во втором уже основная часть главы 1, не дублируй введение.
+- locked_section_titles: минимум 4 раздела, логично идущие после показанного текста первой главы.
+
+Не включай ключи кроме перечисленных. Не пиши пояснений вне JSON."""
+        max_preview_tokens = 3800
+    else:
+        json_spec = """{
+  "toc": [{"num": "1", "title": "название основной части без номера в title", "page": "строка"}, {"num": "1.1", "title": "...", "page": "строка"}, {"num": "1.2", "title": "...", "page": "строка"}],
+  "continuous_excerpt": "строка — цельный связный отрывок начала работы без внутренних подзаголовков (~600 токенов выхода, до ~2600 знаков). Без markdown и без «ёлочек»; абзацы через \\n\\n",
+  "locked_section_titles": ["строка", "строка", ...]
+}"""
+        req_tail = """Требования:
+- toc: три строки с num «1», «1.1», «1.2» — только основная часть с подпунктами (без введения и заключения в списке).
+- continuous_excerpt: законченные абзацы, не обрыв на полуслове.
+- locked_section_titles: минимум 2 названия после показанного фрагмента.
+
+Не включай ключи кроме перечисленных. Не пиши пояснений вне JSON."""
+        max_preview_tokens = 2200
+
+    prompt = f"""Ты готовишь КОРОТКИЙ предпросмотр учебной работы перед оплатой (пользователь ещё не платил).
+{structure_hint}
+Тема: «{topic}»
+Язык всего текста в JSON — как у темы ({lab["name"]}); заголовки и отрывки на этом языке.
+
+Верни строго один JSON-объект:
+{json_spec}
+
+{req_tail}"""
+
+    data = ask_json_limited(prompt, max_tokens=max_preview_tokens)
+
+    toc = data.get("toc") or []
+    if not isinstance(toc, list):
+        toc = []
+    clean_toc = []
+    for item in toc[:22]:
+        if not isinstance(item, dict):
+            continue
+        t = str(item.get("title", "")).strip()
+        if not t:
+            continue
+        p = item.get("page")
+        raw_num = item.get("num")
+        if raw_num is None or (isinstance(raw_num, str) and raw_num.strip() == ""):
+            num_s = ""
+        else:
+            num_s = str(raw_num).strip()[:16]
+            if num_s.endswith("."):
+                num_s = num_s[:-1].strip()
+        clean_toc.append(
+            {
+                "num": num_s,
+                "title": t[:200],
+                "page": str(p).strip()[:8] if p is not None else "…",
+            }
+        )
+
+    if has_chapters:
+        cc_n = int(rules.get("chapters_count") or 3)
+        sc_n = int(rules.get("subchapters_count") or 2)
+        clean_toc = _rebuild_preview_toc_chapters(clean_toc, cc_n, sc_n, intro_w, concl_w, src_w, doc_lang)
+    elif wt in ("Сочинение", "Эссе"):
+        clean_toc = _rebuild_preview_toc_essay(clean_toc, intro_w, concl_w, doc_lang)
+    elif wt == "Тест":
+        rsp = {"ru": "Ответ", "kz": "Жауап", "en": "Response"}.get(doc_lang, "Ответ")
+        clean_toc = [
+            {"num": "", "title": intro_w, "page": "1"},
+            {"num": "1", "title": rsp, "page": "2"},
+        ]
+
+    locked = data.get("locked_section_titles") or []
+    if not isinstance(locked, list):
+        locked = []
+    locked = [str(x).strip()[:200] for x in locked if str(x).strip()][:12]
+
+    if len(clean_toc) < 3:
+        mid_labels = {"ru": "Основная часть", "kz": "Негізгі бөлім", "en": "Main body"}
+        sub_labels = {"ru": "Развитие темы", "kz": "Тақырыпты дамыту", "en": "Developing the topic"}
+        mid = mid_labels.get(doc_lang, mid_labels["ru"])
+        sub = sub_labels.get(doc_lang, sub_labels["ru"])
+        clean_toc = [
+            {"num": "", "title": intro_w, "page": "3"},
+            {"num": "1", "title": mid, "page": "5"},
+            {"num": "1.1", "title": sub, "page": "6"},
+            {"num": "2", "title": concl_w, "page": "…"},
+        ]
+
+    ph = {
+        "ru": "Здесь появится начало работы после генерации.",
+        "kz": "Жұмыстың басы осында пайда болады.",
+        "en": "The beginning of your work will appear here.",
+    }.get(doc_lang, "Здесь появится начало работы после генерации.")
+
+    excerpt_sections: list[dict[str, str]] = []
+    if split_preview:
+        intro_t = clean_text(str(data.get("introduction_excerpt", "") or ""))[:2800]
+        ch1_title = str(data.get("first_chapter_title", "") or "").strip()[:300]
+        if not ch1_title:
+            ch1_title = _first_chapter_heading_from_toc(clean_toc)
+        ch1_txt = clean_text(str(data.get("first_chapter_excerpt", "") or ""))[:2800]
+        if intro_t:
+            excerpt_sections.append({"title": intro_w, "text": intro_t})
+        if ch1_txt:
+            excerpt_sections.append({"title": ch1_title or "1", "text": ch1_txt})
+        if not excerpt_sections:
+            single = clean_text(str(data.get("excerpt", "") or ""))[:3200]
+            if single:
+                excerpt_sections = _split_legacy_excerpt(single, intro_w, doc_lang)
+        if not excerpt_sections:
+            ch1_f = ch1_title or _first_chapter_heading_from_toc(clean_toc) or "1"
+            excerpt_sections = [{"title": intro_w, "text": ph}, {"title": ch1_f, "text": ph}]
+    else:
+        cont = clean_text(str(data.get("continuous_excerpt", "") or data.get("excerpt", "") or ""))[:2800]
+        frag_labels = {"ru": f"Фрагмент: {wt}", "kz": f"Үзінді: {wt}", "en": f"Excerpt: {wt}"}
+        frag_label = frag_labels.get(doc_lang, f"Фрагмент: {wt}")
+        if cont:
+            excerpt_sections = [{"title": frag_label, "text": cont}]
+        else:
+            excerpt_sections = [
+                {"title": (clean_toc[0]["title"] if clean_toc else frag_label), "text": ph}
+            ]
+
+    excerpt_title = (
+        excerpt_sections[0]["title"]
+        if excerpt_sections
+        else (clean_toc[0]["title"] if clean_toc else intro_w)
+    )
+    excerpt = "\n\n".join(s.get("text", "") for s in excerpt_sections).strip()
+    if not excerpt:
+        excerpt = ph
+
+    while len(locked) < 4:
+        n = len(locked) + 1
+        locked.append({ "ru": f"Раздел {n}", "kz": f"Бөлім {n}", "en": f"Section {n}" }.get(doc_lang, f"Раздел {n}"))
+
+    return {
+        "work_type": wt,
+        "topic": topic,
+        "doc_lang": doc_lang,
+        "has_toc_sheet": bool(has_chapters or wt in ("Сочинение", "Эссе")),
+        "toc": clean_toc,
+        "excerpt_title": excerpt_title,
+        "excerpt": excerpt,
+        "excerpt_sections": excerpt_sections,
+        "locked_section_titles": locked,
         "_cost_usd": round(_session_cost, 4),
     }
 

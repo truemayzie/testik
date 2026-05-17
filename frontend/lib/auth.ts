@@ -196,13 +196,35 @@ export const authOptions: NextAuthOptions = {
     async redirect({ baseUrl }) {
       return baseUrl;
     },
-    // Добавляем id, role, banned пользователя в сессию
+    // Добавляем id, role, banned пользователя в сессию + флаг бесплатного предпросмотра
     async session({ session, user }) {
       if (session.user) {
-        const u = user as typeof user & { role?: string; banned?: boolean };
-        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).id = u.id;
-        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).role = u.role ?? "user";
-        (session.user as typeof session.user & { id: string; role: string; banned: boolean }).banned = u.banned ?? false;
+        const db = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            id: true,
+            role: true,
+            banned: true,
+            createdAt: true,
+            freePreviewUses: true,
+            freePreviewQuota: true,
+          },
+        });
+        if (db) {
+          (session.user as { id: string }).id = db.id;
+          (session.user as { role: string }).role = db.role ?? "user";
+          (session.user as { banned: boolean }).banned = db.banned ?? false;
+          (session.user as { createdAt?: string }).createdAt =
+            db.createdAt instanceof Date ? db.createdAt.toISOString() : undefined;
+          const isAdmin = db.role === "admin";
+          const quota = Math.max(0, db.freePreviewQuota ?? 1);
+          const used = Math.max(0, db.freePreviewUses ?? 0);
+          const remaining = Math.max(0, quota - used);
+          (session.user as { previewAvailable?: boolean }).previewAvailable = isAdmin || remaining > 0;
+          (session.user as { previewQuota?: number }).previewQuota = quota;
+          (session.user as { previewUses?: number }).previewUses = used;
+          (session.user as { previewRemaining?: number }).previewRemaining = remaining;
+        }
       }
       return session;
     },

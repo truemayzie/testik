@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { activeJobs } from "@/app/lib/activeJobs";
 import { tgNotify } from "@/lib/tgNotify";
 import { createRunningGeneration } from "@/lib/db";
+import { prepareTopic } from "@/lib/topicValidate";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -42,6 +43,12 @@ export async function POST(request: NextRequest) {
 
   const body     = await request.json();
   const workType = body.workType || "Реферат";
+
+  const prepared = prepareTopic(String(body.topic ?? ""));
+  if (!prepared.ok) {
+    return NextResponse.json({ error: prepared.message }, { status: 400 });
+  }
+  const topic = prepared.topic;
 
   const isAdmin   = user.role === "admin";
   const isYukassa = user.role === "yukassa_test";
@@ -138,7 +145,7 @@ export async function POST(request: NextRequest) {
   try {
     const { id: _id, role: _role, ...profile } = user;
     const backendBody = {
-      topic:     body.topic,
+      topic,
       pages:     body.pages,
       work_type: workType,
       profile,
@@ -169,7 +176,7 @@ export async function POST(request: NextRequest) {
     // даже если пользователь закрыл вкладку и не дождался финального поллинга.
     const running = await createRunningGeneration({
       userId: user.id,
-      topic: body.topic,
+      topic,
       pages: body.pages,
       workType,
       jobId,
@@ -177,9 +184,9 @@ export async function POST(request: NextRequest) {
     generationId = running.id;
 
     // Регистрируем задание в памяти — ускоряет поллинг без доп. запросов к БД
-    activeJobs.set(user.id, { jobId, generationId: running.id, topic: body.topic, pages: body.pages, workType, paymentId });
+    activeJobs.set(user.id, { jobId, generationId: running.id, topic, pages: body.pages, workType, paymentId });
     console.info("[generate] job started", { userId: user.id, jobId, workType });
-    tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${body.topic}»\n📃 ${body.pages} стр.`);
+    tgNotify(`📝 <b>Генерация началась</b>\n👤 ${user.fullName || user.id}\n📄 ${workType}: «${topic}»\n📃 ${body.pages} стр.`);
   } catch (err) {
     console.error("[generate] Не удалось запустить задание:", err);
     await revertPayment(paymentId);

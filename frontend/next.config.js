@@ -1,5 +1,9 @@
+/** Отдельный distDir для staging (см. npm run build:staging, порт 3001). */
+const distDir = process.env.NEXT_BUILD_DIR || ".next";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir,
   poweredByHeader: false,
   experimental: {
     instrumentationHook: true,

@@ -12,6 +12,7 @@ build/
 # ── Node / Next.js ────────────────────────
 node_modules/
 .next/
+.next-staging/
 out/
 .turbo/
 *.tsbuildinfo

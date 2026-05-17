@@ -9,9 +9,18 @@ import { useModalContext } from "@/app/lib/ModalContext";
 
 const LogoInner = () => (
   <>
-    <svg className={styles.logoSpark} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="#D97706"/>
-    </svg>
+    <span className={styles.logoMark} aria-hidden>
+      <svg className={styles.logoSpark} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="11" fill="url(#refaiLogoBg)" />
+        <path d="M12 4.5L13.6 10.2L19.5 12L13.6 13.8L12 19.5L10.4 13.8L4.5 12L10.4 10.2Z" fill="#D97706" />
+        <defs>
+          <linearGradient id="refaiLogoBg" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1B3A6B" />
+            <stop offset="1" stopColor="#0f2645" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </span>
     <div className={styles.logoTexts}>
       <span className={styles.logoWord}>Ref<span className={styles.logoAi}>ai</span></span>
       <span className={styles.logoTagline}>Генератор учебных работ</span>
@@ -28,6 +37,7 @@ export default function Header() {
   const pathname = usePathname();
   const isAuthPage = pathname?.startsWith("/auth");
   const isHomePage = pathname === "/";
+  const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === "1";
   const { isModalOpen } = useModalContext();
 
   useEffect(() => { setMounted(true); }, []);
@@ -54,6 +64,7 @@ export default function Header() {
   return (
     <div className={styles.headerWrap} style={{ zIndex: isModalOpen ? 1 : undefined }}>
       <header className={styles.header}>
+        <div className={styles.headerInner}>
         <Link href="/" className={styles.logo}><LogoInner /></Link>
 
         {/* Десктоп nav */}
@@ -133,30 +144,40 @@ export default function Header() {
             <Link href="/auth/signin" className={styles.signInBtn}>Войти</Link>
           )}
         </div>
+        </div>
       </header>
-      {!bannerHidden && isHomePage && (
+      {isStaging && (
+        <div className={styles.stagingRibbon} role="status">
+          <span className={styles.stagingRibbonText}>
+            Staging — черновик дизайна. Продакшен: ref-ai.ru
+          </span>
+        </div>
+      )}
+      {!bannerHidden && isHomePage && !isStaging && (
         <div className={styles.langBanner} role="status" aria-live="polite">
-          <div className={styles.langBannerInner}>
-            <span className={styles.langBannerIcon} aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L13.9 8.1L20 10L13.9 11.9L12 18L10.1 11.9L4 10L10.1 8.1L12 2Z" fill="currentColor"/>
-              </svg>
-            </span>
-            <span className={styles.langBannerText}>
-              Поддержка генерации на русском, английском, казахском и других языках
-            </span>
-            <span className={styles.langBannerBadge}>RU · EN · KZ</span>
+          <div className={styles.langBannerShell}>
+            <div className={styles.langBannerInner}>
+              <span className={styles.langBannerIcon} aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L13.9 8.1L20 10L13.9 11.9L12 18L10.1 11.9L4 10L10.1 8.1L12 2Z" fill="currentColor"/>
+                </svg>
+              </span>
+              <span className={styles.langBannerText}>
+                Поддержка генерации на русском, английском, казахском и других языках
+              </span>
+              <span className={styles.langBannerBadge}>RU · EN · KZ</span>
+            </div>
+            <button
+              className={styles.langBannerClose}
+              aria-label="Скрыть уведомление"
+              onClick={() => {
+                localStorage.setItem("langBannerHidden", "1");
+                setBannerHidden(true);
+              }}
+            >
+              ×
+            </button>
           </div>
-          <button
-            className={styles.langBannerClose}
-            aria-label="Скрыть уведомление"
-            onClick={() => {
-              localStorage.setItem("langBannerHidden", "1");
-              setBannerHidden(true);
-            }}
-          >
-            ×
-          </button>
         </div>
       )}
     </div>

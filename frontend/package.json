@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:staging": "NEXT_BUILD_DIR=.next-staging NEXT_PUBLIC_IS_STAGING=1 next build",
     "start": "next start",
+    "start:staging": "PORT=3001 NEXT_BUILD_DIR=.next-staging next start",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "fill-seo": "tsx scripts/fill-body-text.ts",

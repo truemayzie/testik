@@ -33,7 +33,7 @@ export default function AuthModal({ onClose }: Props) {
         <div className={styles.buttons}>
           <button
             className={styles.yandexBtn}
-            onClick={() => signIn("yandex", { callbackUrl: "/" })}
+            onClick={() => signIn("yandex", { callbackUrl: "/?fromAuth=1" })}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13.32 0H10.1C6.37 0 4.14 1.9 4.14 5.02c0 2.7 1.26 4.07 3.67 5.67L5.18 15.8H1.5L0 24h4.38l1.14-6.5h2.1L9.4 24h4.38l-2-12.07c2.43-1.6 3.84-3.6 3.84-6.5C15.62 1.9 15 0 13.32 0zm-2.1 10.1h-.9V4.3h.9c1.44 0 2.1.72 2.1 2.88 0 2.16-.66 2.92-2.1 2.92z"/>

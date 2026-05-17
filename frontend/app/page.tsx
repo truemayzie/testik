@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,8 @@ import Link from "next/link";
 import TypewriterInput from "./components/TypewriterInput";
 import PaymentWidget from "./components/PaymentWidget";
 import ExamplesSection from "./components/ExamplesSection";
-import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
+import { WORK_PRICES, WORK_PAGES, WORK_GEN_TIME } from "../lib/prices";
+import { prepareTopic } from "../lib/topicValidate";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
 import { useModalContext } from "./lib/ModalContext";
@@ -150,15 +151,40 @@ const WHY_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
+const GEN_TRUST_ICONS = {
+  gost: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  ),
+  sources: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+      <line x1="8" y1="7" x2="16" y2="7" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </svg>
+  ),
+  fast: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  ),
+} as const;
+
 // SVG-иконки для шагов
 const STEP_ICONS = [
   // 01: Ввести тему — карандаш
   <svg key="edit" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>,
-  // 02: ИИ пишет — cpu/chip
-  <svg key="cpu" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+  // 02: Превью — глаз
+  <svg key="eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
   </svg>,
   // 03: Скачать — download
   <svg key="download" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -166,6 +192,127 @@ const STEP_ICONS = [
   </svg>,
 ];
 
+const HOW_STEPS = [
+  {
+    title: "Тема и тип работы",
+    text: "Выберите формат — от сочинения до ВКР — и введите тему. Можно кратко, главное передать суть.",
+  },
+  {
+    title: "Превью до оплаты",
+    text: "Бесплатно смотрите содержание и фрагмент текста. Полная версия — после оплаты.",
+  },
+  {
+    title: "DOCX по ГОСТ",
+    text: "Скачиваете Word: шрифт, поля, интервалы, титульник и список литературы уже оформлены.",
+  },
+] as const;
+
+const HOW_FEATURES = [
+  "ГОСТ 7.32-2017",
+  "Список литературы",
+  "Титульный лист",
+  "Таблицы и структура",
+] as const;
+
+type CompareAiTone = "plus" | "neutral" | "minus";
+
+const AI_COMPARE_ROWS: {
+  label: string;
+  generic: string;
+  refai: string;
+  aiTone: CompareAiTone;
+}[] = [
+  {
+    label: "Идеи и черновик",
+    aiTone: "plus",
+    generic: "Быстрые ответы, можно уточнять в чате",
+    refai: "Сразу структура под тип работы",
+  },
+  {
+    label: "Оформление по ГОСТ",
+    aiTone: "neutral",
+    generic: "Текст есть — поля и шрифты вручную",
+    refai: "Готовый DOCX по ГОСТ",
+  },
+  {
+    label: "Список литературы",
+    aiTone: "neutral",
+    generic: "Подскажет названия — ссылки проверяйте",
+    refai: "Реальные источники из баз",
+  },
+  {
+    label: "Структура работы",
+    aiTone: "neutral",
+    generic: "Зависит от формулировки запроса",
+    refai: "Введение, главы, заключение",
+  },
+  {
+    label: "Титульный лист",
+    aiTone: "minus",
+    generic: "Собираете сами в Word",
+    refai: "Заполняется из профиля",
+  },
+  {
+    label: "Формат сдачи",
+    aiTone: "neutral",
+    generic: "Копировать из чата по частям",
+    refai: "Скачать Word одним файлом",
+  },
+];
+
+function CompareMarkIcon({ kind }: { kind: "yes" | "ai" | "partial" | "no" }) {
+  const markClass =
+    kind === "yes"
+      ? styles.compareMarkYes
+      : kind === "ai"
+        ? styles.compareMarkAi
+        : kind === "partial"
+          ? styles.compareMarkPartial
+          : styles.compareMarkNo;
+
+  return (
+    <span className={`${styles.compareMark} ${markClass}`} aria-hidden>
+      {kind === "partial" ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M8 12h8" />
+        </svg>
+      ) : kind === "no" ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M8 8l8 8M16 8l-8 8" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 12.5l3.5 3.5L18 8" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function CompareAiMark({ tone }: { tone: CompareAiTone }) {
+  if (tone === "plus") return <CompareMarkIcon kind="ai" />;
+  if (tone === "neutral") return <CompareMarkIcon kind="partial" />;
+  return <CompareMarkIcon kind="no" />;
+}
+
+function CompareAiCell({
+  text,
+  tone,
+  className,
+}: {
+  text: string;
+  tone: CompareAiTone;
+  className?: string;
+}) {
+  return (
+    <div
+      className={[styles.compareRowAi, className ?? ""].filter(Boolean).join(" ")}
+    >
+      <CompareAiMark tone={tone} />
+      <span className={styles.compareCellText}>{text}</span>
+    </div>
+  );
+}
 
 const FAQ = [
   {
@@ -359,14 +506,53 @@ export default function Home() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
 
+  // Цель Метрики "Успешная регистрация" — у NextAuth нет отдельного URL для sign-up,
+  // поэтому фиксируем событие при первом входе (создание User в БД) по createdAt.
+  useEffect(() => {
+    try {
+      if (sessionStatus !== "authenticated") return;
+      const createdAtIso = (session?.user as { createdAt?: string } | null)?.createdAt;
+      if (!createdAtIso) return;
+
+      const createdAtMs = Date.parse(createdAtIso);
+      if (!Number.isFinite(createdAtMs)) return;
+
+      // окно "новый пользователь": 10 минут
+      const isNewUser = Date.now() - createdAtMs < 10 * 60 * 1000;
+      if (!isNewUser) return;
+
+      const key = `ym_signup_fired_${createdAtIso}`;
+      if (typeof window === "undefined") return;
+      if (window.localStorage.getItem(key) === "1") return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ymFn = (window as any).ym as undefined | ((...args: any[]) => void);
+      if (typeof ymFn !== "function") return;
+
+      ymFn(108284268, "reachGoal", "signup_success");
+      window.localStorage.setItem(key, "1");
+    } catch {
+      // no-op: не ломаем UI из-за аналитики
+    }
+  }, [sessionStatus, session]);
+
   // Тестовый аккаунт ЮКасса
   const userRole  = (session?.user as { role?: string } | null)?.role;
   const isYukassa = userRole === "yukassa_test";
   const isAdmin   = userRole === "admin";
+  const previewUser = session?.user as {
+    previewRemaining?: number;
+    previewQuota?: number;
+  } | null;
+  const previewQuota = previewUser?.previewQuota ?? 1;
+  const previewRemaining = previewUser?.previewRemaining ?? 0;
+  const previewAvailable =
+    sessionStatus === "authenticated" && session?.user?.previewAvailable === true;
   const YUKASSA_TYPES = ["Сочинение", "Эссе", "Доклад"];
 
   const [workType, setWorkType]               = useState("Реферат");
   const [topic, setTopic]                     = useState("");
+  const [topicFieldError, setTopicFieldError] = useState<string | null>(null);
   const [pages, setPages]                     = useState(WORK_PAGES["Реферат"].default);
   const [loading, setLoading]                 = useState(false);
   const [result, setResult]                   = useState<ReferatResult | null>(null);
@@ -419,7 +605,7 @@ export default function Home() {
   const [trialUsed, setTrialUsed]             = useState(false);
   const [f5Recovery, setF5Recovery]           = useState(false);
   const [paymentLoading, setPaymentLoading]   = useState(false);
-  type PaymentWidgetData = { workType: string; extras: string[] };
+  type PaymentWidgetData = { workType: string; extras: string[]; topic: string };
   const [paymentWidgetData, setPaymentWidgetData] = useState<PaymentWidgetData | null>(null);
   const [capacityError, setCapacityError]     = useState<string[] | null>(null); // null = нет ошибки, [] = всё занято, [...] = доступные типы
 
@@ -442,12 +628,16 @@ export default function Home() {
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepsRef        = useRef<Step[]>(getProgressSteps("Реферат"));
   const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
-  const f5InfoRef       = useRef<{ workType: string; startedAt: number }>({ workType: "Реферат", startedAt: 0 });
+  const authReturnHandled = useRef(false);
+  const f5InfoRef       = useRef<{ workType: string; startedAt: number; generationId?: string }>({ workType: "Реферат", startedAt: 0 });
+  const f5IdleStreakRef = useRef(0);
   const isUnloadingRef  = useRef(false); // флаг F5 / ухода со страницы
   const loadingRef      = useRef(false);  // актуальное значение loading для beforeunload
-  const currentGenRef   = useRef<{ topic: string; pages: number; workType: string; startedAt: number } | null>(null);
+  const currentGenRef   = useRef<{ topic: string; pages: number; workType: string; startedAt: number; generationId?: string } | null>(null);
   const heroRef             = useRef<HTMLElement>(null);
   const progressSectionRef  = useRef<HTMLElement>(null);
+  const workTypesRef        = useRef<HTMLDivElement>(null);
+  const workTypeElsRef      = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     const updateViewport = () => setIsMobileViewport(window.innerWidth <= 768);
@@ -471,6 +661,29 @@ export default function Home() {
     return () => cancelAnimationFrame(id);
   }, [loading]);
 
+  function scrollWorkTypeIntoView(type: string, behavior: ScrollBehavior = "smooth") {
+    const container = workTypesRef.current;
+    const el = workTypeElsRef.current[type];
+    if (!container || !el || !window.matchMedia("(max-width: 900px)").matches) return;
+
+    const list = isYukassa ? YUKASSA_TYPES : WORK_TYPES;
+    const idx = list.indexOf(type);
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    const elLeft = el.offsetLeft;
+    const elWidth = el.offsetWidth;
+    const containerWidth = container.clientWidth;
+
+    let target: number;
+    if (idx <= 0) target = 0;
+    else if (idx >= list.length - 1) target = maxScroll;
+    else target = elLeft - (containerWidth - elWidth) / 2;
+
+    container.scrollTo({
+      left: Math.max(0, Math.min(target, maxScroll)),
+      behavior,
+    });
+  }
+
   function selectWorkType(type: string) {
     setWorkType(type);
     setPages(WORK_PAGES[type]?.default ?? 20);
@@ -478,7 +691,23 @@ export default function Home() {
     setResult(null);
     setError(null);
     setCapacityError(null);
+    requestAnimationFrame(() => scrollWorkTypeIntoView(type));
   }
+
+  function goToGeneratorFromExample(type: string) {
+    selectWorkType(type);
+    window.setTimeout(() => {
+      document.getElementById("generator")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
+  // Мобилка: один раз центрируем выбранный тип при загрузке (без повторного скролла при смене)
+  useLayoutEffect(() => {
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    const id = requestAnimationFrame(() => scrollWorkTypeIntoView(workType, "instant"));
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function startProgress(elapsedOffset = 0) {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -953,7 +1182,15 @@ export default function Home() {
         if (response.status === 401) {
           const errMsg = "Нужно войти в аккаунт, чтобы запустить генерацию.";
           _gen.resolve(null, errMsg);
+          _gen.cancel();
+          clearGenState();
+          try {
+            sessionStorage.removeItem("activeGeneration");
+            sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
+            sessionStorage.setItem("pendingAuthReturn", "1");
+          } catch { /* ignore */ }
           setError({ message: errMsg, status: 401 });
+          setLoading(false);
           router.push("/auth/signin");
           return;
         }
@@ -1186,7 +1423,13 @@ export default function Home() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!topic.trim()) return;
+    const prepared = prepareTopic(topic);
+    if (!prepared.ok) {
+      setTopicFieldError(prepared.message);
+      return;
+    }
+    setTopicFieldError(null);
+    const cleanTopic = prepared.topic;
 
     setCapacityError(null);
 
@@ -1212,7 +1455,7 @@ export default function Home() {
     // Admin — генерация бесплатно
     if (isAdmin) {
       if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-      runGeneration(topic, pages, workType);
+      runGeneration(cleanTopic, pages, workType);
       return;
     }
 
@@ -1220,7 +1463,21 @@ export default function Home() {
     if (isYukassa) {
       if (trialUsed) return;
       if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-      runGeneration(topic, pages, workType);
+      runGeneration(cleanTopic, pages, workType);
+      return;
+    }
+
+    // Гость: сохраняем тему и ведём на вход → после входа откроется превью в окне оплаты
+    if (sessionStatus === "unauthenticated") {
+      try {
+        sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
+        sessionStorage.setItem("pendingAuthReturn", "1");
+        sessionStorage.setItem("pendingPreviewAfterAuth", "1");
+        if (formExtrasItems.length > 0) {
+          sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
+        }
+      } catch { /* ignore */ }
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent("/?fromAuth=1")}`);
       return;
     }
 
@@ -1228,13 +1485,20 @@ export default function Home() {
     try {
       const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(workType)}`);
       if (checkRes.status === 401) {
-        setError({ message: "Нужно войти в аккаунт, чтобы продолжить.", status: 401 });
-        router.push("/auth/signin");
+        try {
+          sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
+          sessionStorage.setItem("pendingAuthReturn", "1");
+          sessionStorage.setItem("pendingPreviewAfterAuth", "1");
+          if (formExtrasItems.length > 0) {
+            sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
+          }
+        } catch { /* ignore */ }
+        router.push(`/auth/signin?callbackUrl=${encodeURIComponent("/?fromAuth=1")}`);
         return;
       }
       const checkData = await checkRes.json();
       if (!checkData.hasPaid) {
-        sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic, pages, workType }));
+        sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
         if (formExtrasItems.length > 0) {
           sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
         }
@@ -1262,7 +1526,7 @@ export default function Home() {
                 _pendingExtrasItems = formExtrasItems;
                 sessionStorage.removeItem("pendingExtrasChoice");
               }
-              runGeneration(topic, pages, workType);
+              runGeneration(cleanTopic, pages, workType);
               return;
             }
             if (typeof devData.paymentUrl === "string" && devData.paymentUrl) {
@@ -1273,7 +1537,7 @@ export default function Home() {
         }
 
         // Prod: показываем виджет с выбором метода оплаты (payment/create вызывает сам виджет при выборе метода)
-        setPaymentWidgetData({ workType, extras: formExtrasItems });
+        setPaymentWidgetData({ workType, extras: formExtrasItems, topic: cleanTopic });
         return;
       }
     } catch {
@@ -1282,7 +1546,7 @@ export default function Home() {
     }
 
     if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-    runGeneration(topic, pages, workType);
+    runGeneration(cleanTopic, pages, workType);
   }
 
   function toggleSection(section: string) {
@@ -1439,6 +1703,101 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isYukassa]);
 
+  // После входа: восстановить тему и открыть окно с предпросмотром (если был «Попробовать»)
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    if (authReturnHandled.current) return;
+
+    const previewIntent = sessionStorage.getItem("pendingPreviewAfterAuth") === "1";
+    const authReturn = sessionStorage.getItem("pendingAuthReturn") === "1";
+    if (!previewIntent && !authReturn) return;
+
+    authReturnHandled.current = true;
+    sessionStorage.removeItem("pendingPreviewAfterAuth");
+    sessionStorage.removeItem("pendingAuthReturn");
+
+    if (new URLSearchParams(window.location.search).get("fromAuth") === "1") {
+      window.history.replaceState({}, "", "/");
+    }
+
+    let t = topic.trim();
+    let p = pages;
+    let wt = workType;
+    try {
+      const raw = sessionStorage.getItem("pendingGeneration");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { topic?: string; pages?: number; workType?: string };
+        if (parsed.workType) {
+          wt = parsed.workType;
+          selectWorkType(wt);
+        }
+        if (typeof parsed.topic === "string") setTopic(parsed.topic);
+        if (typeof parsed.pages === "number" && parsed.pages > 0) setPages(parsed.pages);
+        t = typeof parsed.topic === "string" ? parsed.topic : t;
+        p = typeof parsed.pages === "number" && parsed.pages > 0 ? parsed.pages : p;
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
+      if (extrasRaw) _pendingExtrasItems = JSON.parse(extrasRaw) as string[];
+    } catch { /* ignore */ }
+
+    if (!t) return;
+
+    const extras = [...(_pendingExtrasItems ?? [])];
+    window.setTimeout(() => {
+      setPaymentWidgetData({ topic: t, workType: wt, extras });
+    }, 150);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStatus]);
+
+  // Вернулись с Robokassa/внешней оплаты — снова открыть модалку превью
+  useEffect(() => {
+    function tryRestorePaymentWidget() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("autoGenerate") === "1") return;
+
+      if (params.get("restorePreview") === "1") {
+        window.history.replaceState({}, "", "/");
+      }
+
+      try {
+        const raw = sessionStorage.getItem("paymentWidgetRestore");
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as {
+          topic?: string;
+          workType?: string;
+          extras?: string[];
+          pages?: number;
+          openedAt?: number;
+        };
+        if (!parsed.topic?.trim() || !parsed.workType) return;
+        if (parsed.openedAt && Date.now() - parsed.openedAt > 2 * 60 * 60 * 1000) {
+          sessionStorage.removeItem("paymentWidgetRestore");
+          return;
+        }
+        selectWorkType(parsed.workType);
+        setTopic(parsed.topic);
+        if (typeof parsed.pages === "number" && parsed.pages > 0) {
+          setPages(parsed.pages);
+        }
+        if (Array.isArray(parsed.extras) && parsed.extras.length > 0) {
+          _pendingExtrasItems = parsed.extras;
+        }
+        setPaymentWidgetData({
+          topic: parsed.topic,
+          workType: parsed.workType,
+          extras: Array.isArray(parsed.extras) ? parsed.extras : [],
+        });
+      } catch { /* ignore */ }
+    }
+    tryRestorePaymentWidget();
+    window.addEventListener("pageshow", tryRestorePaymentWidget);
+    return () => window.removeEventListener("pageshow", tryRestorePaymentWidget);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // При монтировании: восстанавливаем прерванную генерацию или запускаем после оплаты
   useEffect(() => {
     // Защита от двойного запуска (React Strict Mode дважды вызывает useEffect в dev)
@@ -1520,11 +1879,12 @@ export default function Home() {
     if (genSt || active) {
       (async () => {
         try {
+          const activeParsed = active ? (JSON.parse(active) as { startedAt?: number; topic?: string; pages?: number; workType?: string; generationId?: string }) : null;
           // Предпочитаем localStorage (переживает F5), но fallback на sessionStorage
-          const startedAt = genSt?.startedAt ?? (active ? JSON.parse(active).startedAt : 0);
-          const t  = genSt?.topic    ?? (active ? JSON.parse(active).topic    : "");
-          const p  = genSt?.pages != null ? genSt.pages : (active ? JSON.parse(active).pages : 0);
-          const wt = genSt?.workType ?? (active ? JSON.parse(active).workType : "Реферат");
+          const startedAt = genSt?.startedAt ?? (activeParsed?.startedAt ?? 0);
+          const t  = genSt?.topic    ?? (activeParsed?.topic ?? "");
+          const p  = genSt?.pages != null ? genSt.pages : (activeParsed?.pages ?? 0);
+          const wt = genSt?.workType ?? (activeParsed?.workType ?? "Реферат");
           const savedPercent = genSt?.percent ?? 0;
 
           const elapsed = Date.now() - startedAt;
@@ -1567,7 +1927,9 @@ export default function Home() {
           // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен.
           // Возобновляем анимацию прогресса с нужного момента + запускаем поллинг статуса.
           stepsRef.current = getProgressSteps(wt);
-          f5InfoRef.current = { workType: wt, startedAt };
+          // В F5 режиме предпочтительно поллить по generationId — это не зависит от рассинхрона времени (client startedAt vs server createdAt)
+          f5IdleStreakRef.current = 0;
+          f5InfoRef.current = { workType: wt, startedAt, generationId: genSt?.generationId ?? activeParsed?.generationId };
           setLoading(true);
           setError(null);
           setResult(null);
@@ -1610,11 +1972,16 @@ export default function Home() {
         if (raw) {
           const parsed = JSON.parse(raw);
           parsed.active = true;
+          // Если generationId пришёл уже после старта генерации — не теряем его при pagehide
+          if (!parsed.generationId && currentGenRef.current?.generationId) {
+            parsed.generationId = currentGenRef.current.generationId;
+          }
           localStorage.setItem("refai_gen", JSON.stringify(parsed));
         } else {
-          const { topic, pages, workType, startedAt } = currentGenRef.current;
+          const { topic, pages, workType, startedAt, generationId } = currentGenRef.current;
           localStorage.setItem("refai_gen", JSON.stringify({
             active: true, percent: 0, stepLabel: "", workType, topic, pages, startedAt,
+            ...(generationId ? { generationId } : {}),
           }));
         }
       } catch {}
@@ -1756,16 +2123,34 @@ export default function Home() {
   useEffect(() => {
     if (!f5Recovery) return;
 
-    const { workType: wt, startedAt } = f5InfoRef.current;
+    const { workType: wt, startedAt, generationId } = f5InfoRef.current;
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(
-          `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${startedAt}`
-        );
+        const qs =
+          `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${startedAt}` +
+          (generationId ? `&generationId=${encodeURIComponent(generationId)}` : "");
+        const res = await fetch(qs);
         if (!res.ok) return;
         const data = await res.json();
         applyBackendProgress(data.progress);
+
+        if (data.status === "idle") {
+          f5IdleStreakRef.current += 1;
+          // Если несколько раз подряд idle — значит мы потеряли контекст (jobId/generationId),
+          // но работа могла уже сохраниться в БД. Уводим в «Мои работы» вместо вечного ожидания.
+          if (f5IdleStreakRef.current >= 3) {
+            clearInterval(pollRef.current!);
+            clearGenState();
+            stopProgress();
+            setF5Recovery(false);
+            setLoading(false);
+            router.push("/dashboard");
+          }
+          return;
+        }
+        // Любой не-idle ответ сбрасывает счётчик
+        f5IdleStreakRef.current = 0;
 
         if (data.status === "done") {
           clearInterval(pollRef.current!);
@@ -1852,25 +2237,94 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(websiteJsonLd) }} />
 
-      {/* ── Hero ── */}
-      <section ref={heroRef} className={styles.hero}>
+      {/* ── Hero (якорь для PreFooter #generator) ── */}
+      <section ref={heroRef} id="generator" className={styles.hero}>
         <div className={styles.heroInner}>
 
-          <div className={styles.heroBadgeRow}>
-            <span className={styles.heroBadge}>ГОСТ 7.32-2017</span>
-            <span className={styles.heroBadge}>Антиплагиат 70-90%</span>
-            <span className={styles.heroBadgeFree}>+ от 99 ₽</span>
+          <div className={styles.heroOrb} aria-hidden />
+
+          <div className={styles.heroIntro}>
+            <div
+              className={styles.heroTrust}
+              role="status"
+              aria-label="Отзывы Lokli и Google Play, оформление по ГОСТ"
+            >
+              <div className={styles.heroTrustLead}>
+                <div className={styles.heroTrustIcons} aria-hidden>
+                  <span className={styles.heroTrustIcon}>
+                    <img
+                      src="/trust-icon-lokli.png"
+                      alt=""
+                      width={22}
+                      height={22}
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </span>
+                  <span className={`${styles.heroTrustIcon} ${styles.heroTrustIconGoogle}`}>
+                    <img
+                      src="/trust-icon-google.png"
+                      alt=""
+                      width={22}
+                      height={22}
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </span>
+                </div>
+                <span className={styles.heroTrustStars} aria-hidden>★★★★★</span>
+              </div>
+              <span className={styles.heroTrustSep} aria-hidden />
+              <span className={styles.heroTrustText}>
+                ГОСТ&nbsp;7.32-2017 · уникальность&nbsp;70–90%
+              </span>
+            </div>
+
+            <h1 className={styles.heroTitle}>
+              Учебные работы с&nbsp;оформлением{" "}
+              <span className={styles.heroAccent}>по&nbsp;ГОСТ</span>
+            </h1>
+
+            <p className={styles.heroSub}>
+              Сочинение, реферат, курсовая или ВКР — введите тему и скачайте готовый Word со списком литературы
+            </p>
           </div>
 
-          <h1 className={styles.heroTitle}>
-            Готовый реферат, курсовая или эссе<br/>
-            за <span className={styles.heroAccent}>5 минут</span>
-          </h1>
-
-          <p className={styles.heroSub}>
-            Введите тему — получите работу по ГОСТу,<br/>
-            со списком литературы и готовым оформлением
-          </p>
+          {previewAvailable && !loading && (
+            <div className={styles.previewPromoBanner} role="status">
+              <div className={styles.previewPromoIcon} aria-hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M8 4h9l3 3v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M17 4v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                  <path d="M9 10h6M9 13h6M9 16h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className={styles.previewPromoBody}>
+                <p className={styles.previewPromoTitle}>
+                  {isAdmin
+                    ? "Предпросмотр до оплаты"
+                    : previewQuota > 1
+                      ? "Вам доступны бесплатные предпросмотры"
+                      : "Вам доступен бесплатный предпросмотр"}
+                </p>
+                <p className={styles.previewPromoText}>
+                  {isAdmin
+                    ? "В окне оплаты показываем оглавление и фрагмент текста — для администратора без лимита."
+                    : previewQuota > 1
+                      ? `Перед оплатой покажем структуру работы и начало текста. Бесплатных предпросмотров: ${previewQuota}, сейчас осталось ${previewRemaining}. Откроется в окне оплаты.`
+                      : "Перед оплатой покажем структуру работы и начало текста. Одно бесплатное превью на аккаунт — откроется в окне оплаты."}
+                </p>
+              </div>
+              <span className={styles.previewPromoBadge} aria-hidden>
+                {isAdmin ? "∞" : String(Math.max(0, previewRemaining))}
+              </span>
+            </div>
+          )}
 
           {/* Баннер для тестового аккаунта ЮКасса */}
           {isYukassa && !loading && (
@@ -1904,47 +2358,86 @@ export default function Home() {
             </div>
           )}
 
-          {/* Типы работ */}
-          <div className={styles.workTypes}>
-            {/* Кнопка Тест — только для admin */}
-            {isAdmin && (
-              <button
-                key="Тест"
-                className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
-                onClick={() => selectWorkType("Тест")}
-                disabled={loading}
-                title="Тестовая генерация — только для администратора"
-              >
-                <span className={styles.workTypeLabel}>Тест</span>
-                <span className={styles.workTypePages}>1 стр.</span>
-              </button>
-            )}
-            {(isYukassa ? YUKASSA_TYPES : WORK_TYPES).map(type => {
-              const info = WORK_PRICES[type];
-              return (
-                <button
-                  key={type}
-                  className={`${styles.workType} ${workType === type ? styles.workTypeActive : ""}`}
-                  onClick={() => selectWorkType(type)}
-                  disabled={loading}
-                >
-                  <span className={styles.workTypeLabel}>{type}</span>
-                  <span className={styles.workTypePages}>{info?.pages}</span>
-                </button>
-              );
-            })}
-          </div>
+          <div className={styles.genCard}>
+            <div className={styles.genCardHead}>
+              <span className={styles.genCardTitle}>Создайте работу</span>
+              {!isYukassa && (
+                <span className={styles.genCardPrice} key={workType}>
+                  {totalPrice}
+                  <span className={styles.genCardPriceSuffix}>₽</span>
+                </span>
+              )}
+            </div>
 
-          {/* Форма */}
+            <p className={styles.genCardHint}>Тип работы</p>
+            <div ref={workTypesRef} className={styles.workTypes}>
+              {isAdmin && (
+                <button
+                  key="Тест"
+                  ref={(el) => { workTypeElsRef.current["Тест"] = el; }}
+                  className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
+                  onClick={() => selectWorkType("Тест")}
+                  disabled={loading}
+                  title="Тестовая генерация — только для администратора"
+                  type="button"
+                >
+                  <span className={styles.workTypeLabel}>Тест</span>
+                  <span className={styles.workTypeMeta}>1 стр.</span>
+                </button>
+              )}
+              {(isYukassa ? YUKASSA_TYPES : WORK_TYPES).map(type => {
+                const info = WORK_PRICES[type];
+                return (
+                  <button
+                    key={type}
+                    ref={(el) => { workTypeElsRef.current[type] = el; }}
+                    className={`${styles.workType} ${workType === type ? styles.workTypeActive : ""}`}
+                    onClick={() => selectWorkType(type)}
+                    disabled={loading}
+                    type="button"
+                  >
+                    <span className={styles.workTypeLabel}>{type}</span>
+                    <span className={styles.workTypeMeta}>
+                      {isYukassa ? info?.pages : `${info?.price} ₽ · ${info?.pages}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
           <form onSubmit={handleSubmit} className={styles.heroForm}>
+            <div className={styles.topicLabelRow}>
+              <span className={styles.topicLabel}>Тема работы</span>
+              <span className={styles.topicInfoWrap}>
+                <button
+                  type="button"
+                  className={styles.topicInfoBtn}
+                  aria-label="Как указать тему"
+                  aria-describedby="topic-hint-popover"
+                >
+                  i
+                </button>
+                <span id="topic-hint-popover" role="tooltip" className={styles.topicInfoPopover}>
+                  Одна фраза с темой — без «сделай» и списка 1. 2. 3. Презентацию можно добавить после готовой работы.
+                </span>
+              </span>
+            </div>
             <div className={styles.inputWrapper}>
               <TypewriterInput
                 value={topic}
-                onChange={setTopic}
+                onChange={(v) => {
+                  setTopic(v);
+                  if (topicFieldError) setTopicFieldError(null);
+                }}
                 disabled={loading}
                 className={styles.heroInput}
               />
             </div>
+            {topicFieldError && (
+              <p className={styles.topicFieldError} role="alert">
+                {topicFieldError}
+              </p>
+            )}
 
             <div className={styles.formControls}>
               <div className={styles.pagesControl}>
@@ -1973,7 +2466,7 @@ export default function Home() {
               <button
                 type="submit"
                 className={styles.heroBtn}
-                disabled={loading || paymentLoading || !topic.trim() || (isYukassa && trialUsed)}
+                disabled={loading || paymentLoading || sessionStatus === "loading" || !topic.trim() || (isYukassa && trialUsed)}
               >
                 {loading
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
@@ -1981,7 +2474,11 @@ export default function Home() {
                   ? <><span className={styles.btnSpinner}/> Создаём платёж...</>
                   : isYukassa
                     ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
-                    : `⚡ Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад", "Реферат": "реферат", "Курсовая": "курсовую", "ВКР": "ВКР" }[workType] ?? workType.toLowerCase()} — ${totalPrice} ₽`}
+                    : sessionStatus === "unauthenticated"
+                      ? "Попробовать бесплатно"
+                      : previewAvailable
+                        ? "Посмотреть превью"
+                        : `Оплатить и начать генерацию — ${totalPrice} ₽`}
               </button>
             </div>
             {capacityError !== null && (
@@ -2001,6 +2498,34 @@ export default function Home() {
               </p>
             )}
           </form>
+
+            <ul className={styles.genCardTrust} aria-label="Преимущества">
+              <li>
+                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.gost}</span>
+                Word по ГОСТ
+              </li>
+              <li>
+                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.sources}</span>
+                Реальные источники
+              </li>
+              <li>
+                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.fast}</span>
+                <span className={styles.genCardTrustTime} key={workType}>
+                  {WORK_GEN_TIME[workType] ?? "7–8 мин"}
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div className={styles.heroScrollHints}>
+            <a href="#how-it-works" className={styles.heroScrollHint}>
+              Как это работает ↓
+            </a>
+            <span className={styles.heroScrollHintSep} aria-hidden>·</span>
+            <a href="#examples" className={styles.heroScrollHint}>
+              Примеры работ ↓
+            </a>
+          </div>
 
           {dailyCount > 0 && (
             <div className={styles.heroNote}>
@@ -2125,61 +2650,125 @@ export default function Home() {
 
       {/* ── Как это работает (показываем только пока нет результата) ── */}
       {!loading && (
-        <section className={styles.stepsSection}>
+        <section id="how-it-works" className={styles.stepsSection} aria-labelledby="how-it-works-title">
           <div className={styles.stepsSectionInner}>
-            <h2 className={styles.sectionTitle}>Как это работает</h2>
-            <p className={styles.sectionSub}>Три шага до готовой работы</p>
-            <div className={styles.stepsGrid}>
-              <div className={styles.stepCard} data-reveal data-delay="1">
-                <div className={styles.stepNumRow}>
-                  <div className={styles.stepNum}>01</div>
-                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[0]}</div>
-                </div>
-                <div className={styles.stepTitle}>Вводишь тему</div>
-                <p className={styles.stepText}>
-                  Напиши любую тему в поле выше — развёрнуто или кратко, главное суть
-                </p>
-              </div>
-              <div className={styles.stepCard} data-reveal data-delay="2">
-                <div className={styles.stepNumRow}>
-                  <div className={styles.stepNum}>02</div>
-                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[1]}</div>
-                </div>
-                <div className={styles.stepTitle}>ИИ пишет работу</div>
-                <p className={styles.stepText}>
-                  Алгоритм формирует структуру, введение, все главы, заключение и источники в среднем за 7–10 минут
-                </p>
-              </div>
-              <div className={styles.stepCard} data-reveal data-delay="3">
-                <div className={styles.stepNumRow}>
-                  <div className={styles.stepNum}>03</div>
-                  <div className={styles.stepIcon} data-step-icon>{STEP_ICONS[2]}</div>
-                </div>
-                <div className={styles.stepTitle}>Скачиваешь DOCX</div>
-                <p className={styles.stepText}>
-                  Готовый файл с оформлением по ГОСТ: шрифт, поля, интервалы, нумерация страниц
-                </p>
-              </div>
+            <header className={styles.stepsHead} data-reveal>
+              <p className={styles.stepsEyebrow}>Как это работает</p>
+              <h2 id="how-it-works-title" className={styles.stepsTitle}>
+                Три шага до готового Word
+              </h2>
+              <p className={styles.stepsLead}>
+                Сначала бесплатное превью — оплата только за полный текст
+              </p>
+            </header>
+
+            <ol className={styles.stepsList}>
+              {HOW_STEPS.map((step, i) => (
+                <li
+                  key={step.title}
+                  className={styles.stepsListItem}
+                  data-reveal
+                  data-delay={String(i + 1)}
+                >
+                  <div className={styles.stepsListMarker} aria-hidden>
+                    <span className={styles.stepsListNum}>{String(i + 1).padStart(2, "0")}</span>
+                    <span className={styles.stepsListIcon} data-step-icon>
+                      {STEP_ICONS[i]}
+                    </span>
+                  </div>
+                  <div className={styles.stepsListBody}>
+                    <h3 className={styles.stepsListTitle}>{step.title}</h3>
+                    <p className={styles.stepsListText}>{step.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className={styles.stepsFeatures} data-reveal data-delay="4">
+              {HOW_FEATURES.map((label) => (
+                <span key={label} className={styles.stepsFeature}>
+                  {label}
+                </span>
+              ))}
             </div>
-            <div className={styles.featuresRow}>
-              <div className={styles.featureItem}>
-                <span className={styles.featureIcon}>✓</span> ГОСТ 7.32-2017
-              </div>
-              <div className={styles.featureItem}>
-                <span className={styles.featureIcon}>✓</span> Список литературы
-              </div>
-              <div className={styles.featureItem}>
-                <span className={styles.featureIcon}>✓</span> Титульный лист
-              </div>
-              <div className={styles.featureItem}>
-                <span className={styles.featureIcon}>✓</span> Таблицы и структура
-              </div>
+
+            <div className={styles.stepsCtaWrap} data-reveal data-delay="5">
+              <a href="#generator" className={styles.stepsCta}>
+                Перейти к генератору
+                <span className={styles.stepsCtaIcon} aria-hidden>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </span>
+              </a>
             </div>
           </div>
         </section>
       )}
 
-      {/* ── Почему мы ── */}
+      {/* ── Примеры работ ── */}
+      {!loading && (
+        <ExamplesSection onCreateFromExample={goToGeneratorFromExample} />
+      )}
+
+      {/* ── ChatGPT vs Refai ── */}
+      {!loading && (
+        <section id="chatgpt-compare" className={styles.compareSection}>
+          <div className={styles.compareInner}>
+            <div className={styles.compareHead} data-reveal>
+              <p className={styles.compareEyebrow}>Сравнение</p>
+              <h2 className={styles.compareHeading}>
+                Обычный ИИ vs <span className={styles.compareAccent}>Refai</span>
+              </h2>
+              <p className={styles.compareSub}>
+                ChatGPT и DeepSeek сильны в диалоге и черновике. Refai — когда нужен готовый файл к сдаче
+              </p>
+            </div>
+            <div className={styles.compareTable} data-reveal data-delay="1">
+              <div className={styles.compareHeader}>
+                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderCriterion}`}>
+                  Критерий
+                </div>
+                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
+                  <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={88} height={28} />
+                </div>
+                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
+                  <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={88} height={28} />
+                </div>
+                <div
+                  className={`${styles.compareHeaderCell} ${styles.compareHeaderAiMobile}`}
+                  aria-label="ChatGPT и DeepSeek"
+                >
+                  <div className={styles.compareAiLogos}>
+                    <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={72} height={24} />
+                    <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={72} height={24} />
+                  </div>
+                </div>
+                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderRefai}`}>
+                  <img src="/compare-refai.png" alt="Refai" className={styles.compareLogo} width={88} height={28} />
+                </div>
+              </div>
+              {AI_COMPARE_ROWS.map((row, i) => (
+                <div key={row.label} className={styles.compareRow} data-reveal data-delay={String(i + 2)}>
+                  <div className={styles.compareRowLabel}>{row.label}</div>
+                  <CompareAiCell text={row.generic} tone={row.aiTone} />
+                  <CompareAiCell
+                    text={row.generic}
+                    tone={row.aiTone}
+                    className={styles.compareRowBadDesktop}
+                  />
+                  <div className={styles.compareRowGood}>
+                    <CompareMarkIcon kind="yes" />
+                    <span className={styles.compareCellText}>{row.refai}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Почему Refai ── */}
       {!loading && (
         <section className={styles.whySection}>
           <div className={styles.whySectionInner}>
@@ -2201,11 +2790,6 @@ export default function Home() {
             </dl>
           </div>
         </section>
-      )}
-
-      {/* ── Примеры работ ── */}
-      {!loading && (
-        <ExamplesSection onSelectWorkType={selectWorkType} />
       )}
 
       {/* ── Последние работы ── */}
@@ -2258,51 +2842,6 @@ export default function Home() {
                 Показать ещё
               </button>
             )}
-          </div>
-        </section>
-      )}
-
-      {/* ── Comparison block ── */}
-      {!loading && (
-        <section className={styles.compareSection}>
-          <div className={styles.compareInner}>
-            <div className={styles.compareHead}>
-              <h2 className={styles.compareHeading}>
-                Самостоятельно vs <span className={styles.compareAccent}>Refai</span>
-              </h2>
-              <p className={styles.compareSub}>Сравните и решите сами</p>
-            </div>
-            <div className={styles.compareTable}>
-              <div className={styles.compareHeader}>
-                <div className={styles.compareHeaderCell}>Критерий</div>
-                <div className={styles.compareHeaderCell}>Самостоятельно</div>
-                <div className={styles.compareHeaderCell}>Refai</div>
-              </div>
-              {[
-                { label: 'Время',             bad: '3–7 дней',           good: '7–10 минут' },
-                { label: 'Оформление по ГОСТ', bad: 'Вручную',            good: 'Автоматически' },
-                { label: 'Источники',          bad: 'Поиск вручную',      good: 'Реальные, с DOI' },
-                { label: 'Уникальность',       bad: '< 50%',              good: '70–90%' },
-                { label: 'Стоимость',          bad: '500–3000 ₽ + время', good: 'от 99 ₽' },
-                { label: 'Формат',             bad: 'PDF или распечатка', good: 'DOCX, сразу в Word' },
-              ].map((row, i) => (
-                <div key={i} className={styles.compareRow} data-reveal data-delay={String(i + 1)}>
-                  <div className={styles.compareRowLabel}>{row.label}</div>
-                  <div className={styles.compareRowBad}>
-                    <svg className={styles.compareBadIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                    {row.bad}
-                  </div>
-                  <div className={styles.compareRowGood}>
-                    <svg className={styles.compareGoodIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    {row.good}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
       )}
@@ -2771,8 +3310,11 @@ export default function Home() {
         <PaymentWidget
           workType={paymentWidgetData.workType}
           extras={paymentWidgetData.extras}
+          topic={paymentWidgetData.topic}
           returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/payment/success`}
           onSuccess={() => {
+            sessionStorage.removeItem("paymentWidgetRestore");
+            sessionStorage.removeItem("paymentPreviewCache");
             setPaymentWidgetData(null);
             const raw = sessionStorage.getItem("pendingGeneration");
             if (raw) {
@@ -2788,7 +3330,11 @@ export default function Home() {
               } catch {}
             }
           }}
-          onClose={() => setPaymentWidgetData(null)}
+          onClose={() => {
+            sessionStorage.removeItem("paymentWidgetRestore");
+            sessionStorage.removeItem("paymentPreviewCache");
+            setPaymentWidgetData(null);
+          }}
         />
       )}
 

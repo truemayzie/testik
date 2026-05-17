@@ -9,6 +9,8 @@
   justify-content: center;
   padding: 16px;
   animation: fadeIn 0.18s ease;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 @keyframes fadeIn {
@@ -27,6 +29,787 @@
   position: relative;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
   animation: slideUp 0.2s ease;
+  touch-action: auto;
+}
+
+.cardWide {
+  max-width: 1040px;
+}
+
+@media (max-width: 900px) {
+  .backdrop {
+    padding: 8px;
+    align-items: stretch;
+  }
+
+  .layoutGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .cardWide {
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    max-height: min(96dvh, 920px);
+    min-height: 0;
+    overflow: hidden;
+    padding: 20px 14px 14px;
+    margin: auto 0;
+    align-self: center;
+    width: 100%;
+    position: relative;
+  }
+
+  .cardWideMobile {
+    max-height: min(96dvh, 900px);
+    height: auto;
+    margin: 8px 0;
+    border-radius: 18px;
+    padding: 0;
+    align-self: center;
+    width: 100%;
+  }
+
+  .cardWideMobile .layoutGrid {
+    padding: 40px 14px 158px;
+    gap: 8px;
+  }
+
+  .cardWideMobile .previewCol {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+    padding-bottom: 8px;
+    gap: 10px;
+  }
+
+  .cardWideMobile .tocList {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .cardWideMobile .closeBtn {
+    position: fixed;
+    z-index: 10002;
+    top: max(10px, env(safe-area-inset-top, 0px));
+    right: max(10px, env(safe-area-inset-right, 0px));
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+    color: #374151;
+  }
+
+  .cardWideMobile .payColSticky {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 10001;
+    flex: none;
+    margin: 0;
+    max-width: calc(100vw - 16px);
+    margin-left: auto;
+    margin-right: auto;
+    padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    .cardWideMobile .payColSticky {
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+    }
+  }
+
+  .previewCol {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+    gap: 10px;
+  }
+
+  .payCol {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: visible;
+    padding-top: 10px;
+    margin-top: 4px;
+    border-top: 1px solid #f1f5f9;
+    touch-action: auto;
+  }
+
+  .payColSticky {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-top: 0;
+    padding-top: 8px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, #fff 20px);
+    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.1);
+  }
+
+  .cardWide .orderSummary {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+  }
+
+  .cardWide .orderLine {
+    padding: 2px 0;
+  }
+
+  .cardWide .guarantees {
+    font-size: 11px;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .cardWide .providers {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .cardWide .providerCard {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .cardWide .title {
+    font-size: 17px;
+  }
+
+  .cardWide .subtitle {
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .cardWide .sheet {
+    padding: 12px 12px;
+    font-size: 12.5px;
+  }
+
+  .cardWide .excerptHead {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+}
+
+@media (min-width: 901px) {
+  .layoutGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+.payCol {
+  min-width: 0;
+}
+
+/* ── Предпросмотр (слева) ── */
+.previewCol {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.previewBadge {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: #1b3a6b;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.previewHint {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.previewHintMuted {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.previewErrorText {
+  font-size: 13px;
+  color: #b45309;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.previewLoading {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  min-height: 280px;
+  padding: 8px 4px 16px;
+  gap: 12px;
+}
+
+.previewLoadingTopic {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7280;
+  text-align: center;
+}
+
+.previewLoadingTopic span {
+  color: #1b3a6b;
+  font-weight: 600;
+}
+
+.previewProgressWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.previewProgressTrack {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.previewProgressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1b3a6b, #2d5a9e);
+  transition: width 0.35s ease;
+}
+
+.previewProgressPct {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b3a6b;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.previewEta {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.previewSteps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.previewStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.previewStepIcon {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.previewStep_done {
+  color: #6b7280;
+}
+
+.previewStep_done .previewStepIcon {
+  color: #059669;
+}
+
+.previewStep_active {
+  color: #111827;
+  font-weight: 600;
+}
+
+.previewStep_active .previewStepIcon {
+  color: #1b3a6b;
+  animation: previewPulse 1.2s ease-in-out infinite;
+}
+
+.previewStep_pending {
+  color: #d1d5db;
+}
+
+.previewStepLabel {
+  flex: 1;
+}
+
+.previewTipCard {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f0f4fa 0%, #e8eef8 100%);
+  border: 1px solid #d8e2f0;
+  animation: previewTipFade 0.4s ease;
+}
+
+.previewTipText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #374151;
+}
+
+@keyframes previewPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes previewTipFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.payWhilePreview {
+  margin: -4px 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #1e40af;
+}
+
+/* ── Компактная оплата (мобилка + превью) ── */
+.payCompactHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  padding-right: 4px;
+}
+
+.payCompactTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.payCompactAmount {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1b3a6b;
+  white-space: nowrap;
+}
+
+.payCompactAmountSub {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.orderCompact {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.payWhilePreviewCompact {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #1e40af;
+}
+
+.providerSegment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.providerSegBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.providerSegBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.providerSegBtnActive {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #312e81;
+}
+
+.methodsCompact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.methodCompact {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 8px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.methodCompact:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.methodCompact.methodSbp {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.methodCompact.methodCard {
+  border-color: #e5e7eb;
+  background: #fafafa;
+}
+
+.methodCompactFull {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  border: 1.5px solid #e0e7ff;
+  border-radius: 12px;
+  background: #eef2ff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.methodCompactFull:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.methodCompactIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.methodCompactName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.methodCompactBadge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.payTrustLine {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.cardWide .errorBanner {
+  margin-bottom: 6px;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.previewLoading .previewSpinner {
+  align-self: center;
+}
+
+.previewSpinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #1b3a6b;
+  border-right-color: rgba(27, 58, 107, 0.35);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+.previewLoadingTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  font-family: system-ui, -apple-system, sans-serif;
+  text-align: center;
+}
+
+.sheet {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-family: "PT Serif", Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.sheetSimpTitle {
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.sheetSimpType {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #1b3a6b;
+  margin-bottom: 6px;
+}
+
+.sheetSimpTopic {
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.sheetSimpNote {
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 10px 0 0;
+  line-height: 1.35;
+}
+
+.tocHead {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #1b3a6b;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.tocList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
+
+.tocRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 3px;
+}
+
+.tocRowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tocNum {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: #1b3a6b;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.6em;
+}
+
+.tocTitle {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.tocPage {
+  flex-shrink: 0;
+  color: #6b7280;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.excerptHead {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.excerptBody {
+  text-align: justify;
+}
+
+/* Отрывок в превью: обрезка + блюр + плашка */
+.excerptSectionWrap {
+  position: relative;
+}
+
+.excerptSectionClip {
+  position: relative;
+  max-height: 10.5rem;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.excerptSectionFade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4.25rem;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(250, 250, 250, 0) 0%,
+    rgba(250, 250, 250, 0.75) 45%,
+    #fafafa 100%
+  );
+}
+
+.excerptSectionTeaser {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(100%, 22rem);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.excerptSectionTeaserLock {
+  font-size: 15px;
+  opacity: 0.7;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.excerptPara {
+  margin: 0 0 10px;
+  text-indent: 1.2em;
+}
+
+.excerptPara:last-child {
+  margin-bottom: 0;
 }
 
 @keyframes slideUp {
@@ -38,6 +821,7 @@
   position: absolute;
   top: 14px;
   right: 14px;
+  z-index: 20;
   background: #f3f4f6;
   border: none;
   border-radius: 50%;
@@ -80,6 +864,74 @@
   font-size: 13px;
   color: #9ca3af;
   margin: 0 0 20px;
+}
+
+/* ── Состав заказа / гарантии ── */
+.orderSummary {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #ffffff, #fafafa);
+  margin: 0 0 14px;
+}
+
+.orderLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.orderKey {
+  font-size: 12px;
+  color: #6b7280;
+  flex: 0 0 auto;
+}
+
+.orderValue {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+  text-align: right;
+}
+
+.guarantees {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #374151;
+  font-size: 12px;
+}
+
+.guarantees li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.guarantees li::before {
+  content: "✓";
+  color: #16a34a;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+
+.ctaArrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 /* ── Методы оплаты ── */
@@ -382,4 +1234,48 @@
   gap: 6px;
   color: #9ca3af;
   font-size: 12px;
+}
+
+@media (max-width: 540px) {
+  .backdrop {
+    padding: 10px;
+    align-items: stretch;
+  }
+
+  .card {
+    padding: 22px 14px 18px;
+    border-radius: 18px;
+    max-height: min(96vh, 900px);
+  }
+
+  .closeBtn {
+    top: 10px;
+    right: 10px;
+  }
+
+  .previewBadge {
+    text-align: center;
+    width: 100%;
+  }
+
+  .sheet {
+    padding: 12px 12px;
+    font-size: 12px;
+  }
+
+  .tocRow {
+    font-size: 11px;
+  }
+
+  .excerptHead {
+    font-size: 13px;
+  }
+
+  .excerptPara {
+    text-indent: 1em;
+  }
+
+  .title {
+    font-size: 17px;
+  }
 }
