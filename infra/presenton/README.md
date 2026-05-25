@@ -15,18 +15,27 @@ docker compose up -d
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5001/
 ```
 
-## Включить в backend
+## Статус на prod
+
+Self-host Presenton в Docker **пока не стартует**: FastAPI внутри образа не ходит в Anthropic через Privoxy (403 на `/v1/models`). Контейнер остановлен.
+
+**Презентации в проде работают через внутренний пайплайн:**
+`PRESENTATION_SLIDES_MODE=deterministic` (по умолчанию) — слайды из `result` без второго Claude.
+
+## Включить Presenton (когда починим прокси в контейнере)
 
 В `backend/.env`:
 
 ```env
 PRESENTON_URL=http://127.0.0.1:5001
 PRESENTON_AUTH_USER=refai
-PRESENTON_AUTH_PASSWORD=<из infra/presenton/.env>
+PRESENTON_AUTH_PASSWORD=<из /root/.refai-presenton-auth.txt>
 PRESENTATION_PROVIDER=presenton
 PRESENTON_THEME=professional-blue
 PRESENTON_TEMPLATE=general
 ```
+
+Privoxy должен слушать `172.17.0.1:8118` (добавлено в `/etc/privoxy/config`).
 
 Перезапуск: `pm2 restart backend --update-env`
 

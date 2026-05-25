@@ -14,9 +14,8 @@ services:
     environment:
       - CAN_CHANGE_KEYS=false
       - DISABLE_ANONYMOUS_TELEMETRY=true
-      # Privoxy слушает только 127.0.0.1 — мост: socat на 172.17.0.1:18118 (см. README)
-      - HTTPS_PROXY=http://172.17.0.1:18118
-      - HTTP_PROXY=http://172.17.0.1:18118
+      - HTTPS_PROXY=http://172.17.0.1:8118
+      - HTTP_PROXY=http://172.17.0.1:8118
       - NO_PROXY=localhost,127.0.0.1
     extra_hosts:
       - "host.docker.internal:host-gateway"

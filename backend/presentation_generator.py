@@ -1,9 +1,10 @@
 """
 presentation_generator.py — генерация JSON-структуры слайдов и текста выступления.
-generate_presentation: ТОЛЬКО вызов Claude API → возвращает dict со слайдами.
+generate_presentation: по умолчанию сборка из result без Claude; режим claude — через API.
 generate_speech: генерирует DOCX текста выступления (без изменений).
 """
 
+import os
 import re
 import json
 from datetime import datetime
@@ -137,10 +138,21 @@ def _build_slides_prompt(topic: str, work_type: str, full_text: str,
 def generate_presentation(job_id: str, topic: str, work_type: str,
                            profile: dict, result: dict) -> tuple:
     """
-    Генерирует JSON-структуру слайдов через Claude API.
+    Генерирует JSON-структуры слайдов.
+    PRESENTATION_SLIDES_MODE=deterministic (по умолчанию) | claude
     Возвращает (slides_dict, slide_titles).
-    slides_dict = {"accent": "blue", "slides": [...]}
     """
+    mode = (os.getenv("PRESENTATION_SLIDES_MODE") or "deterministic").strip().lower()
+    if mode != "claude":
+        from slides_from_result import build_slides_from_result, slide_titles_from_slides
+
+        slides_dict = build_slides_from_result(
+            topic, work_type, result, profile or {},
+        )
+        titles = slide_titles_from_slides(slides_dict)
+        print(f"[extras] Слайды (deterministic): {len(slides_dict.get('slides', []))} шт., job={job_id}")
+        return slides_dict, titles
+
     structure = result.get("structure", [])
     max_sections   = 12 if work_type in ("Курсовая", "ВКР") else 7
     chars_per_sect = 600 if work_type in ("Курсовая", "ВКР") else 400

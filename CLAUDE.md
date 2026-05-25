@@ -107,7 +107,8 @@ npm run db:studio    # GUI Prisma Studio
 - `rebuild_examples.py` — утилита хирургической пересборки TOC и библиографии в примерах DOCX без регенерации контента
 
 ### presentation_generator.py
-- `generate_presentation` — генерирует JSON-структуру слайдов через Claude API, затем вызывает `node pptx_builder.js` через subprocess
+- `generate_presentation` — по умолчанию `PRESENTATION_SLIDES_MODE=deterministic`: JSON слайдов из `slides_from_result.py` (без второго Claude); режим `claude` — через API как раньше
+- Опционально `PRESENTATION_PROVIDER=presenton` — PPTX через Presenton API (`presenton_client.py`), превью слайдов всё равно из `result`
 - `_WORK_TYPE_PALETTE` — маппинг типа работы → палитра: ВКР/Курсовая→`dark_gold`, Реферат/Доклад→`blue_academic`, Эссе/Сочинение→`burgundy_warm`
 - `_build_slides_prompt()` — промпт для AI, генерирует JSON слайдов с полями `image_query`/`image_query2` (английский, для поиска картинок)
 - Курсовая/ВКР: до 12 разделов × 600 символов, max_tokens=3500; остальные: 7 × 400, max_tokens=2500

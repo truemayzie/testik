@@ -439,11 +439,14 @@ def create_extras(request: ExtrasRequest):
                     print(f"[extras] готовый PPTX: {path_cache}")
 
             def _extras_presentation_presenton():
+                nonlocal slide_titles
                 from presenton_client import (
                     download_pptx_to_file,
                     generate_presentation as presenton_generate,
                     presenton_enabled,
                 )
+                from slides_from_result import build_slides_from_result, slide_titles_from_slides
+
                 if not presenton_enabled():
                     raise RuntimeError("PRESENTON_URL не задан")
                 pres = presenton_generate(
@@ -455,10 +458,17 @@ def create_extras(request: ExtrasRequest):
                 )
                 path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
                 download_pptx_to_file(pres["path"], path_cache)
+                # Превью в Refai — из текста работы; PPTX — от Presenton
+                preview = build_slides_from_result(
+                    request.topic,
+                    request.work_type,
+                    request.result,
+                    request.profile or {},
+                )
+                slide_titles = slide_titles_from_slides(preview)
                 meta = {
+                    **preview,
                     "provider": "presenton",
-                    "accent": "blue",
-                    "slides": [],
                     "presenton": pres,
                 }
                 with _extras_lock:

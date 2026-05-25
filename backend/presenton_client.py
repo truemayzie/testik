@@ -183,10 +183,24 @@ def _post_json(url: str, payload: dict) -> dict[str, Any]:
 
 
 def download_pptx_to_file(pptx_url: str, dest_path: str) -> None:
-    """Скачивает PPTX по URL Presenton в локальный файл."""
-    req = urllib.request.Request(pptx_url, headers=_auth_headers())
+    """Скачивает PPTX по URL Presenton (или копирует локальный path) в файл."""
+    if not pptx_url:
+        raise RuntimeError("Пустой URL PPTX")
+    if pptx_url.startswith("file://"):
+        pptx_url = pptx_url[7:]
+    if pptx_url.startswith("/") and os.path.isfile(pptx_url):
+        with open(pptx_url, "rb") as src, open(dest_path, "wb") as dst:
+            dst.write(src.read())
+        return
+
+    headers = _auth_headers()
+    req = urllib.request.Request(pptx_url, headers=headers)
     timeout = int(_env("PRESENTON_DOWNLOAD_TIMEOUT", "120"))
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as e:
+        err = e.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"Скачивание PPTX {e.code}: {err}") from e
     with open(dest_path, "wb") as f:
         f.write(data)
