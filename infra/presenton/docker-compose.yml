@@ -1,0 +1,29 @@
+# Presenton self-host — отдельный движок презентаций для Refai extras.
+# Запуск: cd infra/presenton && docker compose up -d
+# UI: http://127.0.0.1:5001  API: http://127.0.0.1:5001/api/v1/ppt/presentation/generate
+
+services:
+  presenton:
+    image: ghcr.io/presenton/presenton:latest
+    container_name: refai-presenton
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:80"
+    env_file:
+      - .env
+    environment:
+      - CAN_CHANGE_KEYS=false
+      - DISABLE_ANONYMOUS_TELEMETRY=true
+      # Privoxy слушает только 127.0.0.1 — мост: socat на 172.17.0.1:18118 (см. README)
+      - HTTPS_PROXY=http://172.17.0.1:18118
+      - HTTP_PROXY=http://172.17.0.1:18118
+      - NO_PROXY=localhost,127.0.0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - presenton_data:/app_data
+    mem_limit: 1024m
+    cpus: 1.0
+
+volumes:
+  presenton_data:

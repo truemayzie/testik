@@ -371,6 +371,8 @@ class ExtrasRequest(BaseModel):
     items: list[str]          # ["presentation", "speech"]
     result: dict
     profile: dict | None = None
+    presentation_theme: str | None = None    # Presenton: professional-blue, …
+    presentation_template: str | None = None   # Presenton: general, modern, …
 
 
 def _cleanup_old_extras_files() -> None:
@@ -410,7 +412,9 @@ def create_extras(request: ExtrasRequest):
         slide_titles = None  # заголовки слайдов для синхронизации с текстом выступления
         try:
             from presentation_generator import generate_presentation, generate_speech
-            if "presentation" in request.items:
+
+            def _extras_presentation_internal():
+                nonlocal slide_titles
                 slides_dict, slide_titles = generate_presentation(
                     extras_job_id,
                     request.topic,
@@ -426,19 +430,62 @@ def create_extras(request: ExtrasRequest):
                         json.dump(slides_dict, sf, ensure_ascii=False)
                 except Exception as exc:
                     print(f"[extras] backup slides JSON: {exc}")
-                ready.append("presentation")
+                s_list = slides_dict.get("slides") or []
+                if s_list:
+                    pptx_io = _render_to_pptx(s_list, slides_dict.get("accent") or "blue", {})
+                    path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
+                    with open(path_cache, "wb") as f:
+                        f.write(pptx_io.getvalue())
+                    print(f"[extras] готовый PPTX: {path_cache}")
+
+            def _extras_presentation_presenton():
+                from presenton_client import (
+                    download_pptx_to_file,
+                    generate_presentation as presenton_generate,
+                    presenton_enabled,
+                )
+                if not presenton_enabled():
+                    raise RuntimeError("PRESENTON_URL не задан")
+                pres = presenton_generate(
+                    request.topic,
+                    request.work_type,
+                    request.result,
+                    theme=request.presentation_theme,
+                    template=request.presentation_template,
+                )
+                path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
+                download_pptx_to_file(pres["path"], path_cache)
+                meta = {
+                    "provider": "presenton",
+                    "accent": "blue",
+                    "slides": [],
+                    "presenton": pres,
+                }
+                with _extras_lock:
+                    _extras_jobs[extras_job_id]["slides"] = meta
                 try:
-                    s_list = slides_dict.get("slides") or []
-                    if s_list:
-                        pptx_io = _render_to_pptx(s_list, slides_dict.get("accent") or "blue", {})
-                        path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
-                        with open(path_cache, "wb") as f:
-                            f.write(pptx_io.getvalue())
-                        print(f"[extras] готовый PPTX: {path_cache}")
-                except HTTPException as he:
-                    print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
+                    with open(f"/tmp/pptx_slides_{extras_job_id}.json", "w", encoding="utf-8") as sf:
+                        json.dump(meta, sf, ensure_ascii=False)
                 except Exception as exc:
-                    print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
+                    print(f"[extras] presenton meta JSON: {exc}")
+                print(f"[extras] Presenton PPTX: {path_cache} edit={pres.get('edit_path')}")
+
+            if "presentation" in request.items:
+                use_presenton = os.getenv("PRESENTATION_PROVIDER", "").strip().lower() == "presenton"
+                if use_presenton:
+                    try:
+                        _extras_presentation_presenton()
+                    except Exception as pres_exc:
+                        print(f"[extras] Presenton failed, fallback internal: {pres_exc}")
+                        _extras_presentation_internal()
+                else:
+                    try:
+                        _extras_presentation_internal()
+                    except HTTPException as he:
+                        print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
+                    except Exception as exc:
+                        print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
+                ready.append("presentation")
             if "speech" in request.items:
                 generate_speech(
                     extras_job_id,
