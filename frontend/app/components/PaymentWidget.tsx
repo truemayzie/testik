@@ -7,7 +7,16 @@ import { QRCodeSVG } from "qrcode.react";
 import styles from "./PaymentWidget.module.css";
 import { detectPaymentMarket } from "@/lib/paymentMarket";
 import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
+import { calcWorkOrderTotals, FIRST_ORDER_DISCOUNT_PERCENT } from "@/lib/firstOrderDiscount";
 import { isAdminSessionRole, reachPaymentSuccessGoalOnce } from "@/lib/metrika";
+import {
+  type PreviewPayload,
+  fetchPaymentPreviewDeduped,
+  getMemoryPreviewPayload,
+  loadPreviewSessionCache,
+  previewCacheKey,
+  rememberPaymentPreview,
+} from "@/lib/paymentPreviewClient";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -70,21 +79,8 @@ function convertRubToKzt(rub: number) {
   return usd * KZT_PER_USD;
 }
 
-type PreviewTocRow = { num?: string; title: string; page: string };
-
-type PreviewExcerptSection = { title: string; text: string };
-
-type PreviewPayload = {
-  work_type: string;
-  topic: string;
-  doc_lang: string;
-  has_toc_sheet: boolean;
-  toc: PreviewTocRow[];
-  excerpt_title: string;
-  excerpt: string;
-  excerpt_sections?: PreviewExcerptSection[];
-  locked_section_titles: string[];
-};
+type PreviewTocRow = PreviewPayload["toc"][number];
+type PreviewExcerptSection = NonNullable<PreviewPayload["excerpt_sections"]>[number];
 
 function tocRowDepth(num: string | undefined): number {
   const n = (num ?? "").trim();
@@ -92,32 +88,6 @@ function tocRowDepth(num: string | undefined): number {
   if (/^\d+$/.test(n)) return 0;
   if (/^\d+(\.\d+)+$/.test(n)) return n.split(".").length - 1;
   return 0;
-}
-
-function previewCacheKey(topic: string, workType: string): string {
-  return `${workType}::${topic.trim()}`;
-}
-
-function loadPreviewCache(topic: string, workType: string): PreviewPayload | null {
-  try {
-    const raw = sessionStorage.getItem("paymentPreviewCache");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { key: string; data: PreviewPayload; savedAt: number };
-    if (parsed.key !== previewCacheKey(topic, workType)) return null;
-    if (Date.now() - parsed.savedAt > 2 * 60 * 60 * 1000) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function savePreviewCache(topic: string, workType: string, data: PreviewPayload) {
-  try {
-    sessionStorage.setItem(
-      "paymentPreviewCache",
-      JSON.stringify({ key: previewCacheKey(topic, workType), data, savedAt: Date.now() }),
-    );
-  } catch { /* ignore */ }
 }
 
 function formatTocNum(num: string | undefined): string | null {
@@ -407,12 +377,14 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
 
   useEffect(() => {
     let cancelled = false;
+    const key = previewCacheKey(topic, workType);
 
-    const cached = loadPreviewCache(topic, workType);
+    const cached = loadPreviewSessionCache(topic, workType) ?? getMemoryPreviewPayload(key);
     if (cached) {
       setPreviewData(cached);
       setPreviewLoading(false);
       setPreviewError("");
+      setPreviewExhausted(false);
       return;
     }
 
@@ -422,62 +394,62 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         const restore = JSON.parse(restoreRaw) as {
           topic?: string;
           workType?: string;
-          previewData?: PreviewPayload;
+          previewData?: PreviewPayload | null;
         };
         if (
           restore.topic?.trim() === topic.trim() &&
           restore.workType === workType &&
           restore.previewData
         ) {
+          rememberPaymentPreview(topic, workType, restore.previewData);
           setPreviewData(restore.previewData);
-          savePreviewCache(topic, workType, restore.previewData);
           setPreviewLoading(false);
           setPreviewError("");
+          setPreviewExhausted(false);
           return;
         }
       }
     } catch { /* ignore */ }
 
-    (async () => {
-      try {
-        const res = await fetch("/api/generate/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic, workType }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.status === 403 && data.code === "PREVIEW_USED") {
-          setPreviewExhausted(true);
-          setPreviewLoading(false);
-          return;
-        }
-        if (!res.ok) {
-          setPreviewError(typeof data.error === "string" ? data.error : "Не удалось загрузить превью");
-          setPreviewLoading(false);
-          return;
-        }
-        const payload = data as PreviewPayload;
-        setPreviewData(payload);
-        savePreviewCache(topic, workType, payload);
+    void (async () => {
+      const result = await fetchPaymentPreviewDeduped(topic, workType);
+      if (cancelled) return;
+      if (result.ok) {
+        setPreviewData(result.data);
         setPreviewLoading(false);
+        setPreviewError("");
+        setPreviewExhausted(false);
         void updateSession();
-      } catch {
-        if (!cancelled) {
-          setPreviewError("Не удалось загрузить превью");
-          setPreviewLoading(false);
-        }
+        return;
       }
+      if (result.code === "PREVIEW_USED") {
+        setPreviewExhausted(true);
+        setPreviewLoading(false);
+        return;
+      }
+      setPreviewError(result.error);
+      setPreviewLoading(false);
     })();
+
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только тема/тип; updateSession вызывается при успехе
   }, [topic, workType]);
 
   const lang = detectDominantLang(topic);
+  const userRole = (session?.user as { role?: string } | undefined)?.role;
+  const firstOrderDiscountEligible =
+    (session?.user as { firstOrderDiscountEligible?: boolean } | undefined)
+      ?.firstOrderDiscountEligible === true;
+  const discountActive =
+    firstOrderDiscountEligible && userRole !== "admin" && userRole !== "yukassa_test";
   const base = WORK_PRICES[workType]?.price ?? 0;
   const extrasAmount = (extras ?? []).reduce((sum, item) => sum + (EXTRAS_PRICES[item] ?? 0), 0);
-  const totalRub = base + extrasAmount;
+  const orderTotals = calcWorkOrderTotals(base, extrasAmount, discountActive);
+  const totalRub = orderTotals.totalRub;
+  const originalTotalRub = orderTotals.originalTotalRub;
+  const priceDiscountApplied = orderTotals.discountApplied;
   const totalKzt = convertRubToKzt(totalRub);
   const isKzUi = market === "kz";
   const primaryAmount = isKzUi ? formatAmount(totalKzt, "KZT") : formatAmount(totalRub, "RUB");
@@ -809,17 +781,29 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
             <>
               <div className={styles.payCompactHead}>
                 <h2 id="payment-widget-title" className={styles.payCompactTitle}>Оплата</h2>
-                <span className={styles.payCompactAmount}>
-                  {primaryAmount}
-                  {secondaryAmount ? <span className={styles.payCompactAmountSub}> {secondaryAmount}</span> : null}
-                </span>
+                <div className={styles.payCompactAmountWrap}>
+                  {priceDiscountApplied && (
+                    <span className={styles.payDiscountBadge}>−{FIRST_ORDER_DISCOUNT_PERCENT}%</span>
+                  )}
+                  <span className={styles.payCompactAmount}>
+                    {priceDiscountApplied && !isKzUi && (
+                      <span className={styles.payAmountOld} aria-hidden>
+                        {formatAmount(originalTotalRub, "RUB")}
+                      </span>
+                    )}
+                    {primaryAmount}
+                    {secondaryAmount ? (
+                      <span className={styles.payCompactAmountSub}> {secondaryAmount}</span>
+                    ) : null}
+                  </span>
+                </div>
               </div>
               <p className={styles.orderCompact} aria-label="Состав заказа">
                 {workLabel} · {langLabel}
               </p>
               {previewLoading && (
                 <p className={styles.payWhilePreviewCompact}>
-                  Превью готовится — оплату можно выбрать сейчас
+                  Готовим превью — оплата будет ниже после прокрутки
                 </p>
               )}
             </>
@@ -835,8 +819,21 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
               <div className={styles.orderSummary} aria-label="Состав заказа">
                 <div className={styles.orderLine}>
                   <span className={styles.orderKey}>К оплате:</span>
-                  <span className={styles.orderValue}>{primaryAmount}{secondaryAmount ? ` ${secondaryAmount}` : ""}</span>
+                  <span className={styles.orderValue}>
+                    {priceDiscountApplied && !isKzUi && (
+                      <span className={styles.payAmountOld} aria-hidden>
+                        {formatAmount(originalTotalRub, "RUB")}{" "}
+                      </span>
+                    )}
+                    {primaryAmount}{secondaryAmount ? ` ${secondaryAmount}` : ""}
+                  </span>
                 </div>
+                {priceDiscountApplied && (
+                  <div className={styles.orderLine}>
+                    <span className={styles.orderKey}>Скидка:</span>
+                    <span className={styles.orderValue}>−{FIRST_ORDER_DISCOUNT_PERCENT}% · первый заказ</span>
+                  </div>
+                )}
                 <div className={styles.orderLine}>
                   <span className={styles.orderKey}>Заказ:</span>
                   <span className={styles.orderValue}>{orderLabel}</span>
@@ -846,12 +843,8 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
                   <span className={styles.orderValue}>{langLabel}</span>
                 </div>
               </div>
-              <ul className={styles.guarantees} aria-label="Гарантии">
-                <li>Без подписок и автосписаний</li>
-                <li>Оплата через ЮKassa / Robokassa</li>
-                <li>DOCX по ГОСТ и полный текст — после оплаты</li>
-                <li>Генерация запускается сразу после оплаты</li>
-              </ul>
+              <PaymentGuaranteesList />
+              <p className={styles.payAfterLine}>После оплаты — DOCX в разделе «Мои работы»</p>
             </>
           )}
           {error && <p className={styles.errorBanner}>⚠ {error}</p>}
@@ -919,7 +912,8 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
                   {methodLoading ? <span className={styles.methodSpinner} /> : <span className={styles.ctaArrow} aria-hidden>→</span>}
                 </button>
               )}
-              <p className={styles.payTrustLine}>Разовая оплата · DOCX после оплаты</p>
+              <PaymentGuaranteesList compact />
+              <p className={styles.payAfterLine}>После оплаты — DOCX в разделе «Мои работы»</p>
             </>
           ) : (
             <>
@@ -1107,7 +1101,7 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
               workType={workType}
               topic={topic}
             />
-            <div className={`${styles.payCol} ${useCompactPay ? styles.payColSticky : ""}`}>{payColumn}</div>
+            <div className={`${styles.payCol} ${useCompactPay ? styles.payColInFlow : ""}`}>{payColumn}</div>
           </div>
         ) : (
           <div className={styles.payCol}>{payColumn}</div>
@@ -1115,6 +1109,20 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
       </div>
     </div>,
     document.body
+  );
+}
+
+function PaymentGuaranteesList({ compact = false }: { compact?: boolean }) {
+  return (
+    <ul
+      className={`${styles.guarantees} ${compact ? styles.guaranteesCompact : ""}`}
+      aria-label="Гарантии"
+    >
+      <li>Без подписок и автосписаний</li>
+      <li>Оплата через ЮKassa / Robokassa</li>
+      <li>DOCX по ГОСТ и полный текст — после оплаты</li>
+      <li>Генерация запускается сразу после оплаты</li>
+    </ul>
   );
 }
 

@@ -98,13 +98,19 @@
   transition: background 0.2s, color 0.2s;
 }
 
-.langBtn:hover {
+.langBtn:hover:not(.langBtnActive) {
   background: #F1F5F9;
+  color: #334155;
 }
 
 .langBtnActive {
   color: #fff;
   background: linear-gradient(135deg, #1B3A6B, #15305A);
+}
+
+.langBtnActive:hover {
+  color: #fff;
+  background: linear-gradient(135deg, #234a7d, #1b3a6b);
 }
 
 .langFlag {

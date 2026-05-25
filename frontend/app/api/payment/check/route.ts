@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { fetchYookassaPayment, reconcileUserWorkTypePayments } from "@/lib/yookassa";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -20,13 +21,9 @@ export async function GET(request: NextRequest) {
     if (!shopId || !secretKey) {
       return NextResponse.json({ status: "pending" });
     }
-    const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
     try {
-      const res = await fetch(`https://api.yookassa.ru/v3/payments/${yokassaPaymentId}`, {
-        headers: { "Authorization": `Basic ${credentials}` },
-      });
-      if (!res.ok) return NextResponse.json({ status: "pending" });
-      const data = await res.json();
+      const data = await fetchYookassaPayment(yokassaPaymentId);
+      if (!data) return NextResponse.json({ status: "pending" });
       if (data.status === "succeeded") {
         // Обновляем статус в нашей БД
         await prisma.payment.updateMany({
@@ -46,6 +43,8 @@ export async function GET(request: NextRequest) {
 
   // Стандартная проверка: есть ли неиспользованный платёж для данного типа работы
   const workType = searchParams.get("workType") || "Реферат";
+
+  await reconcileUserWorkTypePayments(sessionUserId, workType);
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUserId },

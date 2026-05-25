@@ -5,6 +5,7 @@ import { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import EmailProvider from "next-auth/providers/email";
 import { prisma } from "./prisma";
+import { isFirstOrderDiscountEligible } from "./firstOrderDiscount";
 import { magicLinkHtml } from "./email";
 import { getDeviceId, deleteDeviceId } from "./vk-device-store";
 import { tgNotify } from "./tgNotify";
@@ -224,6 +225,8 @@ export const authOptions: NextAuthOptions = {
           (session.user as { previewQuota?: number }).previewQuota = quota;
           (session.user as { previewUses?: number }).previewUses = used;
           (session.user as { previewRemaining?: number }).previewRemaining = remaining;
+          (session.user as { firstOrderDiscountEligible?: boolean }).firstOrderDiscountEligible =
+            await isFirstOrderDiscountEligible(db.id, db.role);
         }
       }
       return session;

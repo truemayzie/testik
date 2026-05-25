@@ -6,6 +6,7 @@ import { activeJobs } from "@/app/lib/activeJobs";
 import { tgNotify } from "@/lib/tgNotify";
 import { createRunningGeneration } from "@/lib/db";
 import { prepareTopic } from "@/lib/topicValidate";
+import { reconcileUserWorkTypePayments } from "@/lib/yookassa";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
     }
     // Оплата не требуется — продолжаем
   } else {
+    await reconcileUserWorkTypePayments(user.id, workType);
     // Стандартный путь: находим платёж и атомарно помечаем использованным
     const payment = await prisma.payment.findFirst({
       where: { userId: user.id, workType, status: "succeeded", usedAt: null },

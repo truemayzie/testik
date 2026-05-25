@@ -82,9 +82,14 @@ export async function finalizeRunningGeneration(params: {
   const slug = randomBytes(6).toString("hex");
   const gen = await prisma.generation.findFirst({
     where: { id: params.id, userId: params.userId },
-    select: { id: true, slug: true, extras: true },
+    select: { id: true, slug: true, extras: true, status: true },
   });
   if (!gen) return null;
+
+  // Идемпотентность: повторный poll после успешного finalize
+  if (gen.status === "completed" && gen.slug) {
+    return { id: gen.id, slug: gen.slug };
+  }
 
   const extras = safeParseExtras(gen.extras);
   // удаляем служебный _jobId, оставляем возможные presentation/speech и т.п.

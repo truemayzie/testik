@@ -77,17 +77,19 @@
   }
 
   .cardWideMobile .layoutGrid {
-    padding: 40px 14px 158px;
-    gap: 8px;
+    padding: 48px 14px 20px;
+    gap: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .cardWideMobile .previewCol {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    max-height: none;
+    overflow: visible;
     padding-right: 2px;
-    padding-bottom: 8px;
+    padding-bottom: 4px;
     gap: 10px;
   }
 
@@ -111,28 +113,15 @@
     color: #374151;
   }
 
-  .cardWideMobile .payColSticky {
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    z-index: 10001;
-    flex: none;
+  .cardWideMobile .payColInFlow {
+    position: static;
+    flex: 0 0 auto;
     margin: 0;
-    max-width: calc(100vw - 16px);
-    margin-left: auto;
-    margin-right: auto;
-    padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
+    padding: 14px 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+    border-top: 1px solid #e2e8f0;
     background: #fff;
-    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.12);
-  }
-
-  @supports (-webkit-touch-callout: none) {
-    .cardWideMobile .payColSticky {
-      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
-    }
+    box-shadow: none;
+    max-width: none;
   }
 
   .previewCol {
@@ -435,7 +424,38 @@
   color: #111827;
 }
 
+.payCompactAmountWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.payDiscountBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 2px 7px;
+  line-height: 1.2;
+}
+
+.payAmountOld {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: line-through;
+  margin-right: 6px;
+}
+
 .payCompactAmount {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
   font-size: 17px;
   font-weight: 800;
   color: #1b3a6b;
@@ -595,6 +615,32 @@
   line-height: 1.35;
   color: #9ca3af;
   text-align: center;
+}
+
+.guaranteesCompact {
+  margin: 12px 0 0;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.guaranteesCompact li::before {
+  font-size: 10px;
+}
+
+.payAfterLine {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #4b5563;
+  text-align: center;
+}
+
+.cardWideMobile .payAfterLine {
+  margin-bottom: 4px;
+  font-size: 10.5px;
 }
 
 .cardWide .errorBanner {

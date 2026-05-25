@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tgNotify } from "@/lib/tgNotify";
+import { fetchYookassaPayment } from "@/lib/yookassa";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,20 +17,11 @@ export async function POST(request: NextRequest) {
     const secretKey = process.env.YOKASSA_SECRET_KEY;
 
     if (shopId && secretKey) {
-      const credentials = Buffer.from(`${shopId}:${secretKey}`).toString("base64");
-      const verifyRes = await fetch(`https://api.yookassa.ru/v3/payments/${yokassaId}`, {
-        headers: { "Authorization": `Basic ${credentials}` },
-        signal: AbortSignal.timeout(10_000),
-      });
-
-      if (!verifyRes.ok) {
-        console.error("[webhook] ЮКасса вернула ошибку при верификации:", verifyRes.status);
+      const verified = await fetchYookassaPayment(yokassaId);
+      if (!verified) {
+        console.error("[webhook] Не удалось верифицировать платёж в ЮKassa:", yokassaId);
         return NextResponse.json({ error: "Verification failed" }, { status: 400 });
       }
-
-      const verified = await verifyRes.json();
-
-      // Статус в webhook должен совпадать с реальным статусом в ЮКассе
       if (verified.status !== event.object?.status) {
         console.error("[webhook] Статус не совпадает:", verified.status, "vs", event.object?.status);
         return NextResponse.json({ error: "Status mismatch" }, { status: 400 });

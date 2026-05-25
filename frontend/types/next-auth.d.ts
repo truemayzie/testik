@@ -12,6 +12,8 @@ declare module "next-auth" {
       previewQuota?: number;
       previewUses?: number;
       previewRemaining?: number;
+      /** −20% на первую оплаченную работу (роль user, ещё не было succeeded-оплаты) */
+      firstOrderDiscountEligible?: boolean;
     };
   }
 }

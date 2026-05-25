@@ -32,18 +32,19 @@ export default function SignInPage() {
 
         {/* Логотип */}
         <Link href="/" className={styles.logo}>
-          <span className={styles.logoIconWrap}>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="22" height="22" aria-hidden="true">
-              <path d="M12 1L14.2 9.8L23 12L14.2 14.2L12 23L9.8 14.2L1 12L9.8 9.8Z" fill="url(#signinGrad)"/>
+          <span className={styles.logoMark} aria-hidden>
+            <svg className={styles.logoSpark} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="11" fill="url(#signinLogoBg)" />
+              <path d="M12 4.5L13.6 10.2L19.5 12L13.6 13.8L12 19.5L10.4 13.8L4.5 12L10.4 10.2Z" fill="#D97706" />
               <defs>
-                <linearGradient id="signinGrad" x1="1" y1="1" x2="23" y2="23" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#D97706"/>
-                  <stop offset="1" stopColor="#FBBF24"/>
+                <linearGradient id="signinLogoBg" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#1B3A6B" />
+                  <stop offset="1" stopColor="#0f2645" />
                 </linearGradient>
               </defs>
             </svg>
           </span>
-          <span className={styles.logoText}>Ref<span className={styles.logoAi}>ai</span></span>
+          <span className={styles.logoWord}>Ref<span className={styles.logoAi}>ai</span></span>
         </Link>
 
         <h1 className={styles.title}>Войти в аккаунт</h1>

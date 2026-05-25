@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from pptx import Presentation
 from pptx.util import Emu
 from generator import generate_work, generate_payment_preview
+from oneoff_vkr_didactic_time import generate_oneoff_vkr, TOPIC as ONEOFF_VKR_TOPIC
 from github_proxy import start_callback_server
 
 start_callback_server()
@@ -255,6 +256,47 @@ def _verify_internal_api(
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+class OneoffVkrRequest(BaseModel):
+    pages: int = 55
+    profile: dict | None = None
+
+
+@app.post("/api/generate/oneoff-vkr-didactic-time", dependencies=[Depends(_verify_internal_api)])
+def create_oneoff_vkr_didactic(req: OneoffVkrRequest):
+    """
+    Разовая генерация ВКР по фиксированному плану (дидактические игры + время).
+    Не использует общий промпт структуры ВКР. Только localhost + internal token.
+    """
+    work_type = "ВКР"
+    needed = slot_weight(work_type)
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        used = compute_used_slots(_jobs.values())
+        if used + needed > MAX_SLOTS:
+            available = list_available_work_types(used)
+            raise HTTPException(
+                status_code=503,
+                detail={"message": "Сервер перегружен", "available": available},
+            )
+        _job_start_unlocked(job_id, work_type)
+
+    def run():
+        try:
+            result = generate_oneoff_vkr(
+                ONEOFF_VKR_TOPIC,
+                req.pages,
+                req.profile,
+                progress_cb=lambda s, t, label: _job_progress(job_id, s, t, label),
+            )
+            _job_done(job_id, result)
+        except Exception as exc:
+            print(f"[oneoff job {job_id}] Ошибка: {exc}")
+            _job_fail(job_id, str(exc))
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"jobId": job_id, "topic": ONEOFF_VKR_TOPIC}
+
+
 @app.post("/api/generate/preview", dependencies=[Depends(_verify_internal_api)])
 def create_preview(req: PreviewRequest):
     """Дешёвый предпросмотр перед оплатой (без DOCX, один вызов LLM)."""
@@ -282,13 +324,25 @@ def get_job_status(job_id: str):
 
 @app.get("/api/generate/result/{job_id}", response_model=ReferatResponse)
 def get_job_result(job_id: str):
-    """Возвращает результат и удаляет задание из памяти."""
-    job = _job_pop(job_id)
+    """Возвращает результат без удаления (job удаляется через DELETE после сохранения в БД)."""
+    job = _job_get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задание не найдено")
     if job["status"] != "done":
         raise HTTPException(status_code=400, detail="Задание ещё не завершено")
-    return job["result"]
+    result = job.get("result")
+    if not result:
+        raise HTTPException(status_code=500, detail="Результат пуст")
+    return result
+
+
+@app.delete("/api/generate/job/{job_id}")
+def discard_job(job_id: str):
+    """Удаляет задание из памяти после успешного сохранения результата в БД."""
+    job = _job_pop(job_id)
+    if not job:
+        return {"ok": True, "removed": False}
+    return {"ok": True, "removed": True}
 
 
 @app.post("/api/download/referat")

@@ -958,6 +958,8 @@ export default function DashboardPage() {
                 const hasPresentation = !!extrasData?.presentation;
                 const hasSpeech = !!extrasData?.speech;
                 const isCompleted = gen.status === "completed";
+                const isFailed = gen.status === "failed";
+                const isRunning = !isCompleted && !isFailed;
                 return (
                   <div key={gen.id} className={styles.card}>
                     <div
@@ -969,8 +971,11 @@ export default function DashboardPage() {
                     >
                       <div className={styles.cardBadges}>
                         <span className={styles.workType}>{gen.workType}</span>
-                        {!isCompleted && (
+                        {isRunning && (
                           <span className={styles.extrasBadgeSpeech}>Генерация…</span>
+                        )}
+                        {isFailed && (
+                          <span className={styles.extrasBadgePres}>Не завершилась</span>
                         )}
                         {hasPresentation && (
                           <span className={styles.extrasBadgePres}>Презентация</span>
@@ -987,14 +992,29 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className={styles.cardActions}>
-                      {!isCompleted ? (
+                      {isFailed ? (
+                        <button
+                          type="button"
+                          className={styles.openBtn}
+                          disabled
+                          title="Генерация прервана. Напишите в поддержку или создайте работу заново."
+                        >
+                          Не завершилась
+                        </button>
+                      ) : isRunning ? (
                         <button
                           className={styles.openBtn}
                           onClick={async () => {
                             setLoadingView(gen.id);
                             try {
-                              // Попытка финализировать running-работу: poll умеет доставать jobId из extras._jobId
-                              await fetch(`/api/generate/poll?generationId=${encodeURIComponent(gen.id)}&includeResult=0`, { cache: "no-store" });
+                              const pollRes = await fetch(
+                                `/api/generate/poll?generationId=${encodeURIComponent(gen.id)}&includeResult=0`,
+                                { cache: "no-store" }
+                              );
+                              const pollData = await pollRes.json().catch(() => ({}));
+                              if (pollData.status === "error" && pollData.error) {
+                                alert(String(pollData.error));
+                              }
                               const listRes = await fetch("/api/generations", { cache: "no-store" });
                               const list = await listRes.json();
                               if (Array.isArray(list)) setGenerations(list);

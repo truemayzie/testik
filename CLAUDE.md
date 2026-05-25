@@ -78,12 +78,13 @@ npm run db:studio    # GUI Prisma Studio
 
 ### main.py
 - In-memory хранилища: `_jobs` (основная генерация), `_extras_jobs` (доп. материалы)
-- Слот-based лимит: `WORK_SLOTS` — вес каждого типа (Сочинение/Эссе=1, Доклад/Реферат=2, Курсовая=4, ВКР=5), `MAX_SLOTS=8`
+- Слот-based лимит: `WORK_SLOTS` — вес каждого типа (Сочинение/Эссе=1, Доклад/Реферат=2, Курсовая=4, ВКР=5), `MAX_SLOTS=8` (на prod 4 GB RAM — адекватно; узкое место чаще GitHub Actions proxy и extras/PPTX, не слоты)
   - `_used_slots()` — суммирует веса запущенных заданий
   - `_available_types()` — типы, которые можно запустить прямо сейчас
   - `GET /api/slots` — публичный эндпоинт: `{used, max, available}`
   - 503 при нехватке слотов возвращает `{message, available}` — список доступных типов
-- Задания: `running → done | error`. При получении result задание удаляется (`_job_pop`)
+- Задания: `running → done | error`. `GET /api/generate/result/{id}` **не удаляет** job; после сохранения в БД Next.js вызывает `DELETE /api/generate/job/{id}`
+- **Фоновый reconciler** (`lib/generationReconciler.ts`, старт в `instrumentation.ts`): каждые 30 с дожимает `Generation` со `status=running` и `extras._jobId`, если backend уже `done` (вкладку можно закрыть). Orphan `not_found` >90 мин → `status=failed`
 - Extras-задания не удаляются — нужны для повторного скачивания файлов
 - Добавлена TTL-очистка файлов extras в `/tmp` (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
 - `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам). Без этого поле отрезалось моделью и в Telegram (`tgNotify` при завершении в `/api/generate/poll`) не было строки «Стоимость»
@@ -318,7 +319,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ## Инфраструктура (prod-сервер)
 
-**ОС:** Ubuntu 22.04 LTS, 2 vCPU, 2 GB RAM, 30 GB SSD (хостинг Timeweb Cloud)
+**ОС:** Ubuntu 22.04 LTS, тариф **Cloud MSK 50** (Timeweb Cloud, Москва): 2×3.3 GHz CPU, **4 GB RAM**, **50 GB NVMe**
 
 **Процессы (PM2):**
 - `frontend` — Next.js :3000

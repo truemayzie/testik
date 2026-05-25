@@ -3,7 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { WORK_PRICES, EXTRAS_PRICES } from "@/lib/prices";
+import {
+  applyFirstOrderDiscount,
+  isFirstOrderDiscountEligible,
+} from "@/lib/firstOrderDiscount";
 import crypto from "crypto";
+import { reconcileUserWorkTypePayments } from "@/lib/yookassa";
 
 type Market = "ru" | "kz";
 function makeRoboInvoiceId(): string {
@@ -40,13 +45,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Неизвестный тип работы" }, { status: 400 });
   }
   const extrasAmount = (extras ?? []).reduce((sum, item) => sum + (EXTRAS_PRICES[item] ?? 0), 0);
-  const totalAmount = priceInfo.price + extrasAmount;
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUserId },
-    select: { id: true, email: true },
+    select: { id: true, email: true, role: true },
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const firstOrderDiscount = await isFirstOrderDiscountEligible(user.id, user.role);
+  const workAmount = firstOrderDiscount
+    ? applyFirstOrderDiscount(priceInfo.price)
+    : priceInfo.price;
+  const totalAmount = workAmount + extrasAmount;
 
   const shopId = process.env.YOKASSA_SHOP_ID;
   const secretKey = process.env.YOKASSA_SECRET_KEY;
@@ -55,14 +65,10 @@ export async function POST(request: NextRequest) {
   const roboPass1 = getRobokassaPass1(roboTestMode);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Отменяем старые pending-платежи этого пользователя за этот тип работы
-  // (возникают когда пользователь возвращается назад в виджете и выбирает другой метод)
+  // Старые pending/canceled за 48 ч: сверка с ЮKassa, затем отмена только реально висящих pending
+  await reconcileUserWorkTypePayments(user.id, workType);
   await prisma.payment.updateMany({
-    where: {
-      userId: user.id,
-      workType,
-      status: "pending",
-    },
+    where: { userId: user.id, workType, status: "pending" },
     data: { status: "canceled" },
   });
 

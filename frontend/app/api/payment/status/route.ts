@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncPaymentFromYookassa } from "@/lib/yookassa";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,17 @@ export async function GET(request: NextRequest) {
 
   const payment = await prisma.payment.findFirst({
     where: { id, userId },
-    select: { status: true, workType: true },
+    select: { id: true, status: true, workType: true, yokassaId: true, provider: true },
   });
 
   if (!payment) {
     return NextResponse.json({ status: "not_found" });
   }
 
-  return NextResponse.json({ status: payment.status, workType: payment.workType });
+  let status = payment.status;
+  if (payment.yokassaId && payment.provider === "yookassa") {
+    status = await syncPaymentFromYookassa(payment);
+  }
+
+  return NextResponse.json({ status, workType: payment.workType });
 }

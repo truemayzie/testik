@@ -42,15 +42,19 @@ export function normalizeTopic(raw: string): string {
 }
 
 function countNumberedItems(s: string): number {
-  return (s.match(/(?:^|[\s;])\d{1,2}[\.\)]\s+\S/g) || []).length;
+  const withMarker = s.match(/(?:^|[\s;])(?:[1-9]|10)[\.\)]\s*\S/g) || [];
+  // «1 символика», «2 Пояснить» — без точки, только пункты 1–10 (не «19 век»)
+  const plain = s.match(/(?:^|[\s;])(?:[1-9]|10)\s{1,3}\S/g) || [];
+  return new Set([...withMarker, ...plain]).size;
 }
 
 /** Явный заказ презентации в поле темы (не extras). */
 function wantsPresentation(s: string): boolean {
-  if (!/презентаци/i.test(s)) return false;
+  if (!/презентаци|призентаци/i.test(s)) return false;
   return (
     /слайд/i.test(s) ||
-    /(?:состав|сделай|созда|подготов|напиш).{0,20}презентаци/i.test(s)
+    /(?:делать|делай|состав|сделай|созда|подготов|напиш|хочу|нужн|надо).{0,24}презентаци/i.test(s) ||
+    /презентаци.{0,24}(?:делать|делай|состав|сделай|созда|подготов|напиш)/i.test(s)
   );
 }
 

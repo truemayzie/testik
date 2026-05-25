@@ -1,3 +1,6 @@
 export async function register() {
-  /* Зарезервировано под server-side hooks при старте Next.js (Node runtime). */
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startGenerationReconciler } = await import("@/lib/generationReconciler");
+    startGenerationReconciler();
+  }
 }

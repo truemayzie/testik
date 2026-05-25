@@ -9,6 +9,11 @@ import TypewriterInput from "./components/TypewriterInput";
 import PaymentWidget from "./components/PaymentWidget";
 import ExamplesSection from "./components/ExamplesSection";
 import { WORK_PRICES, WORK_PAGES, WORK_GEN_TIME } from "../lib/prices";
+import {
+  applyFirstOrderDiscount,
+  calcWorkOrderTotals,
+  FIRST_ORDER_DISCOUNT_PERCENT,
+} from "../lib/firstOrderDiscount";
 import { prepareTopic } from "../lib/topicValidate";
 import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
 import { getProgressSteps, type Step } from "./lib/progressSteps";
@@ -17,6 +22,7 @@ import { useModalA11y } from "./lib/useModalA11y";
 import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
 import { detectPaymentMarket } from "@/lib/paymentMarket";
 import { safeJsonLd } from "@/lib/safeJsonLd";
+import { clearPaymentPreviewClientCaches } from "@/lib/paymentPreviewClient";
 import styles from "./page.module.css";
 import PresentationViewer, { type Slide } from "./components/PresentationViewer";
 
@@ -317,7 +323,7 @@ function CompareAiCell({
 const FAQ = [
   {
     q: "Как работает генерация?",
-    a: "Введите тему, выберите тип и объём работы, нажмите «Сгенерировать». Refai строит план, ищет реальные источники через научные базы, пишет введение, все главы, заключение и список литературы. Готовый DOCX-файл скачивается сразу — обычно за 2–5 минут.",
+    a: "Введите тему, выберите тип и объём работы, нажмите «Сгенерировать». Refai строит план, ищет реальные источники через научные базы, пишет введение, все главы, заключение и список литературы. Готовый DOCX-файл скачивается сразу.",
   },
   {
     q: "Какой файл получу на выходе?",
@@ -437,8 +443,16 @@ type DisplayWork = {
   isNew: boolean;
 };
 
+type RecentWorkItem = {
+  id: string;
+  workType: string;
+  topic: string;
+  slug: string;
+  authorLabel: string;
+};
+
 function buildInitialWorks(pool: typeof MOCK_WORKS_POOL): DisplayWork[] {
-  return shuffleArray(pool).slice(0, 8).map((w, i) => ({
+  return shuffleArray(pool).slice(0, 4).map((w, i) => ({
     id: `mock-${i}-${Date.now()}`,
     workType: w.type,
     topic: w.title,
@@ -446,17 +460,6 @@ function buildInitialWorks(pool: typeof MOCK_WORKS_POOL): DisplayWork[] {
     isNew: false,
   }));
 }
-
-const MOCK_RECENT = [
-  { id: "1", workType: "ВКР",       topic: "Разработка системы мониторинга качества ПО на основе машинного обучения",           createdAt: "2026-03-31T10:12:00Z" },
-  { id: "2", workType: "Курсовая",  topic: "Рынок электромобилей в России: тенденции и перспективы 2025–2030",                  createdAt: "2026-03-31T08:47:00Z" },
-  { id: "3", workType: "Реферат",   topic: "Нейропластичность мозга: как обучение изменяет структуру нейронных связей",         createdAt: "2026-03-30T22:30:00Z" },
-  { id: "4", workType: "Эссе",      topic: "Человек и машина: этические вызовы искусственного интеллекта в XXI веке",           createdAt: "2026-03-30T19:15:00Z" },
-  { id: "5", workType: "Доклад",    topic: "Квантовые вычисления: принципы работы и практические применения сегодня",            createdAt: "2026-03-30T16:40:00Z" },
-  { id: "6", workType: "Курсовая",  topic: "Психологические методы управления стрессом у студентов в период сессии",            createdAt: "2026-03-30T13:22:00Z" },
-  { id: "7", workType: "Реферат",   topic: "Экологические последствия таяния арктических льдов для мировой экономики",          createdAt: "2026-03-30T09:55:00Z" },
-  { id: "8", workType: "Сочинение", topic: "Образ маленького человека в русской литературе XIX века: от Гоголя до Достоевского", createdAt: "2026-03-29T21:18:00Z" },
-];
 
 const WORK_TYPE_COLORS: Record<string, string> = {
   "Сочинение": "#1B3A6B",
@@ -475,14 +478,6 @@ const WORK_TYPE_ICONS: Record<string, string> = {
   "Курсовая":  "📚",
   "ВКР":       "🎓",
 };
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("ru-RU", {
-    day: "numeric", month: "long", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  }).replace(",", " г. в");
-}
-
 
 const FUN_FACTS = [
   "Средний студент тратит около 17 часов в неделю на подготовку к занятиям",
@@ -548,12 +543,21 @@ export default function Home() {
   const previewRemaining = previewUser?.previewRemaining ?? 0;
   const previewAvailable =
     sessionStatus === "authenticated" && session?.user?.previewAvailable === true;
+  const firstOrderDiscountEligible =
+    (session?.user as { firstOrderDiscountEligible?: boolean } | undefined)
+      ?.firstOrderDiscountEligible === true;
+  const showFirstOrderDiscount =
+    !isYukassa &&
+    !isAdmin &&
+    sessionStatus !== "loading" &&
+    (sessionStatus === "unauthenticated" || firstOrderDiscountEligible);
   const YUKASSA_TYPES = ["Сочинение", "Эссе", "Доклад"];
 
-  const [workType, setWorkType]               = useState("Реферат");
+  const [workType, setWorkType]               = useState("");
   const [topic, setTopic]                     = useState("");
   const [topicFieldError, setTopicFieldError] = useState<string | null>(null);
-  const [pages, setPages]                     = useState(WORK_PAGES["Реферат"].default);
+  const [workTypeError, setWorkTypeError]     = useState<string | null>(null);
+  const [pages, setPages]                     = useState(20);
   const [loading, setLoading]                 = useState(false);
   const [result, setResult]                   = useState<ReferatResult | null>(null);
   const [error, setError]                     = useState<{ message: string; status: number } | null>(null);
@@ -593,8 +597,7 @@ export default function Home() {
   const [previewZoom, setPreviewZoom]         = useState(1);
   const [bannerDismissed, setBannerDismissed] = useState(true); // true пока не проверили
   const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
-  const [recentWorks, setRecentWorks]         = useState(MOCK_RECENT);
-  const [showAllWorks, setShowAllWorks]       = useState(false);
+  const [recentWorks, setRecentWorks]         = useState<RecentWorkItem[]>([]);
   const [displayedWorks, setDisplayedWorks]   = useState<DisplayWork[]>([]);
   const [usingRealWorks, setUsingRealWorks]   = useState(false);
   const poolRef                               = useRef<typeof MOCK_WORKS_POOL>([]);
@@ -626,7 +629,7 @@ export default function Home() {
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const smoothProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stepsRef        = useRef<Step[]>(getProgressSteps("Реферат"));
+  const stepsRef        = useRef<Step[]>([]);
   const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
   const authReturnHandled = useRef(false);
   const f5InfoRef       = useRef<{ workType: string; startedAt: number; generationId?: string }>({ workType: "Реферат", startedAt: 0 });
@@ -686,6 +689,7 @@ export default function Home() {
 
   function selectWorkType(type: string) {
     setWorkType(type);
+    setWorkTypeError(null);
     setPages(WORK_PAGES[type]?.default ?? 20);
     stepsRef.current = getProgressSteps(type);
     setResult(null);
@@ -703,7 +707,7 @@ export default function Home() {
 
   // Мобилка: один раз центрируем выбранный тип при загрузке (без повторного скролла при смене)
   useLayoutEffect(() => {
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    if (!workType || !window.matchMedia("(max-width: 900px)").matches) return;
     const id = requestAnimationFrame(() => scrollWorkTypeIntoView(workType, "instant"));
     return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1423,6 +1427,11 @@ export default function Home() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!workType) {
+      setWorkTypeError("Выберите тип работы");
+      return;
+    }
+    setWorkTypeError(null);
     const prepared = prepareTopic(topic);
     if (!prepared.ok) {
       setTopicFieldError(prepared.message);
@@ -1646,7 +1655,20 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/generations/recent")
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data) && data.length >= 30) { setRecentWorks(data); setUsingRealWorks(true); } })
+      .then((data: unknown) => {
+        if (!Array.isArray(data) || data.length < 1) return;
+        const items = data.filter(
+          (w): w is RecentWorkItem =>
+            typeof w === "object" &&
+            w !== null &&
+            typeof (w as RecentWorkItem).slug === "string" &&
+            (w as RecentWorkItem).slug.length > 0,
+        );
+        if (items.length >= 1) {
+          setRecentWorks(items);
+          setUsingRealWorks(true);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -1654,7 +1676,7 @@ export default function Home() {
   useEffect(() => {
     const shuffled = shuffleArray(MOCK_WORKS_POOL);
     poolRef.current = shuffled;
-    poolCursorRef.current = 8; // первые 8 уже использованы в начальном списке
+    poolCursorRef.current = 4; // первые 4 уже использованы в начальном списке
     setDisplayedWorks(buildInitialWorks(shuffled));
   }, []);
 
@@ -1681,7 +1703,7 @@ export default function Home() {
         minutesAgo: 0,
         isNew: true,
       };
-      setDisplayedWorks(prev => [newCard, ...prev.slice(0, 7)]);
+      setDisplayedWorks(prev => [newCard, ...prev.slice(0, 3)]);
       setTimeout(() => {
         setDisplayedWorks(prev => prev.map(w => w.id === newCard.id ? { ...w, isNew: false } : w));
       }, 8_000);
@@ -2199,12 +2221,19 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, displayedWorks.length, recentWorks.length]);
 
-  const price         = WORK_PRICES[workType]?.price ?? 199;
-  const pageRange     = WORK_PAGES[workType];
+  const basePrice     = workType ? (WORK_PRICES[workType]?.price ?? 199) : 0;
+  const pageRange     = workType ? WORK_PAGES[workType] : undefined;
   const EXTRAS_TYPES  = ["Доклад", "Реферат", "Курсовая", "ВКР"];
   const hasExtrasForm = EXTRAS_TYPES.includes(workType);
   const extrasPrice   = (wantPresentation ? 199 : 0) + (wantSpeech ? 149 : 0);
-  const totalPrice    = price + extrasPrice;
+  const orderTotals   = calcWorkOrderTotals(
+    basePrice,
+    extrasPrice,
+    showFirstOrderDiscount
+  );
+  const totalPrice    = orderTotals.totalRub;
+  const originalTotalPrice = orderTotals.originalTotalRub;
+  const priceDiscountApplied = orderTotals.discountApplied;
 
   const faqJsonLd = {
     '@context': 'https://schema.org',
@@ -2290,42 +2319,6 @@ export default function Home() {
             </p>
           </div>
 
-          {previewAvailable && !loading && (
-            <div className={styles.previewPromoBanner} role="status">
-              <div className={styles.previewPromoIcon} aria-hidden>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M8 4h9l3 3v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M17 4v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                  <path d="M9 10h6M9 13h6M9 16h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div className={styles.previewPromoBody}>
-                <p className={styles.previewPromoTitle}>
-                  {isAdmin
-                    ? "Предпросмотр до оплаты"
-                    : previewQuota > 1
-                      ? "Вам доступны бесплатные предпросмотры"
-                      : "Вам доступен бесплатный предпросмотр"}
-                </p>
-                <p className={styles.previewPromoText}>
-                  {isAdmin
-                    ? "В окне оплаты показываем оглавление и фрагмент текста — для администратора без лимита."
-                    : previewQuota > 1
-                      ? `Перед оплатой покажем структуру работы и начало текста. Бесплатных предпросмотров: ${previewQuota}, сейчас осталось ${previewRemaining}. Откроется в окне оплаты.`
-                      : "Перед оплатой покажем структуру работы и начало текста. Одно бесплатное превью на аккаунт — откроется в окне оплаты."}
-                </p>
-              </div>
-              <span className={styles.previewPromoBadge} aria-hidden>
-                {isAdmin ? "∞" : String(Math.max(0, previewRemaining))}
-              </span>
-            </div>
-          )}
-
           {/* Баннер для тестового аккаунта ЮКасса */}
           {isYukassa && !loading && (
             <div className={`${styles.yukassaBanner} ${trialUsed ? styles.yukassaBannerUsed : ""}`}>
@@ -2359,13 +2352,61 @@ export default function Home() {
           )}
 
           <div className={styles.genCard}>
+            {previewAvailable && !loading && (
+              <div className={styles.previewPromo} role="status">
+                <div className={styles.previewPromoIcon} aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </div>
+                <div className={styles.previewPromoBody}>
+                  <p className={styles.previewPromoTitle}>
+                    {isAdmin
+                      ? "Предпросмотр до оплаты"
+                      : previewQuota > 1
+                        ? "Бесплатные предпросмотры"
+                        : "Бесплатный предпросмотр"}
+                  </p>
+                  <p className={styles.previewPromoText}>
+                    {isAdmin
+                      ? "Оглавление и фрагмент текста в окне оплаты — без лимита."
+                      : previewQuota > 1
+                        ? `Структура и начало текста до оплаты · осталось ${previewRemaining} из ${previewQuota}`
+                        : "Структура и начало текста до оплаты — в окне оплаты."}
+                  </p>
+                </div>
+                <span className={styles.previewPromoBadge} aria-hidden>
+                  {isAdmin ? "∞" : String(Math.max(0, previewRemaining))}
+                </span>
+              </div>
+            )}
+
             <div className={styles.genCardHead}>
               <span className={styles.genCardTitle}>Создайте работу</span>
-              {!isYukassa && (
-                <span className={styles.genCardPrice} key={workType}>
-                  {totalPrice}
-                  <span className={styles.genCardPriceSuffix}>₽</span>
-                </span>
+              {!isYukassa && workType && (
+                priceDiscountApplied ? (
+                  <div className={styles.genCardPriceWrap} key={workType}>
+                    <span className={styles.genCardDiscountBadge}>
+                      −{FIRST_ORDER_DISCOUNT_PERCENT}%
+                    </span>
+                    <div className={styles.genCardPrice}>
+                      <span className={styles.genCardPriceOld} aria-hidden>
+                        {originalTotalPrice}
+                        <span className={styles.genCardPriceSuffix}>₽</span>
+                      </span>
+                      <span className={styles.genCardPriceNew}>
+                        {totalPrice}
+                        <span className={styles.genCardPriceSuffix}>₽</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <span className={styles.genCardPrice} key={workType}>
+                    {totalPrice}
+                    <span className={styles.genCardPriceSuffix}>₽</span>
+                  </span>
+                )
               )}
             </div>
 
@@ -2398,12 +2439,21 @@ export default function Home() {
                   >
                     <span className={styles.workTypeLabel}>{type}</span>
                     <span className={styles.workTypeMeta}>
-                      {isYukassa ? info?.pages : `${info?.price} ₽ · ${info?.pages}`}
+                      {isYukassa
+                        ? info?.pages
+                        : showFirstOrderDiscount && info && info.price > 0
+                          ? `${applyFirstOrderDiscount(info.price)} ₽ · ${info.pages}`
+                          : `${info?.price} ₽ · ${info?.pages}`}
                     </span>
                   </button>
                 );
               })}
             </div>
+            {workTypeError && (
+              <p className={styles.topicFieldError} role="alert">
+                {workTypeError}
+              </p>
+            )}
 
           <form onSubmit={handleSubmit} className={styles.heroForm}>
             <div className={styles.topicLabelRow}>
@@ -2439,34 +2489,36 @@ export default function Home() {
               </p>
             )}
 
-            <div className={styles.formControls}>
-              <div className={styles.pagesControl}>
-                <span className={styles.pagesLabel}>Объём:</span>
-                <input
-                  type="range"
-                  min={pageRange?.min ?? 20}
-                  max={pageRange?.max ?? 25}
-                  step={1}
-                  value={pages}
-                  onChange={e => setPages(Number(e.target.value))}
-                  className={styles.range}
-                  disabled={loading}
-                />
-                <span className={styles.pagesValue}>{pages} стр.</span>
+            {workType && pageRange && (
+              <div className={styles.formControls}>
+                <div className={styles.pagesControl}>
+                  <span className={styles.pagesLabel}>Объём:</span>
+                  <input
+                    type="range"
+                    min={pageRange.min}
+                    max={pageRange.max}
+                    step={1}
+                    value={pages}
+                    onChange={e => setPages(Number(e.target.value))}
+                    className={styles.range}
+                    disabled={loading}
+                  />
+                  <span className={styles.pagesValue}>{pages} стр.</span>
+                </div>
+                <div className={styles.metaBadges}>
+                  <span className={styles.metaBadge}>Times New Roman 14pt</span>
+                  <span className={styles.metaBadge}>Интервал 1.5</span>
+                  <span className={styles.metaBadge}>Поля 30/10/20/20</span>
+                </div>
               </div>
-              <div className={styles.metaBadges}>
-                <span className={styles.metaBadge}>Times New Roman 14pt</span>
-                <span className={styles.metaBadge}>Интервал 1.5</span>
-                <span className={styles.metaBadge}>Поля 30/10/20/20</span>
-              </div>
-            </div>
+            )}
 
 
             <div className={styles.btnRow}>
               <button
                 type="submit"
                 className={styles.heroBtn}
-                disabled={loading || paymentLoading || sessionStatus === "loading" || !topic.trim() || (isYukassa && trialUsed)}
+                disabled={loading || paymentLoading || sessionStatus === "loading" || !workType || !topic.trim() || (isYukassa && trialUsed)}
               >
                 {loading
                   ? <><span className={styles.btnSpinner}/> Генерируем...</>
@@ -2802,46 +2854,60 @@ export default function Home() {
                   Последние <span className={styles.recentAccent}>проекты</span>
                 </h2>
                 <p className={styles.recentSubline}>
-                  Более <strong>1 000 работ</strong> уже сгенерировано
+                  {usingRealWorks ? (
+                    <>Реальные работы пользователей Refai</>
+                  ) : (
+                    <>Более <strong>1 000 работ</strong> уже сгенерировано</>
+                  )}
                 </p>
               </div>
             </div>
             <div className={styles.recentGrid}>
               {(usingRealWorks
-                ? (showAllWorks ? recentWorks : recentWorks.slice(0, 8))
+                ? recentWorks.slice(0, 4)
                 : displayedWorks
-              ).map((w, _idx) => {
-                const workType  = (w as DisplayWork).workType ?? (w as typeof MOCK_RECENT[0]).workType;
-                const topic     = (w as DisplayWork).topic    ?? (w as typeof MOCK_RECENT[0]).topic;
-                const isNew     = (w as DisplayWork).isNew;
-                const minsAgo   = (w as DisplayWork).minutesAgo;
-                const createdAt = (w as typeof MOCK_RECENT[0]).createdAt;
+              ).map((w) => {
+                const isReal = usingRealWorks;
+                const real = isReal ? (w as RecentWorkItem) : null;
+                const mock = !isReal ? (w as DisplayWork) : null;
+                const workType = real?.workType ?? mock!.workType;
+                const topic = real?.topic ?? mock!.topic;
+                const isNew = mock?.isNew ?? false;
                 const typeColor = WORK_TYPE_COLORS[workType] || "#1B3A6B";
-                const typeIcon  = WORK_TYPE_ICONS[workType]  || "📄";
-                return (
-                  <div
-                    key={(w as DisplayWork).id ?? (w as typeof MOCK_RECENT[0]).id}
-                    className={`${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`}
-                  >
+                const cardClass = `${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`;
+
+                const inner = (
+                  <>
                     <div className={styles.recentCardTop}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span className={styles.recentBadge} style={{ color: typeColor }}>{workType}</span>
-                        {isNew && <span className={styles.recentNewDot} />}
-                      </div>
-                      <span suppressHydrationWarning className={styles.recentDate}>
-                        {createdAt ? formatDate(createdAt) : timeAgo(minsAgo ?? 0)}
-                      </span>
+                      <span className={styles.recentBadge} style={{ color: typeColor }}>{workType}</span>
+                      {isNew && <span className={styles.recentNewDot} aria-hidden />}
                     </div>
+                    {real?.authorLabel && (
+                      <p className={styles.recentAuthor}>{real.authorLabel}</p>
+                    )}
                     <p className={styles.recentWorkTitle}>{topic}</p>
+                  </>
+                );
+
+                if (real?.slug) {
+                  return (
+                    <Link
+                      key={real.id}
+                      href={`/preview/${real.slug}`}
+                      className={`${cardClass} ${styles.recentCardLink}`}
+                    >
+                      {inner}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <div key={mock!.id} className={cardClass}>
+                    {inner}
                   </div>
                 );
               })}
             </div>
-            {usingRealWorks && recentWorks.length > 8 && !showAllWorks && (
-              <button className={styles.showMoreBtn} onClick={() => setShowAllWorks(true)}>
-                Показать ещё
-              </button>
-            )}
           </div>
         </section>
       )}
@@ -3314,7 +3380,7 @@ export default function Home() {
           returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/payment/success`}
           onSuccess={() => {
             sessionStorage.removeItem("paymentWidgetRestore");
-            sessionStorage.removeItem("paymentPreviewCache");
+            clearPaymentPreviewClientCaches();
             setPaymentWidgetData(null);
             const raw = sessionStorage.getItem("pendingGeneration");
             if (raw) {
@@ -3332,7 +3398,6 @@ export default function Home() {
           }}
           onClose={() => {
             sessionStorage.removeItem("paymentWidgetRestore");
-            sessionStorage.removeItem("paymentPreviewCache");
             setPaymentWidgetData(null);
           }}
         />
