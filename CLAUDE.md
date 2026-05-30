@@ -8,7 +8,7 @@ Always respond in Russian. Всегда отвечай на русском яз�
 
 Сервис генерации учебных работ (рефераты, курсовые, ВКР, эссе, доклады, сочинения) с оформлением по ГОСТ, авторизацией, оплатой через ЮКассу и дополнительными материалами (презентация + текст выступления).
 
-**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (SQLite) | FastAPI + python-docx + Claude API (claude-sonnet-4-5) | Node.js + pptxgenjs (генерация PPTX)
+**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (SQLite) | FastAPI + python-docx + python-pptx + Claude API (claude-sonnet-4-5)
 
 ## Команды
 
@@ -31,29 +31,34 @@ npm run db:push      # применить схему
 npm run db:studio    # GUI Prisma Studio
 ```
 
-## Архитектура: поток основной генерации
+## Архитектура: поток основной генерации (воронка `/order`)
 
 ```
-Пользователь вводит тему + выбирает тип работы
-→ handleSubmit → GET /api/payment/check?workType=X
-→ Нет платежа → sessionStorage.pendingGeneration → открывается PaymentWidget (модальное окно)
-→ PaymentWidget → POST /api/payment/create → выбор провайдера:
-    - ЮKassa (для РФ): embedded checkout (карта) или redirect (СБП)
-    - Robokassa (для KZ/зарубежных карт): redirect на auth.robokassa.ru
-    - dev-succeeded (только когда платежи не настроены)
-→ Успешная оплата → переход на /payment/success → polling /api/payment/status?id=... → redirect на /?autoGenerate=1
-→ page.tsx читает pendingGeneration из sessionStorage → runGeneration()
-→ POST /api/generate → проверяет Payment (status=succeeded, usedAt=null)
-→ прокси на FastAPI POST /api/generate/referat → возвращает { jobId }
-→ `/api/generate` сразу отвечает `{status:"running", jobId, generationId}` (без long-wait)
-   - **важно:** `Generation` создаётся сразу со статусом `running`, чтобы работа попала в «Мои работы»
-→ frontend поллит GET /api/generate/poll?generationId=...&includeResult=1 (и/или workType+startedAt) каждые 5с
-→ FastAPI генерирует в фоновом потоке: generator.py (Claude API) → JSON
-→ `/api/generate/poll` при `done` забирает result из FastAPI, сохраняет Generation в БД (+slug), отправляет email/TG
-→ frontend получает `{status:"done", id, slug, result}` и показывает модал результата
+Пользователь на главной вводит тему + выбирает тип работы
+→ handleSubmit → openOrderPage()
+→ Не авторизован → /auth/signin?callbackUrl=/order + pendingOrderDraft в sessionStorage
+→ Авторизован → POST /api/tasks → PreviewTask в БД → redirect /order/[taskId]
+→ OrderPageClient: PaymentWidget (режим страницы, не модалка)
+   - GET /api/generate/preview — содержание + фрагмент текста (редактируемое TOC)
+   - Сочинение/Эссе: без блока «Содержание», заголовок «Основная часть»
+→ POST /api/payment/create → ЮKassa (embedded/СБП) или Robokassa или dev-succeeded
+→ Успешная оплата → /payment/success → polling /api/payment/status → redirect /order/[taskId]?autoGenerate=1
+→ OrderPageClient → useClientGeneration / OrderGenerationAside
+→ POST /api/generate { topic, workType, pages, structure?, taskId } → Payment (usedAt) → FastAPI job
+→ Generation создаётся сразу status=running; в extras JSON пишется `_taskId` для связи с PreviewTask
+→ frontend поллит GET /api/generate/poll?generationId=... каждые 5с
+→ FastAPI: generator.py → JSON; опционально custom_structure из превью
+→ poll при done → saveGeneration → OrderDoneView (DOCX-превью, extras, скачивание)
+→ sessionStorage: orderGenerationSession (phase: checkout | generating | done)
 ```
+
+**Legacy `/order` без id:** `OrderBootstrap.tsx` читает `pendingOrderDraft` / query → создаёт task → `/order/[id]`.
+
+**Legacy редиректы:** `/tasks/[id]` и `/tasks/pending` → `/order/...`. Старый `/payment` удалён (остался `/payment/success`).
 
 **Dev-режим без ЮКассы:** если `YOKASSA_SHOP_ID` пуст, `/api/payment/create` создаёт платёж со статусом `succeeded` автоматически.
+
+**Nginx:** `location /api/tasks` → Next.js :3000 (ПЕРЕД fallback `/api/` → FastAPI).
 
 ## Архитектура: поток генерации допматериалов (Extras)
 
@@ -72,7 +77,7 @@ npm run db:studio    # GUI Prisma Studio
 
 **Важно:** статус-эндпоинт `/api/generate/extras/status/[extrasJobId]/route.ts` ОБЯЗАН иметь `export const dynamic = "force-dynamic"` + `cache: "no-store"` — иначе Next.js кэширует ответ и фронтенд зависает на "Генерируем...".
 
-**Модульный паттерн `_extras`:** polling живёт вне React lifecycle (иначе stale closure при ре-рендерах). Аналогично `_gen` для основной генерации.
+**Модульный паттерн `_extras`:** polling живёт вне React lifecycle (иначе stale closure при ре-рендерах). На странице заказа генерация — через `useClientGeneration` + `orderGenerationSession` (не `_gen` на главной).
 
 ## Бэкенд (FastAPI)
 
@@ -87,7 +92,8 @@ npm run db:studio    # GUI Prisma Studio
 - **Фоновый reconciler** (`lib/generationReconciler.ts`, старт в `instrumentation.ts`): каждые 30 с дожимает `Generation` со `status=running` и `extras._jobId`, если backend уже `done` (вкладку можно закрыть). Orphan `not_found` >90 мин → `status=failed`
 - Extras-задания не удаляются — нужны для повторного скачивания файлов
 - Добавлена TTL-очистка файлов extras в `/tmp` (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
-- `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам). Без этого поле отрезалось моделью и в Telegram (`tgNotify` при завершении в `/api/generate/poll`) не было строки «Стоимость»
+- `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам)
+- `ReferatRequest`: опциональное поле `structure: list[str] | None` — кастомное содержание из превью заказа
 
 ### generator.py
 - `WORK_RULES` dict: лимиты страниц, флаги `has_title_page / has_toc / has_sources` для каждого типа
@@ -107,21 +113,15 @@ npm run db:studio    # GUI Prisma Studio
 - `rebuild_examples.py` — утилита хирургической пересборки TOC и библиографии в примерах DOCX без регенерации контента
 
 ### presentation_generator.py
-- `generate_presentation` — по умолчанию `PRESENTATION_SLIDES_MODE=deterministic`: JSON слайдов из `slides_from_result.py` (без второго Claude); режим `claude` — через API как раньше
-- Опционально `PRESENTATION_PROVIDER=presenton` — PPTX через Presenton API (`presenton_client.py`), превью слайдов всё равно из `result`
-- `_WORK_TYPE_PALETTE` — маппинг типа работы → палитра: ВКР/Курсовая→`dark_gold`, Реферат/Доклад→`blue_academic`, Эссе/Сочинение→`burgundy_warm`
-- `_build_slides_prompt()` — промпт для AI, генерирует JSON слайдов с полями `image_query`/`image_query2` (английский, для поиска картинок)
-- Курсовая/ВКР: до 12 разделов × 600 символов, max_tokens=3500; остальные: 7 × 400, max_tokens=2500
-- Типы слайдов: `TITLE`, `RELEVANCE`, `OVERVIEW`, `CONTENT`, `STATS`, `CONCLUSION`, `SOURCES`, `FINAL`
-- `generate_speech` — генерирует текст выступления 3-5 мин (450-600 слов) и сохраняет как DOCX
+- `generate_presentation` — `PRESENTATION_SLIDES_MODE=deterministic` (JSON из `slides_from_result.py`, без второго Claude) или `claude`
+- `generate_speech` — текст выступления 3–5 мин, DOCX
+- Превью слайдов на фронте: `IonPresentationPreview` + `lib/presentationSlides.ts`
 
-### pptx_builder.js (Node.js, backend/)
-- CLI: `node pptx_builder.js <input.json> <output.pptx> [pixabay_key]`
-- 3 палитры: `dark_gold`, `blue_academic`, `burgundy_warm`
-- Иконки: react-icons/fa → SVG → sharp → PNG base64
-- Загрузка изображений: `looksLikeNamedEntity(q)` → Wikipedia первой (точнее для именных/исторических тем), иначе Pixabay → Wikipedia → плейсхолдер
-- Скоринг Pixabay: `scoreHit()` — стоп-слова + совпадения ключей в тегах, MIN_SCORE=2; blacklist (love, flower, cute, cartoon, abstract…)
-- Зависимости: `backend/package.json` — pptxgenjs, react, react-dom, react-icons, sharp
+### pptx_template_builder.py
+- Сборка PPTX extras через **python-pptx** и шаблон `backend/tamplates/ion.pptx`
+- Макеты: «Титульный», «Заголовок и объект», «Только заголовок»
+- `PRESENTATION_TEMPLATE_PATH` — переопределение пути к шаблону
+- **Удалено:** `pptx_builder.js`, `render_slides.js`, `presenton_client.py` (Node/presenton больше не используются для extras)
 
 ### github_proxy.py
 - Прокси через GitHub Actions для обхода блокировок Claude API из РФ
@@ -149,48 +149,36 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 ### Ключевые файлы фронтенда
 
-**`app/page.tsx`** — главная страница
-- При старте новой генерации (`runGeneration`) сбрасываются `generationId` / `generationSlug`; после успешного poll подставляются `id` и `slug` (для журнала скачиваний и связи с extras)
-- Hero с формой + выбором типа работы + TypewriterInput
-- Прогресс-бар (тёмная тема, navy градиент `#061525 → #1B3A6B`, shimmer) — шаги в `stepsRef` (ref, не state — избегает stale closure)
-  - Дизайн: точки-шаги (pending/active с пульсацией/done), тема работы в кавычках, счётчик «Шаг N из M», анимированная смена подписи текущего шага (`key={stepIndex}` для ре-монтирования)
-- Результат с DOCX-превью (`docx-preview`) и extras-переключателями
-- Лендинг (снизу от hero): «Почему Refai?» (карточки с SVG-иконками), «Как это работает» (3 шага с иконками справа от номера), блок сравнения «Самостоятельно vs Refai» (6 строк), «Последние проекты», «Свежие отзывы», FAQ, PreFooter
-- Scroll-reveal анимации: `[data-reveal]` + `[data-visible="true"]` через IntersectionObserver (threshold 0.08); иконки шагов получают `stepIconPop` анимацию при появлении
-- Модальное окно результата через `createPortal(document.body)`
-- Две колонки на десктопе (превью + панель), bottom-sheet на мобиле
-- **Гидратация:** счётчик «генераций сегодня» не инициализировать через `getDailyGenCount()` в `useState` — внутри есть `Math.random()`, из‑за расхождения SSR/клиента возможны ошибки React #418/#423/#425. Начальное значение `0`, первый расчёт и интервал 37 с — только в `useEffect` после монтирования
+**`app/page.tsx`** — главная (лендинг + форма заказа)
+- Hero: динамический H1 через `lib/heroCopy.ts`; счётчик «Создано уже более N работ» — `GET /api/stats/works-created`
+- Форма → `openOrderPage()` → `POST /api/tasks` → `/order/[id]` (генерация и оплата **не на главной**)
+- Лендинг: «Почему Refai?», «Как это работает», compare, «Последние проекты», FAQ, PreFooter
+- Scroll-reveal: `[data-reveal]` + IntersectionObserver
+- `?autoGenerate=1` после оплаты → редирект на `/order/[taskId]?autoGenerate=1` (не на главную)
 
-**Модульные переменные (вне React) в page.tsx:**
-- `_gen` — состояние основной генерации. Не сбрасывается при client-side навигации, только при F5. Автоочистка через 60с после завершения
-- `_extras` — состояние extras-генерации. Паттерн observer: `_extras.listen(cb)`, `_extras.resolve(ready, err)`. Polling вне useEffect (не зависит от lifecycle компонента)
-- `_extrasPollingStarted` — флаг, предотвращает дублирование polling при ре-маунтах
-- `_extrasGenId` — хранит DB id генерации для сохранения extras job IDs
+**`app/order/`** — страница заказа (Samopisets-style)
+- `/order/[id]/page.tsx` → `OrderPageClient`: checkout → generating → done
+- `PaymentWidget` — превью TOC/текста, blur + CTA, sticky-блок оплаты справа
+- `OrderGenerationAside` — прогресс генерации; `OrderDoneView` — результат и скачивание
+- `lib/pendingOrderDraft.ts`, `lib/orderGenerationSession.ts`, `lib/createOrderTask.ts`
+
+**`app/components/Header.tsx`** — fixed + `--site-header-h`; при scroll >16px «плавающий островок»; «Мои работы» + аватар с dropdown (id копируется, «Выйти»)
+
+**`app/components/PaymentWidget.tsx`** — checkout на странице `/order`: превью, extras-toggles, ЮKassa/Robokassa
+
+**`lib/useClientGeneration.ts`** — хук генерации + poll (вынесен с главной)
 
 **`app/dashboard/page.tsx`** — «Мои работы»
-- Журнал скачиваний: см. `WorkActivity` (`_activity` в `POST /api/download` для DOCX + `trackWorkActivityClient` после PPTX/Speech)
-- Список карточек с бейджами типа работы
-- Если `Generation.status !== "completed"`:
-  - карточка помечается «Генерация…»
-  - «Открыть»/скачивание недоступны
-  - доступна кнопка «Проверить» — вызывает `/api/generate/poll?generationId=...` и обновляет список
-- Extras-бейджи: Презентация (красный `#EF4444`), Выступление (янтарный `#F59E0B`)
-- Модальное окно через `createPortal`: DOCX-превью слева + info-панель справа (десктоп), bottom-sheet (мобиль)
-- Кнопки скачивания с иконками: DOCX (`/docx-icon.png`), Презентация (`/pptx-icon.svg`), Выступление (`/txt-icon.svg`)
-- `renderPreview` использует `docx-preview` (renderAsync, `experimental: true`)
-- `applyScale` — устанавливает `--docx-scale` CSS-переменную + `transform: scale()` + компенсирует `marginBottom`; зум через `applyZoom`
+- Черновики «Ожидает оплаты» из `GET /api/tasks` → кнопка «Оплатить» → `/order/[id]`
+- Генерации in-progress / completed — как раньше
+- Журнал скачиваний: `WorkActivity`
 
 **`app/components/TypewriterInput.tsx`** — анимированный placeholder
 - Анимация через CSS-оверлей (не pixel-calc), cursor всегда вплотную к тексту
 
 **`app/components/PreFooter.tsx`** — CTA-секция с анимированными карточками документов (якорь `#generator`)
 
-**`app/components/PaymentWidget.tsx`** — модальное окно оплаты:
-- провайдер: ЮKassa (РФ) / Robokassa (KZ) — выбор с флагами (SVG)
-- ЮKassa: СБП + embedded карта
-- Robokassa: redirect-flow на Robokassa, подтверждение по ResultURL
-
-**`app/components/AuthModal.tsx`** — модалка авторизации для неавторизованных пользователей
+**Удалено с главной:** `AuthModal`, `GenerationWidget`, `genState.ts`, `/payment/page.tsx` — авторизация через `/auth/signin`, checkout через `/order`
 
 **`app/[workType]/page.tsx`** — SEO-хаб по типу работы (`/referat`, `/kursovaya` и т.д.): список тем с фильтрами, ссылки на отдельные SEO-страницы
 
@@ -210,7 +198,11 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 | Маршрут | Метод | Описание |
 |---------|-------|----------|
-| `/api/generate` | POST | Проверяет Payment → запускает backend job → сразу возвращает `{status:"running", jobId}` |
+| `/api/tasks` | GET/POST/DELETE | Черновики заказа (`PreviewTask`); POST создаёт task → `/order/[id]` |
+| `/api/tasks/[id]` | GET/DELETE | Один черновик / удаление |
+| `/api/generations/by-task/[taskId]` | GET | Generation по `_taskId` в extras |
+| `/api/stats/works-created` | GET | Счётчик для hero (seoPage.count) |
+| `/api/generate` | POST | Payment + taskId → backend job → `{status:"running", jobId, generationId}` |
 | `/api/generate/poll` | GET | Поллинг статуса основной генерации; при `done` сохраняет Generation и возвращает результат |
 | `/api/generate/extras` | POST | Запускает extras-генерацию через FastAPI |
 | `/api/generate/extras/status/[id]` | GET | Статус extras (force-dynamic, no-store, только владелец job) |
@@ -269,8 +261,9 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 ## Модели Prisma (SQLite)
 
-- **`User`** — NextAuth + профильные поля титульника (university, faculty, department, speciality, discipline, course, groupNumber, fullName, teacherName, city), `role: "user"|"admin"|"yukassa_test"`, `banned: Boolean`, `password: String?` (bcrypt, для тестовых аккаунтов)
-- **`Generation`** — `result` (JSON-строка), `isPublic`, `slug` (уникальный), `extras` (JSON: `{"presentation":"jobId","speech":"jobId"}`), `rating Int?` (1–5, из письма)
+- **`User`** — NextAuth + профиль титульника; `freePreviewUses`, `freePreviewQuota` (в сессии сейчас `previewAvailable: true` для всех)
+- **`PreviewTask`** — черновик до оплаты: `topic`, `workType`, `pages`, `extras?`, `expiresAt` (48 ч TTL)
+- **`Generation`** — `result`, `slug`, `extras` (JSON: `presentation`, `speech`, **`_taskId`**)
 - **`Payment`** — `usedAt: null` = не использован; `workType` привязан к типу работы
 - `provider` / `providerPaymentId`: поддержка `yookassa` и `robokassa` (Robokassa InvId хранится в `providerPaymentId`)
 - **`ExtrasJob`** — ownership `extrasJobId -> userId` для защиты `/api/generate/extras/status/*`
@@ -281,7 +274,7 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 
 **`lib/workActivity.ts`** — `recordWorkActivity` для API-маршрутов.
 
-**`lib/db.ts`** — хелперы: `saveGeneration`, `getUserGenerations`, `getGeneration`, `deleteGeneration`, `updateGenerationExtras`
+**`lib/db.ts`** — `saveGeneration`, `getUserGenerations`, `getGenerationByPreviewTaskId`, …
 
 ## Авторизация (lib/auth.ts)
 
@@ -290,7 +283,8 @@ Extras: Презентация +199 ₽, Текст выступления +149 
 - Сессии в БД (`strategy: "database"`)
 - Callback URL Яндекс (prod): `https://ref-ai.ru/api/auth/callback/yandex`
 - **Nginx**: `/api/feedback` (и `/api/feedback/comment`) проксируется на Next.js:3000, а не на FastAPI:8000 — отдельный `location /api/feedback` блок стоит ПЕРЕД общим `location /api/`
-- ID пользователя добавляется в сессию через `callbacks.session`
+- `allowDangerousEmailAccountLinking: true`; redirect на `callbackUrl` после OAuth
+- Secure cookies в prod (`__Secure-next-auth.*`)
 - Тестовый аккаунт ЮКасса: роль `yukassa_test`, bcrypt-пароль, особые условия оплаты
 
 ## ENV
@@ -333,23 +327,22 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - **Уведомления админу о событиях сайта:** `frontend/lib/tgNotify.ts` — `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID` в `frontend/.env.local` (регистрация, старт/конец генерации с `_cost_usd`, оплата). Это не тот же процесс, что `tg-bot`, но тот же класс исходящих запросов к Telegram API; при необходимости прокси для Node задаётся через `HTTPS_PROXY` в окружении процесса `frontend`.
 - После правок бота: `pm2 restart tg-bot --update-env`
 
-**Nginx:** reverse proxy для ref-ai.ru. Правило: специфичные `location /api/foo` → Next.js:3000 (с авторизацией). Фолбэк `location /api/` → FastAPI:8000 (без авторизации, только публичные эндпоинты: `/api/slots`).
-- Важный explicit-проксируемый маршрут: `/api/gift` должен идти в Next.js (`3000`), иначе будет 404 от FastAPI-фолбэка.
+**Nginx:** reverse proxy для ref-ai.ru. Специфичные `location /api/foo` → Next.js:3000. Фолбэк `/api/` → FastAPI:8000.
+- Обязательные Next.js-маршруты: `/api/gift`, **`/api/tasks`**, `/api/feedback`
 
 **Proxy для исходящих запросов:** Privoxy (:8118). Backend и Claude Code используют `HTTPS_PROXY=http://127.0.0.1:8118` / `ALL_PROXY=http://127.0.0.1:8118` (прописаны в `.bashrc`). Запускать `claude` напрямую — без `proxychains4`.
 - Для PM2 HTTP-процессов (`frontend`, `backend`) не использовать `LD_PRELOAD=libproxychains.so.4` (ломает OAuth/HTTP callbacks). Допустим только стандартный proxy через `HTTPS_PROXY`/`ALL_PROXY`.
 
 **SSL:** Let's Encrypt, auto-renew certbot.
 
-**БД:** SQLite (`frontend/prisma/dev.db`). Prisma ORM.
+**БД:** SQLite. **Prod:** файл `frontend/prisma/prisma/dev.db` (~5 MB). В `.env`: `DATABASE_URL="file:./prisma/dev.db"` (путь относительно `schema.prisma`). Файл `frontend/prisma/dev.db` — пустышка, не использовать.
 
 ### Мини-runbook деплоя frontend
-1. `cd /var/www/ref-ai/frontend && npm run build`
-2. `pm2 restart frontend --update-env` (обязательный рестарт после build, иначе возможен рассинхрон `/_next/static/chunks/*`)
-3. Smoke-check:
-   - `curl -I https://ref-ai.ru/auth/signin` → `200`
-   - `curl -I https://ref-ai.ru/_next/static/chunks/<актуальный-webpack-chunk>.js` → `200`, `Content-Type: application/javascript`
-   - `curl https://ref-ai.ru/api/capacity` → JSON от backend-прокси
+```bash
+bash /var/www/ref-ai/scripts/deploy-frontend.sh
+# или вручную: rm -rf .next && npm run build && pm2 restart frontend --update-env
+```
+После `schema.prisma` — `npm run db:push` в `frontend/` (остановить dev-сервер).
 
 ### Мини-runbook деплоя backend / бота
 - После изменений в `backend/main.py` (модели ответа, эндпоинты): `pm2 restart backend --update-env`
@@ -394,15 +387,13 @@ Referrer-Policy: strict-origin-when-cross-origin
 - ✅ Профиль пользователя (поля для автозаполнения титульника)
 - ✅ Личный кабинет + история работ с DOCX-превью (docx-preview)
 - ✅ Оплата ЮКасса (включая dev-режим)
-- ✅ Автогенерация после оплаты (sessionStorage + ?autoGenerate=1)
-- ✅ Восстановление прогресса при уходе со страницы (модульная переменная `_gen`)
+- ✅ Автогенерация после оплаты (`/order/[taskId]?autoGenerate=1` + `orderGenerationSession`)
+- ✅ Воронка заказа `/order` + черновики `PreviewTask` + dashboard «Ожидает оплаты»
+- ✅ PaymentWidget на странице заказа (превью + оплата + генерация)
+- ✅ Header: sticky «островок» при скролле, аватар + «Мои работы»
 - ✅ Дополнительные материалы: Презентация (PPTX) + Текст выступления (DOCX)
-  - ✅ Генерация PPTX через Node.js pptxgenjs (pptx_builder.js), вызов из Python subprocess
-  - ✅ 3 палитры по типу работы (dark_gold / blue_academic / burgundy_warm)
-  - ✅ Изображения: Wikipedia (именные сущности) → Pixabay со скорингом → плейсхолдер
-  - ✅ Скоринг Pixabay: стоп-слова + совпадения тегов, MIN_SCORE=2, blacklist нерелевантных тегов
-  - ✅ Polling вне React lifecycle (модульная переменная `_extras`)
-  - ✅ Сохранение job IDs в БД (поле `extras` у Generation)
+  - ✅ PPTX через **python-pptx** + шаблон `ion.pptx` (`pptx_template_builder.py`)
+  - ✅ Превью слайдов: `IonPresentationPreview`
 - ✅ Расширенный титульный лист: поля city, speciality, discipline + чекбоксы «не указывать» для faculty/speciality/discipline
 - ✅ Social proof на лендинге: живая лента 50 работ с ротацией, счётчик генераций за день
 - ✅ Публичные превью работ по slug (SEO, частичное содержимое для гостей)
@@ -411,7 +402,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 - ✅ Раздел «Последние проекты»: реалистичные mock-данные, цветные карточки по типу, замена реальными данными при ≥ 8 работ в БД
 - ✅ Админ-панель: статистика, управление пользователями/платежами/работами
 - ✅ SEO-инфраструктура: хаб-страницы по типу работы (`/referat` и т.д.) + детальные страницы (`/referat/[slug]`) с JSON-LD, breadcrumbs, предпросмотром, CTA
-- ✅ PaymentWidget: оплата через модальное окно (без редиректа на /payment), embedded ЮКасса checkout
+- ✅ PaymentWidget: checkout на `/order` (ЮKassa embedded + Robokassa)
 - ✅ Scroll-reveal анимации на лендинге: IntersectionObserver + data-reveal/data-visible, иконки шагов с анимацией pop
 - ✅ Блок сравнения «Самостоятельно vs Refai» на лендинге (6 строк: время/оформление/источники/уникальность/стоимость/формат)
 - ✅ Редизайн прогресс-бара: точки-шаги с пульсацией, тема работы, счётчик «Шаг N из M», анимированные подписи
@@ -441,6 +432,15 @@ Referrer-Policy: strict-origin-when-cross-origin
 - **KZ/EN локализация генерации**: в `backend/generator.py` добавлено auto-script определение языка темы (`ru|kz|en`), локализованы служебные секции структуры (`Введение/Заключение/Список литературы`), а `Заключение` теперь генерируется на языке темы.
 - **Источники для KZ**: реализован mixed-пул (KZ + RU/EN) с минимальной валидацией наличия KZ-источников и отдельной нормализацией стиля библиографии только в KZ-ветке; RU-ветка источников оставлена без изменений.
 - **DOCX-локализация**: в `backend/formatter.py` добавлен выбор локализованных заголовков `TOC` и служебных разделов по `meta.doc_lang`, с canonical-сопоставлением (`intro/conclusion/sources/appendix`) для устойчивой сборки документа.
-- **Реальный прогресс генерации**: в `backend/main.py` добавлен прогресс job (`step/total_steps/percent/eta_seconds`) и прокидывание в `/api/generate/status/*`; во `frontend` (`/api/generate/poll` + `app/page.tsx`) UI теперь использует backend-прогресс и ETA вместо чисто таймерной заглушки.
+- **Реальный прогресс генерации**: backend job progress → `/api/generate/poll`; UI на `/order` через `useClientGeneration` + ETA
 - **Стабилизация прогресс-бара**: убран конфликт клиентского таймера и backend-прогресса (исправлены скачки к 100% и обратно), улучшена оценка времени до конца на основе ожидаемой длительности типа работы.
 - **UX-обновления**: переработана адаптивность карточки прогресса (процент + ETA + переносы), добавлена верхняя языковая промо-плашка под навигацией в стилистике сайта (`Header.tsx`, `Header.module.css`) с сохранением скрытия в `localStorage`.
+
+### Изменения 2026-05-29
+- **Воронка `/order`**: главная только лендинг + форма; checkout/превью/генерация/результат на `/order/[taskId]`; модель **`PreviewTask`**; API **`/api/tasks`**; черновики в dashboard «Ожидает оплаты».
+- **PaymentWidget** — режим страницы заказа (Samopisets-style): превью TOC, blur, sticky оплата; сочинение/эссе без TOC.
+- **Header**: fixed, плавающий островок при scroll, «Мои работы» у аватара, dropdown с копированием id.
+- **PPTX extras**: `pptx_template_builder.py` + шаблон `ion.pptx`; удалены Node `pptx_builder.js` и Presenton client.
+- **`useClientGeneration`**: генерация вынесена с главной; `orderGenerationSession` для восстановления фазы заказа.
+- **Auth**: `callbackUrl` redirect, secure cookies, linking email/Yandex аккаунтов.
+- **Deploy**: `scripts/deploy-frontend.sh` — `rm -rf .next` перед build (фикс 404 static chunks).
