@@ -3,9 +3,9 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import styles from "./Header.module.css";
-import { useModalContext } from "@/app/lib/ModalContext";
+import { userInitials } from "@/lib/userInitials";
 
 const LogoInner = () => (
   <>
@@ -28,134 +28,234 @@ const LogoInner = () => (
   </>
 );
 
+function UserAvatarButton({
+  image,
+  initials,
+  onClick,
+  expanded,
+}: {
+  image?: string | null;
+  initials: string;
+  onClick: () => void;
+  expanded?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.avatarBtn}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label="Меню аккаунта"
+      aria-expanded={expanded}
+      aria-haspopup="menu"
+    >
+      {image ? (
+        <img src={image} alt="" className={styles.avatarImg} />
+      ) : (
+        <span className={styles.avatarInitials} aria-hidden>{initials}</span>
+      )}
+      <svg className={styles.avatarChevron} width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+        <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
+
+function shortDisplayId(userId: string): string {
+  const tail = userId.replace(/[^a-z0-9]/gi, "").slice(-6);
+  return tail || userId.slice(0, 8);
+}
+
+function displayUserName(user: { name?: string | null; email?: string | null }): string {
+  const name = user.name?.trim();
+  if (name) return name;
+  const email = user.email?.trim();
+  if (email) return email.split("@")[0] ?? email;
+  return "Аккаунт";
+}
+
 export default function Header() {
   const { data: session, status } = useSession();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [bannerHidden, setBannerHidden] = useState(true);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [floated, setFloated] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pathname = usePathname();
   const isAuthPage = pathname?.startsWith("/auth");
   const isHomePage = pathname === "/";
+  const isDashboard = pathname?.startsWith("/dashboard");
+  const isOrderPage = pathname?.startsWith("/order");
   const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === "1";
-  const { isModalOpen } = useModalContext();
+
+  const syncHeaderHeight = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    document.documentElement.style.setProperty("--site-header-h", `${el.offsetHeight}px`);
+  }, []);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!mounted) return;
-    const key = "langBannerHidden";
-    const hidden = localStorage.getItem(key) === "1";
-    setBannerHidden(hidden);
+    setBannerHidden(localStorage.getItem("langBannerHidden") === "1");
   }, [mounted]);
 
   useEffect(() => {
+    syncHeaderHeight();
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(syncHeaderHeight);
+    ro.observe(el);
+    window.addEventListener("resize", syncHeaderHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", syncHeaderHeight);
+    };
+  }, [syncHeaderHeight, bannerHidden, isHomePage, isStaging, mounted, status, floated]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop;
+      setFloated(y > 16);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [pathname]);
+
+  useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
+      if (!userMenuOpen) return;
+      const t = e.target as Node;
+      if (userMenuRef.current && !userMenuRef.current.contains(t)) {
+        setUserMenuOpen(false);
       }
     }
-    if (menuOpen) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [userMenuOpen]);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   if (isAuthPage) return null;
 
+  const showLangBanner = !bannerHidden && isHomePage && !isStaging && !floated;
+  const userId = (session?.user as { id?: string } | undefined)?.id ?? "";
+  const initials = session?.user
+    ? userInitials({ name: session.user.name, email: session.user.email })
+    : "?";
+
+  async function copyUserId() {
+    if (!userId) return;
+    try {
+      await navigator.clipboard.writeText(userId);
+      setIdCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setIdCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
-    <div className={styles.headerWrap} style={{ zIndex: isModalOpen ? 1 : undefined }}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-        <Link href="/" className={styles.logo}><LogoInner /></Link>
+    <>
+      <div
+        ref={wrapRef}
+        data-site-header=""
+        className={`${styles.headerWrap} ${floated ? styles.headerWrapFloating : ""} ${showLangBanner ? styles.headerWrapWithBanner : ""} ${isOrderPage ? styles.headerWrapOrder : ""}`}
+      >
+        <div className={styles.headerShell}>
+          <header className={styles.header}>
+            <div className={styles.headerBar}>
+              <Link href="/" className={styles.logo}><LogoInner /></Link>
 
-        {/* Десктоп nav */}
-        <nav className={styles.nav}>
-          {!mounted || status === "loading" ? (
-            <div className={styles.skeleton}/>
-          ) : session ? (
-            <>
-              <Link href="/dashboard" className={styles.dashLink}>Мои работы</Link>
-              {session.user?.image && (
-                <img src={session.user.image} alt="" className={styles.avatar}/>
-              )}
-              <span className={styles.userName}>
-                {session.user?.name?.split(" ")[0] || session.user?.email}
-              </span>
-              <button
-                className={styles.signOutBtn}
-                onClick={() => signOut({ callbackUrl: "/" })}
-              >
-                Выйти
-              </button>
-            </>
-          ) : (
-            <Link href="/auth/signin" className={styles.signInBtn}>Войти</Link>
-          )}
-        </nav>
-
-        {/* Мобильный бургер */}
-        <div className={styles.mobileRight} ref={menuRef}>
-          {!mounted || status === "loading" ? (
-            <div className={styles.skeleton}/>
-          ) : session ? (
-            <>
-              <button
-                className={styles.burgerBtn}
-                onClick={() => setMenuOpen(o => !o)}
-                aria-label="Меню"
-              >
-                {menuOpen ? (
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  </svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  </svg>
-                )}
-              </button>
-
-              {menuOpen && (
-                <div className={styles.mobileMenu}>
-                  {session.user?.image && (
-                    <div className={styles.mobileUser}>
-                      <img src={session.user.image} alt="" className={styles.mobileAvatar}/>
-                      <span className={styles.mobileUserName}>
-                        {session.user?.name?.split(" ")[0] || session.user?.email}
-                      </span>
+              <div className={styles.headerRight}>
+                {!mounted || status === "loading" ? (
+                  <div className={styles.skeleton} />
+                ) : session ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className={`${styles.dashLink} ${isDashboard ? styles.dashLinkActive : ""}`}
+                    >
+                      Мои работы
+                    </Link>
+                    <div className={styles.userMenuWrap} ref={userMenuRef}>
+                      <UserAvatarButton
+                        image={session.user?.image}
+                        initials={initials}
+                        expanded={userMenuOpen}
+                        onClick={() => setUserMenuOpen((o) => !o)}
+                      />
+                      {userMenuOpen && (
+                        <div className={styles.userDropdown} role="menu">
+                          {userId ? (
+                            <button
+                              type="button"
+                              className={styles.userIdCopy}
+                              onClick={() => void copyUserId()}
+                              title="Скопировать ID"
+                            >
+                              <span className={styles.userIdCopyIcon} aria-hidden>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                                  <path d="M6 16H5a2 2 0 01-2-2V5a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="1.8" />
+                                </svg>
+                              </span>
+                              <span className={styles.userIdCopyText}>
+                                {idCopied ? "Скопировано" : `id: ${shortDisplayId(userId)}`}
+                              </span>
+                            </button>
+                          ) : null}
+                          <p className={styles.userDisplayName}>
+                            {displayUserName(session.user!)}
+                          </p>
+                          <div className={styles.userDropdownDivider} />
+                          <button
+                            type="button"
+                            className={styles.userDropdownSignOut}
+                            role="menuitem"
+                            onClick={() => signOut({ callbackUrl: "/" })}
+                          >
+                            <span className={styles.signOutIcon} aria-hidden>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                <path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            Выйти
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <Link href="/dashboard" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                    Мои работы
-                  </Link>
-                  <div className={styles.mobileDivider}/>
-                  <button
-                    className={styles.mobileSignOut}
-                    onClick={() => { setMenuOpen(false); signOut({ callbackUrl: "/" }); }}
-                  >
-                    Выйти
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <Link href="/auth/signin" className={styles.signInBtn}>Войти</Link>
+                  </>
+                ) : (
+                  <Link href="/auth/signin" className={styles.signInBtn}>Войти</Link>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {isStaging && (
+            <div className={styles.stagingRibbon} role="status">
+              <span className={styles.stagingRibbonText}>
+                Staging — черновик дизайна. Продакшен: ref-ai.ru
+              </span>
+            </div>
           )}
         </div>
-        </div>
-      </header>
-      {isStaging && (
-        <div className={styles.stagingRibbon} role="status">
-          <span className={styles.stagingRibbonText}>
-            Staging — черновик дизайна. Продакшен: ref-ai.ru
-          </span>
-        </div>
-      )}
-      {!bannerHidden && isHomePage && !isStaging && (
-        <div className={styles.langBanner} role="status" aria-live="polite">
-          <div className={styles.langBannerShell}>
+
+        {showLangBanner && (
+          <div className={styles.langBanner} role="status" aria-live="polite">
             <div className={styles.langBannerInner}>
               <span className={styles.langBannerIcon} aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -166,20 +266,22 @@ export default function Header() {
                 Поддержка генерации на русском, английском, казахском и других языках
               </span>
               <span className={styles.langBannerBadge}>RU · EN · KZ</span>
+              <button
+                type="button"
+                className={styles.langBannerClose}
+                aria-label="Скрыть уведомление"
+                onClick={() => {
+                  localStorage.setItem("langBannerHidden", "1");
+                  setBannerHidden(true);
+                }}
+              >
+                ×
+              </button>
             </div>
-            <button
-              className={styles.langBannerClose}
-              aria-label="Скрыть уведомление"
-              onClick={() => {
-                localStorage.setItem("langBannerHidden", "1");
-                setBannerHidden(true);
-              }}
-            >
-              ×
-            </button>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+      <div className={styles.headerSpacer} aria-hidden />
+    </>
   );
 }

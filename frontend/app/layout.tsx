@@ -3,7 +3,6 @@ import "./globals.css";
 import Providers from "./providers";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import GenerationWidget from "./components/GenerationWidget";
 import TelegramSupport from "./components/TelegramSupport";
 import CookieConsent from "./components/CookieConsent";
 import { safeJsonLd } from "@/lib/safeJsonLd";
@@ -103,7 +102,6 @@ export default function RootLayout({
           <Header />
           {children}
           <Footer />
-          <GenerationWidget />
           <TelegramSupport />
           <CookieConsent />
         </Providers>

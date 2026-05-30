@@ -112,13 +112,30 @@ export async function POST(request: NextRequest) {
 
   // ── Rate limiting ─────────────────────────────────────────────────────────
 
-  // Проверка 1: активная генерация у этого юзера
-  if (activeJobs.get(user.id)) {
-    console.warn("[generate] active job already exists", { userId: user.id });
-    return NextResponse.json(
-      { error: "У вас уже идёт генерация. Дождитесь завершения." },
-      { status: 429 }
-    );
+  // Проверка 1: активная генерация у этого юзера — отдаём существующую, не создаём дубль
+  const memJob = activeJobs.get(user.id);
+  if (memJob?.generationId) {
+    console.warn("[generate] active job already exists", { userId: user.id, generationId: memJob.generationId });
+    return NextResponse.json({
+      status: "running",
+      jobId: memJob.jobId,
+      generationId: memJob.generationId,
+      alreadyRunning: true,
+    });
+  }
+
+  const runningInDb = await prisma.generation.findFirst({
+    where: { userId: user.id, status: "running" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (runningInDb) {
+    console.warn("[generate] running generation in db", { userId: user.id, generationId: runningInDb.id });
+    return NextResponse.json({
+      status: "running",
+      generationId: runningInDb.id,
+      alreadyRunning: true,
+    });
   }
 
   // Проверка 2: дневной лимит (5 генераций в день)
@@ -146,12 +163,24 @@ export async function POST(request: NextRequest) {
   let generationId: string | null = null;
   try {
     const { id: _id, role: _role, ...profile } = user;
-    const backendBody = {
+    const rawStructure = body.structure;
+    const structure =
+      Array.isArray(rawStructure)
+        ? rawStructure
+            .filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0)
+            .map((s: string) => s.trim().slice(0, 300))
+            .slice(0, 30)
+        : undefined;
+
+    const backendBody: Record<string, unknown> = {
       topic,
       pages:     body.pages,
       work_type: workType,
       profile,
     };
+    if (structure && structure.length >= 3) {
+      backendBody.structure = structure;
+    }
 
     const startRes = await fetch(`${BACKEND_URL}/api/generate/referat`, {
       method:  "POST",
@@ -182,6 +211,8 @@ export async function POST(request: NextRequest) {
       pages: body.pages,
       workType,
       jobId,
+      previewTaskId:
+        typeof body.taskId === "string" && body.taskId.trim() ? body.taskId.trim() : undefined,
     });
     generationId = running.id;
 

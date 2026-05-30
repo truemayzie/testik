@@ -55,8 +55,10 @@ export async function createRunningGeneration(params: {
   pages: number;
   workType: string;
   jobId: string;
+  previewTaskId?: string;
 }) {
-  const extras = { _jobId: params.jobId };
+  const extras: Record<string, string> = { _jobId: params.jobId };
+  if (params.previewTaskId) extras._taskId = params.previewTaskId;
   return await prisma.generation.create({
     data: {
       userId: params.userId,
@@ -107,6 +109,31 @@ export async function finalizeRunningGeneration(params: {
     },
     select: { id: true, slug: true },
   });
+}
+
+// ── Найти генерацию по id заказа (PreviewTask) ───────────────────
+export async function getGenerationByPreviewTaskId(userId: string, previewTaskId: string) {
+  const rows = await prisma.generation.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    select: {
+      id: true,
+      topic: true,
+      pages: true,
+      workType: true,
+      status: true,
+      slug: true,
+      extras: true,
+      createdAt: true,
+    },
+  });
+
+  for (const row of rows) {
+    const extras = safeParseExtras(row.extras);
+    if (extras._taskId === previewTaskId) return row;
+  }
+  return null;
 }
 
 // ── Получить все генерации пользователя ──────────────────────────

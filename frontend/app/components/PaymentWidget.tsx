@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
-import { createPortal } from "react-dom";
 import { QRCodeSVG } from "qrcode.react";
 import styles from "./PaymentWidget.module.css";
 import { detectPaymentMarket } from "@/lib/paymentMarket";
@@ -17,6 +16,13 @@ import {
   previewCacheKey,
   rememberPaymentPreview,
 } from "@/lib/paymentPreviewClient";
+import {
+  type PreviewTocRow,
+  isLockedTocRow,
+  savePreviewStructureForTask,
+  supportsPreviewStructure,
+  tocToStructure,
+} from "@/lib/previewStructure";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -28,8 +34,9 @@ interface Props {
   extras: string[];
   topic: string;
   returnUrl: string;
-  onSuccess: () => void;
-  onClose: () => void;
+  onSuccess: (ctx?: { extras?: string[] }) => void;
+  taskId?: string;
+  asideSlot?: ReactNode;
 }
 
 type Screen = "select" | "sbp" | "card";
@@ -79,7 +86,6 @@ function convertRubToKzt(rub: number) {
   return usd * KZT_PER_USD;
 }
 
-type PreviewTocRow = PreviewPayload["toc"][number];
 type PreviewExcerptSection = NonNullable<PreviewPayload["excerpt_sections"]>[number];
 
 function tocRowDepth(num: string | undefined): number {
@@ -94,6 +100,100 @@ function formatTocNum(num: string | undefined): string | null {
   const n = (num ?? "").trim();
   if (!n) return null;
   return n.endsWith(".") ? n : `${n}.`;
+}
+
+function isSourcesTocRow(title: string): boolean {
+  const t = title.toLowerCase();
+  return /(список\s+литерат|источник|references|bibliography|дерекк)/i.test(t);
+}
+
+const LOCKED_PAGE_FILLER = [
+  "В данном разделе раскрываются ключевые положения темы, приводятся аргументы и примеры из научной литературы. Текст выстроен логично и соответствует требованиям оформления по ГОСТ.",
+  "Анализ материалов показывает взаимосвязь теоретических основ и практических аспектов. Здесь формулируются выводы по подразделу и намечаются направления дальнейшего рассмотрения.",
+  "Рассматриваются основные подходы и современные точки зрения исследователей. Абзацы связаны между собой и поддерживают общую линию рассуждения работы.",
+];
+
+function isGenericLockedTitle(title: string): boolean {
+  return /^(раздел|section|бөлім)\s+\d+$/i.test(title.trim());
+}
+
+function isConclusionTocRow(title: string): boolean {
+  const t = title.toLowerCase();
+  return /(заключени|қорытынды|conclusion)/i.test(t);
+}
+
+function tocNumLabel(row: { num?: string; title: string }): string | null {
+  if (isSourcesTocRow(row.title) || isConclusionTocRow(row.title)) return null;
+  return formatTocNum(row.num);
+}
+
+function chapterTitleFromTocRow(row: { num?: string; title: string }): string {
+  if (isSourcesTocRow(row.title) || isConclusionTocRow(row.title)) return "";
+  const numLabel = formatTocNum(row.num ?? "");
+  return numLabel ? `${numLabel} ${row.title}` : row.title;
+}
+
+function getLockedChapterTitles(data: PreviewPayload, shownTitles: string[]): string[] {
+  const fromPayload = (data.locked_section_titles ?? []).map((t) => t.trim()).filter(Boolean);
+  const meaningfulPayload = fromPayload.filter((t) => !isGenericLockedTitle(t));
+  const shownNorm = new Set(shownTitles.map((s) => s.toLowerCase().trim()));
+
+  const fromToc = data.toc
+    .map(chapterTitleFromTocRow)
+    .filter(Boolean)
+    .filter((t) => !shownNorm.has(t.toLowerCase().trim()))
+    .filter((t) => !/^(введение|introduction|кіріспе|заключение|қорытынды|conclusion)$/i.test(t.trim()));
+
+  const merged = [...meaningfulPayload];
+  for (const t of fromToc) {
+    if (!merged.some((m) => m.toLowerCase() === t.toLowerCase())) merged.push(t);
+  }
+  if (merged.length === 0) merged.push(...fromPayload);
+
+  return merged.slice(0, 4);
+}
+
+function resolveExtrasSelection(workType: string, extras?: string[] | null): string[] {
+  if (workType === "Сочинение" || workType === "Эссе") return [];
+  if (Array.isArray(extras) && extras.length > 0) return extras;
+  return ["presentation", "speech"];
+}
+
+function LockedChapterSheet({ title, fillerIndex }: { title: string; fillerIndex: number }) {
+  const fillers = [
+    LOCKED_PAGE_FILLER[fillerIndex % LOCKED_PAGE_FILLER.length],
+    LOCKED_PAGE_FILLER[(fillerIndex + 1) % LOCKED_PAGE_FILLER.length],
+    LOCKED_PAGE_FILLER[(fillerIndex + 2) % LOCKED_PAGE_FILLER.length],
+  ];
+
+  return (
+    <div className={styles.docStackWrap}>
+      <div className={styles.docStackGhost2} aria-hidden />
+      <div className={styles.docStackGhost1} aria-hidden />
+      <div className={styles.docPage}>
+        <div className={styles.docPageRuler} aria-hidden />
+        <div className={styles.excerptHeadPage}>{title}</div>
+        <div className={`${styles.docPageBody} ${styles.lockedSheetBody}`}>
+          <div className={styles.lockedSheetText} aria-hidden>
+            {fillers.map((p, i) => (
+              <p key={i} className={styles.excerptPara}>{p}</p>
+            ))}
+          </div>
+          <div className={styles.lockedSheetFrost} aria-hidden />
+          <div className={styles.lockedSheetBadge}>
+            <span className={styles.lockedSheetBadgeIcon} aria-hidden>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span className={styles.lockedSheetBadgeTitle}>Генерация после оплаты</span>
+            <span className={styles.lockedSheetBadgeSub}>Раздел появится в полном DOCX</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const PREVIEW_RETENTION_TIPS = [
@@ -131,7 +231,35 @@ function truncateTopic(topic: string, max = 72): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
-function PreviewLoadingPane({ topic, workType }: { topic: string; workType: string }) {
+/** Первые абзацы читаемы, остальное под блюром (страница заказа). */
+function splitExcerptTeaser(text: string): { visible: string; hidden: string } {
+  const paragraphs = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  if (!paragraphs.length) return { visible: "", hidden: "" };
+  if (paragraphs.length === 1 && paragraphs[0].length <= 420) {
+    return { visible: paragraphs[0], hidden: "" };
+  }
+  let visible = paragraphs[0];
+  let rest = paragraphs.slice(1);
+  if (visible.length < 220 && rest.length > 0) {
+    visible = `${visible}\n\n${rest[0]}`;
+    rest = rest.slice(1);
+  }
+  return { visible, hidden: rest.join("\n\n") };
+}
+
+function essayMainPartLabel(docLang: string): string {
+  if (docLang === "kz") return "Негізгі бөлім";
+  if (docLang === "en") return "Main part";
+  return "Основная часть";
+}
+
+function PreviewLoadingPane({
+  topic,
+  workType,
+}: {
+  topic: string;
+  workType: string;
+}) {
   const steps = getPreviewWaitSteps(workType);
   const [stepIndex, setStepIndex] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
@@ -148,7 +276,7 @@ function PreviewLoadingPane({ topic, workType }: { topic: string; workType: stri
   useEffect(() => {
     const progressTick = window.setInterval(() => {
       const elapsed = (Date.now() - startRef.current) / 1000;
-      setProgress(Math.min(94, Math.round((1 - Math.exp(-elapsed / 22)) * 94)));
+      setProgress(Math.min(92, Math.round((1 - Math.exp(-elapsed / 45)) * 92)));
 
       let idx = 0;
       for (let i = steps.length - 1; i >= 0; i--) {
@@ -173,9 +301,9 @@ function PreviewLoadingPane({ topic, workType }: { topic: string; workType: stri
   const topicShort = truncateTopic(topic);
 
   return (
-    <div className={styles.previewLoading}>
+    <div className={styles.previewLoadingPage}>
       <div className={styles.previewSpinner} role="status" aria-label="Загрузка" />
-      <p className={styles.previewLoadingTitle}>Готовим предпросмотр</p>
+      <p className={styles.previewLoadingTitle}>Готовим вашу работу</p>
       {topicShort ? (
         <p className={styles.previewLoadingTopic}>
           Тема: <span>«{topicShort}»</span>
@@ -188,7 +316,9 @@ function PreviewLoadingPane({ topic, workType }: { topic: string; workType: stri
         </div>
         <span className={styles.previewProgressPct}>{progress}%</span>
       </div>
-      <p className={styles.previewEta}>Обычно 20–40 секунд · {workType}</p>
+      <p className={styles.previewEta}>
+        {`Обычно 30–90 секунд · ${workType}. Не закрывайте страницу.`}
+      </p>
 
       <ul className={styles.previewSteps} aria-label="Этапы подготовки">
         {steps.map((step, i) => {
@@ -221,35 +351,72 @@ function PaymentPreviewPane({
   loading,
   error,
   data,
-  workLabel,
   workType,
   topic,
+  onRetry,
+  topicOnlyFallback,
+  tocRows,
+  tocEditable,
+  tocEditing,
+  onStartTocEdit,
+  onCancelTocEdit,
+  onFinishTocEdit,
+  onTocTitleChange,
 }: {
   loading: boolean;
   error: string;
   data: PreviewPayload | null;
-  workLabel: string;
   workType: string;
   topic: string;
+  onRetry?: () => void;
+  /** Без превью оплаты — только карточка темы (режим генерации/готово) */
+  topicOnlyFallback?: boolean;
+  tocRows?: PreviewTocRow[];
+  tocEditable?: boolean;
+  tocEditing?: boolean;
+  onStartTocEdit?: () => void;
+  onCancelTocEdit?: () => void;
+  onFinishTocEdit?: () => void;
+  onTocTitleChange?: (index: number, title: string) => void;
 }) {
+  const colClass = styles.previewColPage;
+
   if (loading) {
     return (
-      <div className={styles.previewCol}>
-        <div className={styles.previewBadge}>Предпросмотр</div>
+      <div className={colClass}>
         <PreviewLoadingPane topic={topic} workType={workType} />
       </div>
     );
   }
   if (error && !data) {
     return (
-      <div className={styles.previewCol}>
-        <div className={styles.previewBadge}>Предпросмотр</div>
+      <div className={colClass}>
         <p className={styles.previewErrorText}>{error}</p>
-        <p className={styles.previewHintMuted}>Оплата доступна в этом окне — на широком экране справа, на телефоне ниже превью.</p>
+        {onRetry ? (
+          <button type="button" className={styles.previewRetryBtn} onClick={onRetry}>
+            Повторить загрузку превью
+          </button>
+        ) : null}
+        <p className={styles.previewHintMuted}>Оплата — в блоке справа (на телефоне ниже).</p>
       </div>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    if (topicOnlyFallback) {
+      return (
+        <div className={colClass}>
+          <div className={styles.pageTopicCard}>
+            <span className={styles.pageTopicBadge}>{workType}</span>
+            <h1 className={styles.pageTopicTitle}>{topic}</h1>
+            <p className={styles.pageTopicMeta}>
+              {WORK_PRICES[workType]?.pages ?? ""} · DOCX по ГОСТ · уникальность 70–90%
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const rawSections = (data.excerpt_sections ?? []).filter((s) => (s.text || "").trim());
   const sections: PreviewExcerptSection[] =
@@ -258,82 +425,169 @@ function PaymentPreviewPane({
       : [{ title: data.excerpt_title, text: data.excerpt }];
 
   const isEssayLike = workType === "Сочинение" || workType === "Эссе";
-  const tocHeadline = isEssayLike
-    ? data.doc_lang === "kz"
-      ? "Негізгі бөлім"
-      : data.doc_lang === "en"
-        ? "Main part"
-        : "Основная часть"
-    : data.doc_lang === "kz"
+  const displayToc = tocRows ?? data.toc;
+  const showTocBlock = data.has_toc_sheet && displayToc.length > 0 && !isEssayLike;
+  const tocHeadline =
+    data.doc_lang === "kz"
       ? "МАЗМҰНЫ"
       : data.doc_lang === "en"
         ? "CONTENTS"
         : "СОДЕРЖАНИЕ";
-
-  const tocRows = isEssayLike
-    ? data.toc.filter((row) => {
-        const n = (row.num ?? "").trim();
-        return n === "1" || n.startsWith("1.");
-      })
-    : data.toc;
+  const shownSectionTitles = sections.map((s) => s.title);
+  const lockedChapterTitles = getLockedChapterTitles(data, shownSectionTitles);
 
   return (
-    <div className={styles.previewCol}>
-      <div className={styles.previewBadge}>Предпросмотр</div>
-      <div className={styles.sheet}>
-        <div className={styles.sheetSimpTitle}>Учебная работа</div>
-        <div className={styles.sheetSimpType}>{workLabel}</div>
-        <div className={styles.sheetSimpTopic}>«{data.topic}»</div>
-        <p className={styles.sheetSimpNote}>Полный титульный лист по ГОСТ — в DOCX после оплаты</p>
+    <div className={colClass}>
+      <div className={styles.pageTopicCard}>
+        <span className={styles.pageTopicBadge}>{workType}</span>
+        <h1 className={styles.pageTopicTitle}>{data.topic}</h1>
+        <p className={styles.pageTopicMeta}>
+          {WORK_PRICES[workType]?.pages ?? ""} · DOCX по ГОСТ · уникальность 70–90%
+        </p>
       </div>
-      {data.has_toc_sheet && tocRows.length > 0 && (
-        <div className={styles.sheet}>
-          <div className={styles.tocHead}>{tocHeadline}</div>
-          <ul className={styles.tocList}>
-            {tocRows.map((row, i) => {
+      {showTocBlock && (
+        <div className={styles.pageSectionCard}>
+          <div className={styles.tocHeadRow}>
+            <div className={styles.tocHeadPage}>{tocHeadline}</div>
+            {tocEditable && !tocEditing && onStartTocEdit ? (
+              <button type="button" className={styles.tocEditBtn} onClick={onStartTocEdit}>
+                Изменить
+              </button>
+            ) : null}
+            {tocEditing && onCancelTocEdit && onFinishTocEdit ? (
+              <div className={styles.tocEditActions}>
+                <button type="button" className={styles.tocEditCancelBtn} onClick={onCancelTocEdit}>
+                  Отмена
+                </button>
+                <button type="button" className={styles.tocEditDoneBtn} onClick={onFinishTocEdit}>
+                  Готово
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <ul className={styles.tocListPage}>
+            {displayToc.map((row, i) => {
               const depth = tocRowDepth(row.num);
-              const numLabel = formatTocNum(row.num);
+              const numLabel = tocNumLabel(row);
+              const locked = isLockedTocRow(row);
+              const canEditRow = tocEditing && onTocTitleChange && !locked;
               return (
                 <li
-                  key={i}
-                  className={styles.tocRow}
+                  key={`${row.num ?? ""}-${i}`}
+                  className={`${styles.tocRow}${locked && tocEditing ? ` ${styles.tocRowLocked}` : ""}`}
                   style={{ paddingLeft: `${6 + depth * 15}px` }}
                 >
                   <span className={styles.tocRowMain}>
                     {numLabel ? <span className={styles.tocNum}>{numLabel}</span> : null}
-                    <span className={styles.tocTitle}>{row.title}</span>
+                    {canEditRow ? (
+                      <input
+                        type="text"
+                        className={styles.tocTitleInput}
+                        value={row.title}
+                        maxLength={200}
+                        aria-label={`Название раздела ${numLabel || i + 1}`}
+                        onChange={(e) => onTocTitleChange(i, e.target.value)}
+                      />
+                    ) : (
+                      <span className={locked && tocEditing ? styles.tocTitleLocked : styles.tocTitle}>
+                        {row.title}
+                      </span>
+                    )}
                   </span>
-                  <span className={styles.tocPage}>{row.page}</span>
+                  {!tocEditing ? <span className={styles.tocPage}>{row.page}</span> : null}
                 </li>
               );
             })}
           </ul>
+          {tocEditing ? (
+            <p className={styles.tocEditHint}>
+              Редактируются только главы и подглавы. Введение, заключение и список литературы не меняются.
+            </p>
+          ) : null}
         </div>
       )}
-      {sections.map((sec, idx) => (
-        <div key={idx} className={styles.sheet}>
-          <div className={styles.excerptSectionWrap}>
-            <div className={styles.excerptHead}>{sec.title}</div>
-            <div className={styles.excerptSectionClip}>
-              <div className={styles.excerptBody}>
-                {sec.text.split(/\n\n+/).filter(Boolean).map((p, i) => (
-                  <p key={i} className={styles.excerptPara}>{p}</p>
-                ))}
+      {!isEssayLike && (
+        <h2 className={styles.pageSectionTitle}>Фрагмент документа</h2>
+      )}
+      {sections.map((sec, idx) => {
+        const sectionTitle = isEssayLike ? essayMainPartLabel(data.doc_lang) : sec.title;
+        const { visible, hidden } = splitExcerptTeaser(sec.text);
+        const bodyParas = sec.text.split(/\n\n+/).filter(Boolean);
+
+        return (
+        <div key={idx}>
+        <div className={styles.docStackWrap}>
+              <div className={styles.docStackGhost2} aria-hidden />
+              <div className={styles.docStackGhost1} aria-hidden />
+              <div className={styles.docPage}>
+                <div className={styles.docPageRuler} aria-hidden />
+                <div
+                  className={
+                    isEssayLike
+                      ? styles.pageDocSheetBar
+                      : styles.excerptHeadPage
+                  }
+                >
+                  {sectionTitle}
+                </div>
+                <div className={styles.docPageBody}>
+                  {visible
+                    .split(/\n\n+/)
+                    .filter(Boolean)
+                    .map((p, i) => (
+                      <p key={`v-${i}`} className={styles.excerptPara}>{p}</p>
+                    ))}
+                  {hidden ? (
+                    <div className={styles.excerptPageHidden}>
+                      {hidden.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                        <p key={`h-${i}`} className={styles.excerptPara}>{p}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {!hidden && bodyParas.length > 1 ? (
+                    <div className={styles.excerptGhostTail} aria-hidden>
+                      {bodyParas.slice(1, 3).map((p, i) => (
+                        <p key={`g-${i}`} className={styles.excerptPara}>{p}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className={styles.excerptFrostOverlay} aria-hidden />
+                  <div className={styles.excerptPayWall}>
+                    <span className={styles.excerptPayWallIcon} aria-hidden>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                        <path d="M8 11V8a4 4 0 118 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    <span className={styles.excerptPayWallTitle}>Генерация после оплаты</span>
+                    <span className={styles.excerptPayWallSub}>Все главы, заключение и список литературы — в DOCX</span>
+                  </div>
+                </div>
               </div>
-              <div className={styles.excerptSectionFade} aria-hidden />
-              <div className={styles.excerptSectionTeaser}>
-                <span className={styles.excerptSectionTeaserLock} aria-hidden>🔒</span>
-                <span>Продолжение — в DOCX после оплаты</span>
-              </div>
-            </div>
-          </div>
         </div>
-      ))}
+        </div>
+      );
+      })}
+      {lockedChapterTitles.length > 0 ? (
+        <div className={styles.lockedChaptersBlock}>
+          {lockedChapterTitles.map((title, li) => (
+            <LockedChapterSheet key={`${title}-${li}`} title={title} fillerIndex={li} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export default function PaymentWidget({ workType, extras, topic, returnUrl, onSuccess, onClose }: Props) {
+export default function PaymentWidget({
+  workType,
+  extras,
+  topic,
+  returnUrl,
+  onSuccess,
+  taskId,
+  asideSlot,
+}: Props) {
   const { data: session, update: updateSession } = useSession();
   const skipMetrikaRef = useRef(false);
   useEffect(() => {
@@ -362,18 +616,73 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
   const widgetRef                       = useRef<any>(null);
   const cardInitRef                     = useRef(false);
   const [confirmationToken, setConfirmationToken] = useState("");
-  const modalRef = useRef<HTMLDivElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
-  const prevFocusedRef = useRef<HTMLElement | null>(null);
-  const scrollLockYRef = useRef(0);
 
-  const [previewExhausted, setPreviewExhausted] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [previewData, setPreviewData] = useState<PreviewPayload | null>(null);
   const [previewError, setPreviewError] = useState("");
+  const [previewRetryKey, setPreviewRetryKey] = useState(0);
+  const [editedToc, setEditedToc] = useState<PreviewTocRow[] | null>(null);
+  const [tocEditing, setTocEditing] = useState(false);
 
-  const showPreviewColumn = !previewExhausted;
+  const supportsTocStructure = supportsPreviewStructure(workType);
+  const effectiveToc = editedToc ?? previewData?.toc ?? [];
+
+  const supportsExtras = workType !== "Сочинение" && workType !== "Эссе";
+  const [selectedExtras, setSelectedExtras] = useState<string[]>(() =>
+    resolveExtrasSelection(workType, extras),
+  );
+
+  useEffect(() => {
+    if (Array.isArray(extras) && extras.length > 0) {
+      setSelectedExtras(extras);
+    }
+  }, [extras]);
+
+  useEffect(() => {
+    if (!supportsExtras) return;
+    try {
+      sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(selectedExtras));
+    } catch { /* ignore */ }
+  }, [selectedExtras, supportsExtras]);
+
+  const toggleExtra = (key: "presentation" | "speech") => {
+    setSelectedExtras((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
+    );
+  };
+
+  useEffect(() => {
+    setEditedToc(null);
+    setTocEditing(false);
+  }, [topic, workType, previewRetryKey]);
+
+  useEffect(() => {
+    if (!taskId || !supportsTocStructure) return;
+    const toc = editedToc ?? previewData?.toc;
+    if (!toc?.length) return;
+    savePreviewStructureForTask(taskId, tocToStructure(toc));
+  }, [taskId, supportsTocStructure, editedToc, previewData?.toc]);
+
+  function handleTocTitleChange(index: number, title: string) {
+    setEditedToc((prev) => {
+      const base = prev ?? previewData?.toc ?? [];
+      const row = base[index];
+      if (!row || isLockedTocRow(row)) return prev ?? base;
+      return base.map((r, i) => (i === index ? { ...r, title: title.slice(0, 200) } : r));
+    });
+  }
+
+  function finishCheckoutSuccess(ctx?: { extras?: string[] }) {
+    onSuccess(ctx);
+  }
+
+  const showPreviewColumn = true;
+
+  const reloadPreview = () => {
+    setPreviewLoading(true);
+    setPreviewError("");
+    setPreviewRetryKey((k) => k + 1);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -384,7 +693,6 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
       setPreviewData(cached);
       setPreviewLoading(false);
       setPreviewError("");
-      setPreviewExhausted(false);
       return;
     }
 
@@ -405,11 +713,17 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
           setPreviewData(restore.previewData);
           setPreviewLoading(false);
           setPreviewError("");
-          setPreviewExhausted(false);
           return;
         }
       }
     } catch { /* ignore */ }
+
+    // Режим генерации/готово: не запрашиваем превью оплаты повторно (иначе слева снова «6%»)
+    if (asideSlot) {
+      setPreviewLoading(false);
+      setPreviewError("");
+      return;
+    }
 
     void (async () => {
       const result = await fetchPaymentPreviewDeduped(topic, workType);
@@ -418,13 +732,7 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         setPreviewData(result.data);
         setPreviewLoading(false);
         setPreviewError("");
-        setPreviewExhausted(false);
         void updateSession();
-        return;
-      }
-      if (result.code === "PREVIEW_USED") {
-        setPreviewExhausted(true);
-        setPreviewLoading(false);
         return;
       }
       setPreviewError(result.error);
@@ -434,18 +742,19 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- только тема/тип; updateSession вызывается при успехе
-  }, [topic, workType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- тема/тип/retry; updateSession при успехе
+  }, [topic, workType, previewRetryKey, asideSlot]);
 
   const lang = detectDominantLang(topic);
   const userRole = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = userRole === "admin";
   const firstOrderDiscountEligible =
     (session?.user as { firstOrderDiscountEligible?: boolean } | undefined)
       ?.firstOrderDiscountEligible === true;
   const discountActive =
     firstOrderDiscountEligible && userRole !== "admin" && userRole !== "yukassa_test";
   const base = WORK_PRICES[workType]?.price ?? 0;
-  const extrasAmount = (extras ?? []).reduce((sum, item) => sum + (EXTRAS_PRICES[item] ?? 0), 0);
+  const extrasAmount = selectedExtras.reduce((sum, item) => sum + (EXTRAS_PRICES[item] ?? 0), 0);
   const orderTotals = calcWorkOrderTotals(base, extrasAmount, discountActive);
   const totalRub = orderTotals.totalRub;
   const originalTotalRub = orderTotals.originalTotalRub;
@@ -472,49 +781,6 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
     return () => mq.removeEventListener("change", onMq);
   }, []);
 
-  useEffect(() => {
-    scrollLockYRef.current = window.scrollY;
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtmlOb = html.style.overscrollBehavior;
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-    const prevBodyPosition = body.style.position;
-    const prevBodyTop = body.style.top;
-    const prevBodyLeft = body.style.left;
-    const prevBodyRight = body.style.right;
-    const prevBodyWidth = body.style.width;
-    html.style.overscrollBehavior = "none";
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollLockYRef.current}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    return () => {
-      html.style.overscrollBehavior = prevHtmlOb;
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-      body.style.position = prevBodyPosition;
-      body.style.top = prevBodyTop;
-      body.style.left = prevBodyLeft;
-      body.style.right = prevBodyRight;
-      body.style.width = prevBodyWidth;
-      window.scrollTo(0, scrollLockYRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const el = backdropRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.target === el) e.preventDefault();
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-
   // Если тема явно на казахском — показываем KZ-рынок и Robokassa по умолчанию.
   // Это особенно важно для русскоязычного интерфейса, когда пользователь пишет тему на казахском.
   useEffect(() => {
@@ -530,43 +796,6 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
       sbpTimerRef.current && clearInterval(sbpTimerRef.current);
       widgetRef.current?.destroy?.();
     };
-  }, []);
-
-  // Делаем модалку доступной с клавиатуры: фокус внутрь и возврат фокуса назад.
-  useEffect(() => {
-    prevFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeBtnRef.current?.focus();
-    return () => {
-      prevFocusedRef.current?.focus();
-    };
-  }, []);
-
-  // Tab не выходит за пределы модалки (focus trap). Закрытие — только по крестику.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (!modalRef.current) return;
-      if (e.key !== "Tab") return;
-
-      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
-      );
-      if (!focusable.length) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-
-      if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      } else if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   // Инициализация виджета карты когда экран = "card" и токен получен
@@ -613,9 +842,10 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workType,
-          extras: extras.length > 0 ? extras : undefined,
+          extras: selectedExtras.length > 0 ? selectedExtras : undefined,
           method,
           market: provider === "robokassa" ? "kz" : "ru",
+          ...(taskId ? { taskId } : {}),
         }),
       });
       const data = await res.json();
@@ -625,13 +855,15 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         return;
       }
 
-      // Сохраняем paymentId в pendingGeneration
       try {
         const pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");
-        sessionStorage.setItem("pendingGeneration", JSON.stringify({ ...pending, paymentId: data.paymentId }));
+        sessionStorage.setItem(
+          "pendingGeneration",
+          JSON.stringify({ ...pending, paymentId: data.paymentId, ...(taskId ? { taskId } : {}) }),
+        );
       } catch {}
 
-      // Robokassa / внешний redirect — сохраняем модалку для возврата «Назад»
+      // Robokassa / внешний redirect — сохраняем превью для возврата «Назад»
       if (typeof data.paymentUrl === "string" && data.paymentUrl) {
         persistPaymentWidgetRestore();
         window.location.href = data.paymentUrl;
@@ -663,8 +895,9 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workType,
-          extras: extras.length > 0 ? extras : undefined,
+          extras: selectedExtras.length > 0 ? selectedExtras : undefined,
           market: "kz",
+          ...(taskId ? { taskId } : {}),
         }),
       });
       const data = await res.json();
@@ -674,7 +907,10 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
       }
       try {
         const pending = JSON.parse(sessionStorage.getItem("pendingGeneration") || "{}");
-        sessionStorage.setItem("pendingGeneration", JSON.stringify({ ...pending, paymentId: data.paymentId }));
+        sessionStorage.setItem(
+          "pendingGeneration",
+          JSON.stringify({ ...pending, paymentId: data.paymentId, ...(taskId ? { taskId } : {}) }),
+        );
       } catch {}
       if (typeof data.paymentUrl === "string" && data.paymentUrl) {
         persistPaymentWidgetRestore();
@@ -701,8 +937,9 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
         JSON.stringify({
           topic,
           workType,
-          extras: extras ?? [],
+          extras: selectedExtras ?? [],
           pages,
+          taskId: taskId ?? null,
           openedAt: Date.now(),
           previewData: previewData ?? null,
         })
@@ -727,7 +964,7 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
               });
             }
           } catch { /* ignore */ }
-          onSuccess();
+          finishCheckoutSuccess({ extras: selectedExtras });
         } else if (data.status === "canceled") {
           stopSbp();
           setError("Платёж отменён");
@@ -765,13 +1002,33 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
     return `${m}:${s}`;
   }
 
-  function handleClose() {
-    stopSbp();
-    widgetRef.current?.destroy?.();
-    onClose();
+  function handleAdminStart() {
+    finishCheckoutSuccess({ extras: selectedExtras.length > 0 ? selectedExtras : undefined });
   }
 
   if (!mounted) return null;
+
+  const previewPane = (
+    <PaymentPreviewPane
+      loading={previewLoading}
+      error={previewError}
+      data={previewData}
+      workType={workType}
+      topic={topic}
+      onRetry={asideSlot ? undefined : reloadPreview}
+      topicOnlyFallback={!!asideSlot}
+      tocRows={supportsTocStructure ? effectiveToc : undefined}
+      tocEditable={supportsTocStructure && !asideSlot && effectiveToc.length > 0}
+      tocEditing={tocEditing}
+      onStartTocEdit={() => setTocEditing(true)}
+      onCancelTocEdit={() => {
+        setEditedToc(null);
+        setTocEditing(false);
+      }}
+      onFinishTocEdit={() => setTocEditing(false)}
+      onTocTitleChange={handleTocTitleChange}
+    />
+  );
 
   const payColumn = (
     <>
@@ -780,19 +1037,21 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
           {useCompactPay ? (
             <>
               <div className={styles.payCompactHead}>
-                <h2 id="payment-widget-title" className={styles.payCompactTitle}>Оплата</h2>
+                <h2 id="payment-widget-title" className={styles.payCompactTitle}>
+                  {isAdmin ? "Генерация" : "Оплата"}
+                </h2>
                 <div className={styles.payCompactAmountWrap}>
-                  {priceDiscountApplied && (
+                  {!isAdmin && priceDiscountApplied && (
                     <span className={styles.payDiscountBadge}>−{FIRST_ORDER_DISCOUNT_PERCENT}%</span>
                   )}
                   <span className={styles.payCompactAmount}>
-                    {priceDiscountApplied && !isKzUi && (
+                    {!isAdmin && priceDiscountApplied && !isKzUi && (
                       <span className={styles.payAmountOld} aria-hidden>
                         {formatAmount(originalTotalRub, "RUB")}
                       </span>
                     )}
-                    {primaryAmount}
-                    {secondaryAmount ? (
+                    {isAdmin ? "0 ₽" : primaryAmount}
+                    {!isAdmin && secondaryAmount ? (
                       <span className={styles.payCompactAmountSub}> {secondaryAmount}</span>
                     ) : null}
                   </span>
@@ -800,7 +1059,16 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
               </div>
               <p className={styles.orderCompact} aria-label="Состав заказа">
                 {workLabel} · {langLabel}
+                {selectedExtras.includes("presentation") ? " · PPTX" : ""}
+                {selectedExtras.includes("speech") ? " · Выступление" : ""}
               </p>
+              {supportsExtras ? (
+                <OrderExtrasPicker
+                  compact
+                  selected={selectedExtras}
+                  onToggle={toggleExtra}
+                />
+              ) : null}
               {previewLoading && (
                 <p className={styles.payWhilePreviewCompact}>
                   Готовим превью — оплата будет ниже после прокрутки
@@ -809,26 +1077,30 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
             </>
           ) : (
             <>
-              <h2 id="payment-widget-title" className={styles.title}>Оплата заказа</h2>
-              <p className={styles.subtitle}>Выберите способ оплаты</p>
+              <h2 id="payment-widget-title" className={styles.title}>
+                {isAdmin ? "Запуск генерации" : "Оплата заказа"}
+              </h2>
+              <p className={styles.subtitle}>
+                {isAdmin ? "Без оплаты для администратора" : "Выберите способ оплаты"}
+              </p>
               {previewLoading && (
                 <p className={styles.payWhilePreview}>
-                  Превью готовится слева — способ оплаты можно выбрать уже сейчас
+                  Превью готовится слева — {isAdmin ? "запуск будет ниже" : "способ оплаты можно выбрать уже сейчас"}
                 </p>
               )}
               <div className={styles.orderSummary} aria-label="Состав заказа">
                 <div className={styles.orderLine}>
-                  <span className={styles.orderKey}>К оплате:</span>
+                  <span className={styles.orderKey}>{isAdmin ? "Стоимость:" : "К оплате:"}</span>
                   <span className={styles.orderValue}>
-                    {priceDiscountApplied && !isKzUi && (
+                    {!isAdmin && priceDiscountApplied && !isKzUi && (
                       <span className={styles.payAmountOld} aria-hidden>
                         {formatAmount(originalTotalRub, "RUB")}{" "}
                       </span>
                     )}
-                    {primaryAmount}{secondaryAmount ? ` ${secondaryAmount}` : ""}
+                    {isAdmin ? "0 ₽" : `${primaryAmount}${secondaryAmount ? ` ${secondaryAmount}` : ""}`}
                   </span>
                 </div>
-                {priceDiscountApplied && (
+                {!isAdmin && priceDiscountApplied && (
                   <div className={styles.orderLine}>
                     <span className={styles.orderKey}>Скидка:</span>
                     <span className={styles.orderValue}>−{FIRST_ORDER_DISCOUNT_PERCENT}% · первый заказ</span>
@@ -843,10 +1115,19 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
                   <span className={styles.orderValue}>{langLabel}</span>
                 </div>
               </div>
-              <PaymentGuaranteesList />
-              <p className={styles.payAfterLine}>После оплаты — DOCX в разделе «Мои работы»</p>
+              {supportsExtras ? (
+                <OrderExtrasPicker
+                  selected={selectedExtras}
+                  onToggle={toggleExtra}
+                />
+              ) : null}
+              {!isAdmin && <PaymentGuaranteesList />}
             </>
           )}
+          {isAdmin ? (
+            <AdminOrderActions compact={useCompactPay} onStart={handleAdminStart} />
+          ) : (
+            <>
           {error && <p className={styles.errorBanner}>⚠ {error}</p>}
           {useCompactPay ? (
             <>
@@ -1010,9 +1291,14 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
               </button>
             </div>
           )}
+          <p className={`${styles.payAfterLine} ${styles.payAfterLinePage}`}>
+            После оплаты — DOCX в разделе «Мои работы»
+          </p>
           <div className={styles.footer}>
             <YookassaBadge />
           </div>
+            </>
+          )}
             </>
           )}
         </>
@@ -1077,38 +1363,102 @@ export default function PaymentWidget({ workType, extras, topic, returnUrl, onSu
     </>
   );
 
-  return createPortal(
-    <div
-      ref={backdropRef}
-      className={styles.backdrop}
-    >
-      <div
-        ref={modalRef}
-        className={`${styles.card} ${showPreviewColumn ? styles.cardWide : ""} ${useCompactPay ? styles.cardWideMobile : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="payment-widget-title"
-      >
-        <button ref={closeBtnRef} className={styles.closeBtn} onClick={handleClose} aria-label="Закрыть">✕</button>
-
+  return (
+    <div className={styles.pageRoot}>
+      <div className={styles.pageMain}>
         {showPreviewColumn ? (
-          <div className={styles.layoutGrid}>
-            <PaymentPreviewPane
-              loading={previewLoading}
-              error={previewError}
-              data={previewData}
-              workLabel={workLabel}
-              workType={workType}
-              topic={topic}
-            />
-            <div className={`${styles.payCol} ${useCompactPay ? styles.payColInFlow : ""}`}>{payColumn}</div>
+          <div className={styles.pageLayoutGrid}>
+            <div className={styles.pagePreviewMain}>{previewPane}</div>
+            <aside className={styles.pagePayAside}>
+              <div className={`${styles.pagePaySticky} ${asideSlot ? styles.pagePayStickyAside : ""}`}>{asideSlot ?? payColumn}</div>
+            </aside>
           </div>
         ) : (
-          <div className={styles.payCol}>{payColumn}</div>
+          <div className={styles.pagePayOnly}>
+            <div className={styles.pagePaySticky}>{asideSlot ?? payColumn}</div>
+          </div>
         )}
       </div>
-    </div>,
-    document.body
+    </div>
+  );
+}
+
+function AdminOrderActions({
+  compact,
+  onStart,
+}: {
+  compact?: boolean;
+  onStart: () => void;
+}) {
+  return (
+    <div className={compact ? styles.adminBlockCompact : styles.adminBlock}>
+      <p className={styles.adminFreeBadge}>Бесплатно · администратор</p>
+      <button type="button" className={styles.adminStartBtn} onClick={onStart}>
+        Запустить генерацию
+      </button>
+      <p className={`${styles.payAfterLine} ${styles.payAfterLinePage}`}>
+        Результат на этой странице и в «Мои работы»
+      </p>
+    </div>
+  );
+}
+
+function OrderExtrasPicker({
+  selected,
+  onToggle,
+  compact = false,
+}: {
+  selected: string[];
+  onToggle: (key: "presentation" | "speech") => void;
+  compact?: boolean;
+}) {
+  const presOn = selected.includes("presentation");
+  const speechOn = selected.includes("speech");
+
+  return (
+    <div className={compact ? styles.extrasBlockCompact : styles.extrasBlock}>
+      <p className={styles.extrasBlockLabel}>Дополнительно к работе</p>
+      <div className={styles.extrasToggleList}>
+        <label className={styles.extrasToggleRow}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={presOn}
+            onChange={() => onToggle("presentation")}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.extrasToggleMeta}>
+            <span className={styles.extrasToggleTitle}>
+              <img src="/pptx-icon.svg" alt="" className={styles.extrasToggleIcon} />
+              Презентация
+            </span>
+            <span className={styles.extrasToggleAnnot}>
+              PPTX для защиты — слайды по структуре вашей работы
+            </span>
+          </span>
+          <span className={styles.extrasTogglePrice}>+{EXTRAS_PRICES.presentation} ₽</span>
+        </label>
+        <label className={styles.extrasToggleRow}>
+          <input
+            type="checkbox"
+            className={styles.toggleInput}
+            checked={speechOn}
+            onChange={() => onToggle("speech")}
+          />
+          <span className={styles.toggleSlider} />
+          <span className={styles.extrasToggleMeta}>
+            <span className={styles.extrasToggleTitle}>
+              <img src="/txt-icon.svg" alt="" className={styles.extrasToggleIcon} />
+              Текст выступления
+            </span>
+            <span className={styles.extrasToggleAnnot}>
+              DOCX на 3–5 минут — готовый сценарий для защиты
+            </span>
+          </span>
+          <span className={styles.extrasTogglePrice}>+{EXTRAS_PRICES.speech} ₽</span>
+        </label>
+      </div>
+    </div>
   );
 }
 

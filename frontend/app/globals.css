@@ -120,7 +120,7 @@ main, .page-transition {
 
 /* ── Плавный скролл к якорям ── */
 :target {
-  scroll-margin-top: 72px; /* высота шапки */
+  scroll-margin-top: var(--site-header-h, 72px);
 }
 
 @keyframes twBlink {
@@ -153,11 +153,6 @@ main, .page-transition {
   --radius:    12px;
   --radius-sm: 8px;
   --radius-lg: 20px;
-}
-
-/* Когда модальное окно результата открыто — скрываем виджет генерации */
-body.modal-open [class*="GenerationWidget_widget"] {
-  display: none !important;
 }
 
 /* DOCX-превью — визуальная тень вокруг каждой страницы.
@@ -286,13 +281,6 @@ body.modal-open [class*="GenerationWidget_widget"] {
 .docx-preview p:has(.docx-preview-tab-stop) {
   line-height: 1.5 !important;
   align-items: center;
-}
-
-/* Когда модалка открыта — шапка уходит под оверлей */
-body.modal-open header {
-  z-index: 1 !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }
 
 /* ── Клавиатурная навигация: focus-visible ── */

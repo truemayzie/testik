@@ -433,3 +433,15 @@
   color: #1b3a6b;
 }
 .testSubmit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.oauthError {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  text-align: left;
+}

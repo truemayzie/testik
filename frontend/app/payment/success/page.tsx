@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import styles from "./success.module.css";
 import { isAdminSessionRole, reachPaymentSuccessGoalOnce } from "@/lib/metrika";
+import { loadPendingOrderDraft } from "@/lib/pendingOrderDraft";
+
+function postPaymentGenerateUrl(): string {
+  const draft = loadPendingOrderDraft();
+  if (draft?.taskId) {
+    return `/order/${draft.taskId}?autoGenerate=1`;
+  }
+  return "/dashboard";
+}
 
 type State = "waiting" | "succeeded" | "cancelled" | "timeout";
 
@@ -30,10 +39,7 @@ export default function PaymentSuccessPage() {
       let pending: { paymentId?: string; returnTo?: string } = {};
       try { pending = JSON.parse(sessionStorage.getItem("pendingExtras") || "{}"); } catch {}
 
-      const extrasTarget =
-        pending.returnTo === "dashboard"
-          ? "/dashboard?extrasAutoGenerate=1"
-          : "/?extrasAutoGenerate=1";
+      const extrasTarget = "/dashboard?extrasAutoGenerate=1";
 
       const paymentId = pending.paymentId;
       if (!paymentId) {
@@ -78,7 +84,7 @@ export default function PaymentSuccessPage() {
 
     // Нет paymentId — скорее всего dev-режим, просто редирект
     if (!paymentId) {
-      router.push("/?autoGenerate=1");
+      router.push(postPaymentGenerateUrl());
       return;
     }
 
@@ -95,7 +101,7 @@ export default function PaymentSuccessPage() {
           clearInterval(id);
           reachPaymentSuccessGoalOnce(`ym_pay_ok_${paymentId}`, { skip: skipMetrikaRef.current });
           setState("succeeded");
-          setTimeout(() => router.push("/?autoGenerate=1"), 1200);
+          setTimeout(() => router.push(postPaymentGenerateUrl()), 1200);
           return;
         }
 
@@ -111,7 +117,7 @@ export default function PaymentSuccessPage() {
         // Тайм-аут: webhook ещё не пришёл, но скорее всего оплата прошла.
         // Редиректим — generate/route.ts проверит платёж ещё раз.
         setState("timeout");
-        setTimeout(() => router.push("/?autoGenerate=1"), 2000);
+        setTimeout(() => router.push(postPaymentGenerateUrl()), 2000);
       }
     }, 2000);
 

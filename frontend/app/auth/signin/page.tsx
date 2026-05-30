@@ -2,26 +2,41 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import styles from "./signin.module.css";
 
-export default function SignInPage() {
+function SignInInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail]     = useState("");
   const [sent, setSent]       = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+  const [oauthError, setOauthError] = useState("");
+  const callbackUrl = searchParams.get("callbackUrl") || "/?fromAuth=1";
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "OAuthAccountNotLinked") {
+      setOauthError(
+        "Этот способ входа привязан к другому профилю. Выйдите из аккаунта (кнопка «Выйти») и войдите снова — или используйте тот же способ, что раньше.",
+      );
+    } else if (err) {
+      setOauthError("Не удалось войти. Попробуйте ещё раз или другой способ.");
+    }
+  }, [searchParams]);
 
   async function handleOAuth(provider: string) {
     setLoading(provider);
-    await signIn(provider, { callbackUrl: "/?fromAuth=1" });
+    await signIn(provider, { callbackUrl });
   }
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading("email");
-    await signIn("email", { email, callbackUrl: "/?fromAuth=1", redirect: false });
+    await signIn("email", { email, callbackUrl, redirect: false });
     setSent(true);
     setLoading(null);
   }
@@ -51,6 +66,10 @@ export default function SignInPage() {
         <p className={styles.subtitle}>
           Сохраняйте работы и скачивайте их в любое время
         </p>
+
+        {oauthError ? (
+          <p className={styles.oauthError} role="alert">{oauthError}</p>
+        ) : null}
 
         {sent ? (
           <div className={styles.successBox}>
@@ -143,5 +162,13 @@ export default function SignInPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className={styles.page}><p style={{ color: "#64748b" }}>Загрузка…</p></div>}>
+      <SignInInner />
+    </Suspense>
   );
 }

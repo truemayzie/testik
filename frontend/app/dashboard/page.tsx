@@ -1,13 +1,15 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import styles from "./dashboard.module.css";
-import PresentationViewer, { type Slide } from "../components/PresentationViewer";
+import IonPresentationPreview from "../components/IonPresentationPreview";
+import { extractSlidesFromPresentationSlides, type IonSlide } from "@/lib/presentationSlides";
 import { useModalA11y } from "../lib/useModalA11y";
 import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
+import { findOrderTaskIdByGenerationId } from "@/lib/orderGenerationSession";
 import { detectPaymentMarket } from "@/lib/paymentMarket";
 
 type Generation = {
@@ -21,6 +23,15 @@ type Generation = {
   extras: string | null; // JSON: {"presentation":"job_id","speech":"job_id"}
 };
 
+type PendingOrder = {
+  id: string;
+  topic: string;
+  pages: number;
+  workType: string;
+  createdAt: string;
+  status: "awaiting_payment";
+};
+
 type ReferatResult = {
   title: string;
   structure: string[];
@@ -31,12 +42,17 @@ type ReferatResult = {
   profile?: Record<string, any>;
 };
 
-type PresentationSlides = { accent: string; slides: unknown[] };
+type PresentationSlides = {
+  accent?: string;
+  slides?: unknown[];
+  provider?: string;
+};
 
 type ExtrasData = {
   presentation?: string;
   speech?: string;
   presentationSlides?: PresentationSlides;
+  _taskId?: string;
 };
 
 type ViewingGen = {
@@ -63,26 +79,6 @@ function supportsExtras(workType: string) {
   return !WORK_TYPES_WITHOUT_EXTRAS.has(workType);
 }
 
-/** Массив слайдов из extras.presentationSlides (объект, строка JSON или ошибочное «массива-сущность» в прошлых сохранениях). */
-function extractSlidesFromPresentationSlides(raw: unknown): Slide[] | null {
-  if (raw == null) return null;
-  if (Array.isArray(raw)) return raw as Slide[];
-  if (typeof raw === "string") {
-    const t = raw.trim();
-    if (!t.startsWith("{") && !t.startsWith("[")) return null;
-    try {
-      return extractSlidesFromPresentationSlides(JSON.parse(t) as unknown);
-    } catch {
-      return null;
-    }
-  }
-  if (typeof raw === "object") {
-    const s = (raw as { slides?: unknown }).slides;
-    if (Array.isArray(s)) return s as Slide[];
-  }
-  return null;
-}
-
 type TitleForm = {
   fullName: string; university: string; faculty: string;
   department: string; groupNumber: string; teacherName: string;
@@ -103,6 +99,18 @@ export default function DashboardPage() {
   const [feedbackDone, setFeedbackDone]         = useState(false);
 
   const [generations, setGenerations] = useState<Generation[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const visiblePendingOrders = useMemo(() => {
+    return pendingOrders.filter((order) => {
+      const topicKey = order.topic.trim().toLowerCase();
+      return !generations.some(
+        (g) =>
+          g.topic.trim().toLowerCase() === topicKey &&
+          g.workType === order.workType &&
+          g.status !== "failed",
+      );
+    });
+  }, [pendingOrders, generations]);
   const [loadingList, setLoadingList] = useState(true);
   const [giftWorkType, setGiftWorkType] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -122,12 +130,8 @@ export default function DashboardPage() {
 
   // Табы модального окна
   const [modalTab, setModalTab]         = useState<"work" | "presentation">("work");
-  const [presImages, setPresImages]     = useState<Record<number, string>>({});
-  const [presSlides, setPresSlides]     = useState<Slide[] | null>(null);
+  const [presSlides, setPresSlides]     = useState<IonSlide[] | null>(null);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= 768
-  );
 
   // Титульный лист
   const [titleForm, setTitleForm]     = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
@@ -150,13 +154,6 @@ export default function DashboardPage() {
   const dashExtrasProgRef = useRef(0);
 
   useEffect(() => {
-    const updateViewport = () => setIsMobileViewport(window.innerWidth <= 768);
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
-
-  useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
   }, [status, router]);
 
@@ -171,12 +168,37 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      fetch("/api/generations")
-        .then(r => r.json())
-        .then(data => { setGenerations(data); setLoadingList(false); })
+      Promise.all([
+        fetch("/api/generations").then((r) => r.json()),
+        fetch("/api/tasks", { cache: "no-store" }).then((r) => r.json()),
+      ])
+        .then(([gens, tasks]) => {
+          setGenerations(Array.isArray(gens) ? gens : []);
+          setPendingOrders(Array.isArray(tasks) ? tasks : []);
+          setLoadingList(false);
+        })
         .catch(() => setLoadingList(false));
     }
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const hasRunning = generations.some(
+      (g) => g.status !== "completed" && g.status !== "failed",
+    );
+    if (!hasRunning) return;
+
+    const timer = window.setInterval(() => {
+      void fetch("/api/generations", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((list) => {
+          if (Array.isArray(list)) setGenerations(list);
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [status, generations]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -383,7 +405,6 @@ export default function DashboardPage() {
       });
       // Инициализируем слайды для вкладки Презентация
       setModalTab("work");
-      setPresImages({});
       setPresSlides(extracted && extracted.length > 0 ? extracted : null);
       setDashPresSel(false);
       setDashSpeechSel(false);
@@ -454,8 +475,9 @@ export default function DashboardPage() {
       result:   genRow.result as ReferatResult,
     });
     setPresSlides(extractSlidesFromPresentationSlides(extrasObj?.presentationSlides));
-    setPresImages({});
-    setModalTab("presentation");
+    if (extrasObj?.presentation) {
+      setModalTab("presentation");
+    }
   }
 
   /** Запуск extras из кабинета (поллинг + сохранение в БД). */
@@ -720,20 +742,20 @@ export default function DashboardPage() {
     if (!viewingGen?.extras) return;
     if (type === "presentation") {
       const presentationJobId = viewingGen.extras.presentation;
-      const rawPs = viewingGen.extras.presentationSlides as unknown;
-      const accentMeta =
-        rawPs &&
-        typeof rawPs === "object" &&
-        !Array.isArray(rawPs) &&
-        "accent" in rawPs &&
-        typeof (rawPs as { accent?: unknown }).accent === "string"
-          ? (rawPs as { accent: string }).accent
-          : "blue";
-      const accent = accentMeta || "blue";
-      const slidesForPost = presSlides ?? extractSlidesFromPresentationSlides(rawPs);
-      const hasCustomImages = Object.keys(presImages).length > 0;
-
-      const downloadBlob = (blob: Blob) => {
+      if (!presentationJobId) {
+        alert("Для этой работы не найден заказ презентации.");
+        return;
+      }
+      setDownloadingPptx(true);
+      try {
+        const res = await fetch(`/api/download/presentation/${presentationJobId}`, { cache: "no-store" });
+        if (!res.ok) {
+          alert(
+            "Файл презентации недоступен (временные файлы хранятся 24 ч). Оформите презентацию заново в блоке «Добавить материалы»."
+          );
+          return;
+        }
+        const blob = await res.blob();
         trackWorkActivityClient({
           action: "PPTX_DOWNLOAD",
           source: "dashboard",
@@ -749,55 +771,8 @@ export default function DashboardPage() {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
-      };
-
-      const downloadByJobId = async (reason: "no_slides_saved" | "post_failed") => {
-        if (!presentationJobId) {
-          alert("Для этой работы не найден доп. заказ презентации. Оформите презентацию в кабинете.");
-          return;
-        }
-        const res = await fetch(`/api/download/presentation/${presentationJobId}`);
-        if (!res.ok) {
-          alert(
-            reason === "no_slides_saved"
-              ? "Не удалось восстановить презентацию: нет сохранённых данных в аккаунте и файла на сервере (после 24 ч временные файлы удаляются). Оформите презентацию заново во вкладке «Презентация» этой работы."
-              : "Сервер не смог заново собрать презентацию (или не хватило времени). Временного файла тоже нет. Через пару минут попробуйте снова или оформите презентацию заново во вкладке «Презентация»."
-          );
-          return;
-        }
-        const blob = await res.blob();
-        downloadBlob(blob);
-      };
-
-      if (!slidesForPost || slidesForPost.length === 0) {
-        await downloadByJobId("no_slides_saved");
-        return;
-      }
-
-      const postBody = {
-        slides: slidesForPost,
-        accent,
-        images: presImages,
-      };
-
-      setDownloadingPptx(true);
-      try {
-        const res = await fetch("/api/generate/presentation/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(postBody),
-        });
-        if (!res.ok) {
-          await downloadByJobId("post_failed");
-          return;
-        }
-        downloadBlob(await res.blob());
       } catch {
-        try {
-          await downloadByJobId("post_failed");
-        } catch {
-          alert("Ошибка скачивания, попробуйте снова");
-        }
+        alert("Ошибка скачивания, попробуйте снова");
       } finally {
         setDownloadingPptx(false);
       }
@@ -848,6 +823,21 @@ export default function DashboardPage() {
     try { return JSON.parse(raw); } catch { return null; }
   }
 
+  function resolveOrderTaskId(extras: ExtrasData | null, generationId: string): string | null {
+    return extras?._taskId || findOrderTaskIdByGenerationId(generationId);
+  }
+
+  function openGenerationCard(gen: Generation, extras: ExtrasData | null, isCompleted: boolean) {
+    if (isCompleted) {
+      handleOpen(gen.id);
+      return;
+    }
+    const orderId = resolveOrderTaskId(extras, gen.id);
+    if (orderId) {
+      router.push(`/order/${orderId}`);
+    }
+  }
+
   if (status === "loading" || status === "unauthenticated") {
     return (
       <div className={styles.loadingPage}>
@@ -872,16 +862,14 @@ export default function DashboardPage() {
   const dashExtrasTotal =
     (dashPresSel && dashCanOrderPres ? 199 : 0) +
     (dashSpeechSel && dashCanOrderSpeech ? 149 : 0);
-  const dashShowPresHero =
-    !!(
-      vxDash &&
-      modalTab === "presentation" &&
-      dashShowExtrasOrder &&
-      !(presSlides && presSlides.length > 0) &&
-      !dashExtrasBusy
-    );
+  const dashHasPresentationTab = !!vxDash?.extras?.presentation;
   const hasPresSlides = !!(presSlides && presSlides.length > 0);
-  const hasPresFileOnly = !!(vxDash?.extras?.presentation && !hasPresSlides);
+
+  useEffect(() => {
+    if (modalTab === "presentation" && !viewingGen?.extras?.presentation) {
+      setModalTab("work");
+    }
+  }, [modalTab, viewingGen?.extras?.presentation]);
 
   return (
     <div className={styles.page}>
@@ -945,7 +933,7 @@ export default function DashboardPage() {
               <div className={styles.loadingSpinner} />
               <span>Загружаем историю...</span>
             </div>
-          ) : generations.length === 0 ? (
+          ) : generations.length === 0 && visiblePendingOrders.length === 0 ? (
             <div className={styles.empty}>
               <span className={styles.emptyIcon}>📋</span>
               <p>У вас пока нет сохранённых работ</p>
@@ -953,6 +941,37 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className={styles.list}>
+              {visiblePendingOrders.map((order) => (
+                <div key={`pending-${order.id}`} className={`${styles.card} ${styles.cardAwaiting}`}>
+                  <div
+                    className={styles.cardLeft}
+                    onClick={() => router.push(`/order/${order.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && router.push(`/order/${order.id}`)}
+                  >
+                    <div className={styles.cardBadges}>
+                      <span className={styles.workType}>{order.workType}</span>
+                      <span className={styles.extrasBadgeAwaiting}>Ожидает оплаты</span>
+                    </div>
+                    <h3 className={styles.cardTitle}>{order.topic}</h3>
+                    <div className={styles.cardMeta}>
+                      <span>~{order.pages} страниц</span>
+                      <span className={styles.dot}>·</span>
+                      <span suppressHydrationWarning>{formatDate(order.createdAt)}</span>
+                    </div>
+                  </div>
+                  <div className={styles.cardActions}>
+                    <button
+                      type="button"
+                      className={styles.openBtn}
+                      onClick={() => router.push(`/order/${order.id}`)}
+                    >
+                      Оплатить
+                    </button>
+                  </div>
+                </div>
+              ))}
               {generations.map(gen => {
                 const extrasData = parseExtras(gen.extras);
                 const hasPresentation = !!extrasData?.presentation;
@@ -960,14 +979,21 @@ export default function DashboardPage() {
                 const isCompleted = gen.status === "completed";
                 const isFailed = gen.status === "failed";
                 const isRunning = !isCompleted && !isFailed;
+                const orderTaskId = resolveOrderTaskId(extrasData, gen.id);
+                const cardClickable = Boolean(orderTaskId) || isCompleted;
                 return (
                   <div key={gen.id} className={styles.card}>
                     <div
                       className={styles.cardLeft}
-                      onClick={() => { if (isCompleted) handleOpen(gen.id); }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => e.key === "Enter" && isCompleted && handleOpen(gen.id)}
+                      onClick={() => openGenerationCard(gen, extrasData, isCompleted)}
+                      role={cardClickable ? "button" : undefined}
+                      tabIndex={cardClickable ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && cardClickable) {
+                          openGenerationCard(gen, extrasData, isCompleted);
+                        }
+                      }}
+                      style={cardClickable ? { cursor: "pointer" } : undefined}
                     >
                       <div className={styles.cardBadges}>
                         <span className={styles.workType}>{gen.workType}</span>
@@ -1002,34 +1028,49 @@ export default function DashboardPage() {
                           Не завершилась
                         </button>
                       ) : isRunning ? (
-                        <button
-                          className={styles.openBtn}
-                          onClick={async () => {
-                            setLoadingView(gen.id);
-                            try {
-                              const pollRes = await fetch(
-                                `/api/generate/poll?generationId=${encodeURIComponent(gen.id)}&includeResult=0`,
-                                { cache: "no-store" }
-                              );
-                              const pollData = await pollRes.json().catch(() => ({}));
-                              if (pollData.status === "error" && pollData.error) {
-                                alert(String(pollData.error));
+                        <>
+                          {orderTaskId ? (
+                            <button
+                              type="button"
+                              className={styles.openBtn}
+                              onClick={() => router.push(`/order/${orderTaskId}`)}
+                            >
+                              Открыть заказ
+                            </button>
+                          ) : null}
+                          <button
+                            className={styles.openBtnSecondary}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setLoadingView(gen.id);
+                              try {
+                                const pollRes = await fetch(
+                                  `/api/generate/poll?generationId=${encodeURIComponent(gen.id)}&includeResult=0`,
+                                  { cache: "no-store" },
+                                );
+                                const pollData = await pollRes.json().catch(() => ({}));
+                                if (pollData.status === "error" && pollData.error) {
+                                  alert(String(pollData.error));
+                                }
+                                const listRes = await fetch("/api/generations", { cache: "no-store" });
+                                const list = await listRes.json();
+                                if (Array.isArray(list)) setGenerations(list);
+                              } finally {
+                                setLoadingView(null);
                               }
-                              const listRes = await fetch("/api/generations", { cache: "no-store" });
-                              const list = await listRes.json();
-                              if (Array.isArray(list)) setGenerations(list);
-                            } finally {
-                              setLoadingView(null);
-                            }
-                          }}
-                          disabled={loadingView === gen.id}
-                        >
-                          {loadingView === gen.id ? <span className={styles.btnSpinner} /> : "Проверить"}
-                        </button>
+                            }}
+                            disabled={loadingView === gen.id}
+                          >
+                            {loadingView === gen.id ? <span className={styles.btnSpinner} /> : "Проверить"}
+                          </button>
+                        </>
                       ) : (
                       <button
                         className={styles.openBtn}
-                        onClick={() => handleOpen(gen.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpen(gen.id);
+                        }}
                         disabled={loadingView === gen.id}
                       >
                         {loadingView === gen.id
@@ -1037,9 +1078,11 @@ export default function DashboardPage() {
                           : "Открыть"}
                       </button>
                       )}
+                      <div className={styles.cardActionsSecondary}>
                       <button
                         className={styles.downloadBtn}
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           setDownloading(gen.id);
                           try {
                             const res  = await fetch(`/api/generations/${gen.id}`);
@@ -1080,7 +1123,8 @@ export default function DashboardPage() {
                         <div className={styles.shareWrap}>
                           <button
                             className={styles.shareBtn}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               navigator.clipboard.writeText(`${window.location.origin}/preview/${gen.slug}`);
                               setCopiedId(gen.id);
                               setTimeout(() => setCopiedId(null), 2000);
@@ -1097,12 +1141,16 @@ export default function DashboardPage() {
                       {(user as typeof user & { role?: string })?.role === "admin" && (
                         <button
                           className={styles.deleteBtn}
-                          onClick={() => handleDelete(gen.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(gen.id);
+                          }}
                           disabled={deleting === gen.id}
                         >
                           {deleting === gen.id ? <span className={styles.btnSpinner} /> : "✕"}
                         </button>
                       )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1149,7 +1197,7 @@ export default function DashboardPage() {
                 <img src="/docx-icon.png" alt="" className={styles.docTabIcon} />
                 Работа
               </button>
-              {supportsExtras(viewingGen.workType) && (
+              {dashHasPresentationTab && (
                 <button type="button" className={`${styles.docTab} ${modalTab === "presentation" ? styles.docTabActive : ""}`}
                   onClick={() => setModalTab("presentation")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1162,7 +1210,7 @@ export default function DashboardPage() {
             <div className={styles.docModalBody}>
 
             {/* Левый столбец */}
-            <div className={styles.docModalLeft} style={modalTab === "presentation" ? { background: "#1a1a2e" } : undefined}>
+            <div className={styles.docModalLeft} style={modalTab === "presentation" ? { background: "#ececf3" } : undefined}>
               {/* DOCX preview — всегда в DOM, скрыт через CSS при табе Презентация */}
               <div style={{ display: modalTab === "work" ? "block" : "none" }}>
                 {previewLoading && (
@@ -1172,7 +1220,8 @@ export default function DashboardPage() {
                 )}
                 <div ref={previewContainerRef} className={styles.docPreviewContainer} />
               </div>
-              {/* PresentationViewer — скрыт при табе Работа */}
+              {/* Ion-превью — скрыто при табе Работа */}
+              {dashHasPresentationTab && (
               <div
                 style={{
                   display: modalTab === "presentation" ? "flex" : "none",
@@ -1183,105 +1232,56 @@ export default function DashboardPage() {
                   position: "relative",
                 }}
               >
-                {dashShowPresHero ? (
-                  <div className={styles.dashPresentationHero}>
-                    <p className={styles.dashPresentationHeroHint}>
-                      Выберите дополнительные материалы для вашей работы. После оплаты генерация начнется автоматически.
-                    </p>
-                    <div className={styles.dashPresentationHeroGrid}>
-                      {dashCanOrderPres && (
-                        <button
-                          type="button"
-                          className={`${styles.dashPresentationHeroCard} ${dashPresSel ? styles.dashPresentationHeroCardActive : ""}`}
-                          onClick={() => setDashPresSel(v => !v)}
-                        >
-                          <img src="/pptx-icon.svg" alt="" className={styles.dashPresentationHeroIcon} />
-                          <span className={styles.dashPresentationHeroTitle}>Презентация</span>
-                          <span className={styles.dashPresentationHeroPrice}>+199 ₽</span>
-                        </button>
-                      )}
-                      {dashCanOrderSpeech && (
-                        <button
-                          type="button"
-                          className={`${styles.dashPresentationHeroCard} ${dashSpeechSel ? styles.dashPresentationHeroCardActive : ""}`}
-                          onClick={() => setDashSpeechSel(v => !v)}
-                        >
-                          <img src="/txt-icon.svg" alt="" className={styles.dashPresentationHeroIcon} />
-                          <span className={styles.dashPresentationHeroTitle}>Текст выступления</span>
-                          <span className={styles.dashPresentationHeroPrice}>+149 ₽</span>
-                        </button>
-                      )}
-                    </div>
-                    {!isMobileViewport && dashExtrasTotal > 0 && (
-                      <button type="button" className={styles.dashPresentationHeroPayBtn} onClick={handleDashboardExtrasPayment}>
-                        Оплатить {dashExtrasTotal} ₽
-                      </button>
-                    )}
-                  </div>
+                {hasPresSlides ? (
+                  <IonPresentationPreview slides={presSlides ?? []} />
                 ) : (
-                  <>
-                    {hasPresSlides ? (
-                      <PresentationViewer
-                        slides={presSlides ?? []}
-                        accent={(viewingGen.extras?.presentationSlides as { accent?: string } | undefined)?.accent || "blue"}
-                        mode="embedded"
-                        images={presImages}
-                        onSlidesChange={setPresSlides}
-                        onImagesChange={setPresImages}
-                      />
-                    ) : (
-                      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "rgba(255,255,255,0.8)", textAlign: "center", padding: 24 }}>
-                        <p style={{ margin: 0, fontSize: 14, fontFamily: "\"Golos Text\", -apple-system, sans-serif", maxWidth: 420, lineHeight: 1.5 }}>
-                          {hasPresFileOnly
-                            ? "Предпросмотр здесь собирается из сохранённых слайдов. Для этой работы в базе есть только признак заказа, а сам список слайдов при сохранении не попал — поэтому превью пустое. Оформи «Презентацию» к этой же работе ещё раз (после фиксов сервера данные сохранятся полностью) или попробуй скачать PPTX."
-                            : "Предпросмотр недоступен для этой версии записи работы."}
-                        </p>
-                        {hasPresFileOnly && (
-                          <button
-                            type="button"
-                            className={styles.dashPresentationHeroPayBtn}
-                            onClick={() => handleDownloadExtra("presentation")}
-                          >
-                            Скачать PPTX
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {dashExtrasBusy && (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#5c4d66", textAlign: "center", padding: 24 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontFamily: "\"Golos Text\", -apple-system, sans-serif", maxWidth: 420, lineHeight: 1.5 }}>
+                      Предпросмотр слайдов недоступен. Скачайте готовый PPTX — файл собран по шаблону Ion.
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.dashPresentationHeroPayBtn}
+                      onClick={() => handleDownloadExtra("presentation")}
+                    >
+                      Скачать PPTX
+                    </button>
+                  </div>
+                )}
+                {dashExtrasBusy && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset:            0,
+                      background:       "rgba(236, 236, 243, 0.96)",
+                      display:          "flex",
+                      flexDirection:    "column",
+                      alignItems:       "center",
+                      justifyContent:   "center",
+                      gap:              14,
+                      zIndex:           6,
+                      padding:          24,
+                      textAlign:        "center",
+                    }}
+                  >
+                    <span style={{ color: "#4a1942", fontSize: 14, marginBottom: 6 }}>
+                      Создаём материалы…
+                    </span>
+                    <div style={{ width: "82%", maxWidth: 340, height: 8, background: "#2d3748", borderRadius: 4, overflow: "hidden" }}>
                       <div
                         style={{
-                          position: "absolute",
-                          inset:            0,
-                          background:       "#1a1a2e",
-                          display:          "flex",
-                          flexDirection:    "column",
-                          alignItems:       "center",
-                          justifyContent:   "center",
-                          gap:              14,
-                          zIndex:           6,
-                          padding:          24,
-                          textAlign:        "center",
+                          height:           "100%",
+                          width:            `${dashExtrasProgress}%`,
+                          background:       "linear-gradient(90deg, #1e3a5f, #d97706)",
+                          borderRadius:     4,
+                          transition:       "width 0.35s ease",
                         }}
-                      >
-                        <span style={{ color: "rgba(255,255,255,0.82)", fontSize: 14, marginBottom: 6 }}>
-                          Создаём материалы…
-                        </span>
-                        <div style={{ width: "82%", maxWidth: 340, height: 8, background: "#2d3748", borderRadius: 4, overflow: "hidden" }}>
-                          <div
-                            style={{
-                              height:           "100%",
-                              width:            `${dashExtrasProgress}%`,
-                              background:       "linear-gradient(90deg, #1e3a5f, #d97706)",
-                              borderRadius:     4,
-                              transition:       "width 0.35s ease",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
+              )}
             </div>
 
             {/* Правый столбец — десктоп */}
@@ -1294,7 +1294,7 @@ export default function DashboardPage() {
               <hr className={styles.docDivider} />
 
               {/* Скачать DOCX / PPTX в зависимости от таба */}
-              {modalTab === "presentation" && (hasPresSlides || hasPresFileOnly) ? (
+              {modalTab === "presentation" && dashHasPresentationTab ? (
                 <button className={styles.docDownloadBtn} onClick={() => handleDownloadExtra("presentation")}
                   disabled={downloadingPptx}
                   style={{ background: downloadingPptx ? "#374151" : "#1E3A5F", color: "#fff" }}>
@@ -1467,7 +1467,7 @@ export default function DashboardPage() {
                   <button className={styles.docMobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
                 </div>
               )}
-              {modalTab === "presentation" && (hasPresSlides || hasPresFileOnly) ? (
+              {modalTab === "presentation" && dashHasPresentationTab ? (
                 <button
                   className={styles.docDownloadBtn}
                   onClick={() => handleDownloadExtra("presentation")}
@@ -1538,7 +1538,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                       )}
-                      {dashExtrasTotal > 0 && (
+                      {modalTab === "work" && dashExtrasTotal > 0 && (
                         <button type="button" className={`${styles.dashExtrasPayBtnWide} ${styles.dashExtrasPayBtnWideBlue}`} onClick={handleDashboardExtrasPayment}>
                           Оплатить {dashExtrasTotal} ₽
                         </button>

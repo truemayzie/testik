@@ -33,11 +33,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { workType, extras, method, market } = await request.json() as {
+  const { workType, extras, method, market, taskId } = await request.json() as {
     workType: string;
     extras?: string[];
     method?: "sbp" | "card";
     market?: "ru" | "kz";
+    taskId?: string;
   };
   const effectiveMarket: Market = market === "kz" ? "kz" : "ru";
   const priceInfo = WORK_PRICES[workType];
@@ -144,8 +145,12 @@ export async function POST(request: NextRequest) {
     if (user.email) {
       params.set("Email", user.email);
     }
+    const failUrl =
+      typeof taskId === "string" && taskId.trim()
+        ? `${appUrl}/order/${encodeURIComponent(taskId.trim())}`
+        : `${appUrl}/dashboard`;
     params.set("SuccessURL", `${appUrl}/payment/success`);
-    params.set("FailURL", `${appUrl}/?restorePreview=1`);
+    params.set("FailURL", failUrl);
 
     return NextResponse.json({
       paymentUrl: `${base}?${params.toString()}`,

@@ -151,6 +151,125 @@
   line-height: 1;
 }
 
+/* ── Modern theme (Presenton-like) ───────────────────────── */
+.modernHeaderSwift {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  background: #fff;
+  border-bottom: 2px solid #1B3A6B;
+  flex-shrink: 0;
+}
+
+.modernHeaderSwift .modernHeaderTitle {
+  font-size: 22px;
+}
+
+.modernHeader {
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 64px;
+  background: #fff;
+  border-bottom: 3px solid #1B3A6B;
+  flex-shrink: 0;
+}
+
+.modernHeaderTitle {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.modernSlideBadge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6B7280;
+  background: #F3F4F6;
+  padding: 6px 14px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.modernTitleSplit {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+
+.modernTitleLeft {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  padding: 48px 56px;
+  color: #fff;
+}
+
+.modernTitleRight {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  padding: 48px 56px;
+  background: #fff;
+}
+
+.modernMetaGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.modernMetaCard {
+  background: #F8FAFC;
+  border-radius: 12px;
+  padding: 16px 18px;
+  border: 1px solid #E5E7EB;
+}
+
+.modernConclusionList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 64px;
+  overflow: hidden;
+}
+
+.modernConclusionCard {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+  border: 1px solid #E5E7EB;
+}
+
+.modernConclusionStripe {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.modernFinalBg {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: linear-gradient(160deg, #f8fafc 0%, #eef2f7 55%, #fff 100%);
+}
+
 /* ── Footer ─────────────────────────────────────────────── */
 .footer {
   height: 52px;

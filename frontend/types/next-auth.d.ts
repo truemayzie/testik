@@ -7,11 +7,8 @@ declare module "next-auth" {
       role?: string;
       banned?: boolean;
       createdAt?: string;
-      /** Есть ли ещё бесплатный предпросмотр (или админ) */
+      /** Есть ли предпросмотр до оплаты (всегда для авторизованных) */
       previewAvailable?: boolean;
-      previewQuota?: number;
-      previewUses?: number;
-      previewRemaining?: number;
       /** −20% на первую оплаченную работу (роль user, ещё не было succeeded-оплаты) */
       firstOrderDiscountEligible?: boolean;
     };

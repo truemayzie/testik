@@ -1,0 +1,551 @@
+.genAside {
+  width: 100%;
+}
+
+.genProgressCard {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 4px 24px rgba(27, 58, 107, 0.07);
+}
+
+.genProgressHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.genProgressBadge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1b3a6b;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.genProgressPct {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #1b3a6b;
+  line-height: 1;
+}
+
+.genProgressTopic {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #64748b;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.genProgressTrack {
+  height: 8px;
+  background: #e8edf4;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.genProgressFill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #1b3a6b 0%, #3b82f6 55%, #d97706 100%);
+  transition: width 0.45s ease-out;
+}
+
+.genStepList {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.genStepItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.genStepItem_done {
+  color: #64748b;
+}
+
+.genStepItem_active {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.genStepDot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.genStepItem_done .genStepDot {
+  background: #1b3a6b;
+}
+
+.genStepItem_active .genStepDot {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.25);
+  animation: genStepPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes genStepPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.85;
+  }
+}
+
+.genProgressStatus {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+.genProgressDots {
+  display: inline-block;
+  min-width: 1.2em;
+}
+
+.genProgressEta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.genProgressHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.genDoneBadge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.genDoneCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.genDoneHeader {
+  margin-bottom: 14px;
+}
+
+.genDoneTitle {
+  margin: 10px 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.genDoneTopic {
+  margin: 0 0 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #64748b;
+  word-break: break-word;
+}
+
+.genDoneDownloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.genDoneDownloads .genDownloadBtn {
+  width: 100%;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.genDoneFooter {
+  padding-top: 2px;
+  text-align: center;
+}
+
+.genAsideTitle {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.genAsideSub {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.genResultAside {
+  margin-top: 4px;
+}
+
+.genResultAside .genResultSub {
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+.genResultAside .genDownloads {
+  justify-content: flex-start;
+}
+
+.doneLoading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 280px;
+  color: #64748b;
+  font-size: 15px;
+}
+
+.doneLoadError {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.doneToc {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.doneSectionBody {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #334155;
+}
+
+.donePara {
+  margin: 0 0 12px;
+  text-align: justify;
+}
+
+.donePara:last-child {
+  margin-bottom: 0;
+}
+
+.doneSources {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.doneSources li {
+  margin-bottom: 8px;
+}
+
+.doneTableWrap {
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.doneTableCaption {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.doneTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.doneTable th,
+.doneTable td {
+  border: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.doneTable th {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.shell {
+  min-height: 100dvh;
+}
+
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 24px 0;
+}
+
+.logo {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.logoAccent {
+  color: #1b3a6b;
+}
+
+.topLink {
+  font-size: 15px;
+  color: #475569;
+  text-decoration: none;
+}
+
+.backBtn {
+  margin-top: 12px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1b3a6b;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.loading {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #64748b;
+  font-size: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #1b3a6b;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.genShell {
+  min-height: 100dvh;
+  background: #f8f9fe;
+}
+
+.genInner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.genHead {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.genBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1b3a6b;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.genTitle {
+  margin: 0 0 8px;
+  font-size: clamp(1.15rem, 4vw, 1.45rem);
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.genMeta {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.genError {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  color: #991b1b;
+  text-align: center;
+}
+
+.genResult {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 22px 20px;
+  margin-top: 8px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(27, 58, 107, 0.08);
+}
+
+.genResultTitle {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.genResultSub {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.genDownloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.genDownloadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1b3a6b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.genDownloadBtn:hover {
+  border-color: #1b3a6b;
+  background: #f8fafc;
+}
+
+.genDownloadIcon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.extrasProgress {
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.extrasProgressTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.extrasProgressBar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.extrasProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #1b3a6b, #3b82f6);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.extrasProgressLabel {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.extrasError {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #b91c1c;
+  text-align: center;
+}
+
+.genFooter {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.genDashLink {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1b3a6b;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.genDashLink:hover {
+  text-decoration: underline;
+}
+

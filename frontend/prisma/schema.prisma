@@ -40,6 +40,22 @@ model User {
   sessions      Session[]
   extrasJobs    ExtrasJob[]
   workActivities WorkActivity[]
+  previewTasks   PreviewTask[]
+}
+
+/// Черновик заказа до оплаты (страница /tasks/[id])
+model PreviewTask {
+  id        String   @id @default(cuid())
+  userId    String
+  topic     String
+  workType  String
+  pages     Int      @default(20)
+  extras    String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Account {

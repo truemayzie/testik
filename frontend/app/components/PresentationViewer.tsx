@@ -3,6 +3,30 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import styles from "./PresentationViewer.module.css";
 import { accentColor, panelBg, borderColor } from "./slideStyles";
+import {
+  getPresentonThemeColors,
+  type PresentonTemplateId,
+  type PresentonThemeColors,
+  type PresentonThemeId,
+} from "@/lib/presentonOptions";
+
+function resolveSlideColors(presentonTheme?: PresentonThemeId, accentKey = "blue"): PresentonThemeColors {
+  if (presentonTheme) return getPresentonThemeColors(presentonTheme);
+  return {
+    primary: accentColor(accentKey),
+    panel: panelBg(accentKey),
+    border: borderColor(accentKey),
+  };
+}
+
+function layoutFlags(layout: PresentonTemplateId) {
+  return {
+    modernTitle: layout !== "general",
+    modernHeader: layout !== "general",
+    modernConclusion: layout === "modern" || layout === "swift",
+    swift: layout === "swift",
+  };
+}
 
 // ─── Типы ────────────────────────────────────────────────────────────────────
 export type Bullet = { bold?: string; text?: string } | string;
@@ -31,26 +55,31 @@ export type Slide = {
   stats?: StatItem[];
 };
 
-export type PresentationData = { accent: string; slides: Slide[] };
+export type PresentationData = {
+  accent: string;
+  slides: Slide[];
+  presentonTheme?: string;
+  presentonTemplate?: PresentonTemplateId;
+};
 
 // ─── EditableSpan ─────────────────────────────────────────────────────────────
 function Editable({
   value,
   onChange,
-  accent,
+  accentHex,
   className,
   style,
   tag: Tag = "span",
 }: {
   value: string;
   onChange: (v: string) => void;
-  accent: string;
+  accentHex: string;
   className?: string;
   style?: React.CSSProperties;
   tag?: keyof React.JSX.IntrinsicElements;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const ac = accentColor(accent);
+  const ac = accentHex;
 
   // Sync external value changes to DOM (e.g. from titleForm)
   useEffect(() => {
@@ -137,58 +166,152 @@ function ImageHolder({
 
 // ─── Slide components ─────────────────────────────────────────────────────────
 
-function SlideTitle({
-  sl, accent, onUpdate,
+function ModernHeader({
+  heading, slideNum, total, colors, onHeadingChange,
 }: {
-  sl: Slide; accent: string; slideIdx: number;
-  onUpdate: (field: string, val: string) => void;
+  heading: string;
+  slideNum?: number;
+  total?: number;
+  colors: PresentonThemeColors;
+  onHeadingChange?: (v: string) => void;
 }) {
-  const ac = accentColor(accent);
-  const bc = borderColor(accent);
+  const ac = colors.primary;
+  const badge = slideNum && total ? `${slideNum} / ${total}` : "";
+  return (
+    <div className={styles.modernHeader} style={{ borderBottomColor: ac }}>
+      {onHeadingChange ? (
+        <Editable
+          value={heading}
+          onChange={onHeadingChange}
+          accentHex={colors.primary}
+          className={styles.modernHeaderTitle}
+          style={{ color: "#111827" }}
+        />
+      ) : (
+        <span className={styles.modernHeaderTitle}>{heading}</span>
+      )}
+      {badge ? <span className={styles.modernSlideBadge}>{badge}</span> : null}
+    </div>
+  );
+}
 
-  // Безопасное получение строкового значения поля (никогда не возвращает "None"/"null"/"undefined")
+function SlideTitle({
+  sl, colors, onUpdate, layout = "modern",
+}: {
+  sl: Slide; colors: PresentonThemeColors; slideIdx: number;
+  onUpdate: (field: string, val: string) => void;
+  layout?: PresentonTemplateId;
+}) {
+  const ac = colors.primary;
+  const bc = colors.border;
+
   const v = (field: keyof Slide) => {
     const val = sl[field];
     if (val === null || val === undefined || val === "None" || val === "null" || val === "undefined") return "";
     return String(val);
   };
 
-  // Мета-блок: первые 3 поля всегда (с тире если пусто), кафедра — только если есть
   const alwaysItems = [
-    { label: "ВЫПОЛНИЛ",     field: "full_name"  as keyof Slide },
-    { label: "ГРУППА",       field: "group"      as keyof Slide },
-    { label: "ПРЕПОДАВАТЕЛЬ",field: "teacher"    as keyof Slide },
+    { label: "Выполнил", field: "full_name" as keyof Slide },
+    { label: "Группа", field: "group" as keyof Slide },
+    { label: "Преподаватель", field: "teacher" as keyof Slide },
   ];
   const deptVal = v("department");
-
   const footLeft = [v("faculty"), v("university")].filter(Boolean).join(" · ");
+
+  if (layoutFlags(layout).modernTitle) {
+    return (
+      <div className={styles.slide}>
+        <div className={styles.modernTitleSplit}>
+          <div
+            className={styles.modernTitleLeft}
+            style={{ background: `linear-gradient(145deg, ${ac} 0%, ${ac}cc 55%, ${ac}99 100%)` }}
+          >
+            <div className={styles.badge} style={{ background: "rgba(255,255,255,0.18)", alignSelf: "flex-start" }}>
+              <Editable
+                value={v("work_type")}
+                onChange={v2 => onUpdate("work_type", v2)}
+                accentHex={colors.primary}
+                style={{ color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}
+              />
+            </div>
+            <Editable
+              value={v("title")}
+              onChange={v2 => onUpdate("title", v2)}
+              accentHex={colors.primary}
+              style={{ color: "#fff", fontSize: 34, fontWeight: 800, lineHeight: 1.15, display: "block" }}
+            />
+            {v("university") && (
+              <Editable
+                value={v("university")}
+                onChange={v2 => onUpdate("university", v2)}
+                accentHex={colors.primary}
+                style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, fontWeight: 600 }}
+              />
+            )}
+          </div>
+          <div className={styles.modernTitleRight}>
+            <div className={styles.modernMetaGrid}>
+              {alwaysItems.map(m => (
+                <div key={m.field} className={styles.modernMetaCard}>
+                  <span className={styles.metaLabel}>{m.label}</span>
+                  <Editable
+                    value={v(m.field) || "—"}
+                    onChange={v2 => onUpdate(m.field as string, v2)}
+                    accentHex={colors.primary}
+                    style={{ color: ac, fontWeight: 700, fontSize: 14, display: "block", marginTop: 4 }}
+                  />
+                </div>
+              ))}
+              {deptVal && (
+                <div className={styles.modernMetaCard} style={{ gridColumn: "1 / -1" }}>
+                  <span className={styles.metaLabel}>Кафедра</span>
+                  <Editable
+                    value={deptVal}
+                    onChange={v2 => onUpdate("department", v2)}
+                    accentHex={colors.primary}
+                    style={{ color: ac, fontWeight: 700, fontSize: 14, display: "block", marginTop: 4 }}
+                  />
+                </div>
+              )}
+            </div>
+            <span style={{ color: "#9CA3AF", fontSize: 12 }}>
+              {footLeft}
+              {(footLeft && (v("city") || v("year"))) ? " · " : ""}
+              {v("city")}{v("city") && v("year") ? ", " : ""}{v("year")}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.slide}>
       <div className={`${styles.topBar} ${styles.topBarBig}`} style={{ background: ac }}>
-        <Editable value={v("university")} onChange={v2 => onUpdate("university", v2)} accent={accent}
+        <Editable value={v("university")} onChange={v2 => onUpdate("university", v2)} accentHex={colors.primary}
           style={{ color: "#fff", fontSize: 18, fontWeight: 700, letterSpacing: 0.3 }} />
       </div>
       <div className={styles.titleBody}>
         <div className={styles.badge} style={{ background: ac }}>
-          <Editable value={v("work_type")} onChange={v2 => onUpdate("work_type", v2)} accent={accent}
+          <Editable value={v("work_type")} onChange={v2 => onUpdate("work_type", v2)} accentHex={colors.primary}
             style={{ color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }} />
         </div>
-        <Editable value={v("title")} onChange={v2 => onUpdate("title", v2)} accent={accent}
+        <Editable value={v("title")} onChange={v2 => onUpdate("title", v2)} accentHex={colors.primary}
           style={{ color: ac, fontSize: 36, fontWeight: 800, lineHeight: 1.2, textAlign: "center", display: "block" }} />
         <div className={styles.divider} style={{ background: ac }} />
         <div className={styles.metaRow} style={{ border: `1.5px solid ${bc}` }}>
           {alwaysItems.map((m, i) => (
             <div key={m.field} className={styles.metaItem} style={i > 0 ? { borderLeft: `1.5px solid ${bc}` } : undefined}>
               <span className={styles.metaLabel}>{m.label}</span>
-              <Editable value={v(m.field) || "—"} onChange={v2 => onUpdate(m.field as string, v2)} accent={accent}
+              <Editable value={v(m.field) || "—"} onChange={v2 => onUpdate(m.field as string, v2)} accentHex={colors.primary}
                 style={{ color: ac, fontWeight: 700, fontSize: 14 }} />
             </div>
           ))}
           {deptVal && (
             <div className={styles.metaItem} style={{ borderLeft: `1.5px solid ${bc}` }}>
               <span className={styles.metaLabel}>КАФЕДРА</span>
-              <Editable value={deptVal} onChange={v2 => onUpdate("department", v2)} accent={accent}
+              <Editable value={deptVal} onChange={v2 => onUpdate("department", v2)} accentHex={colors.primary}
                 style={{ color: ac, fontWeight: 700, fontSize: 14 }} />
             </div>
           )}
@@ -197,9 +320,9 @@ function SlideTitle({
       <div className={`${styles.footer} ${styles.footerLarge}`}>
         <span className={styles.footerText}>{footLeft}</span>
         <span className={styles.footerText}>
-          <Editable value={v("city")} onChange={v2 => onUpdate("city", v2)} accent={accent} style={{ color: "#9CA3AF", fontSize: 11 }} />
+          <Editable value={v("city")} onChange={v2 => onUpdate("city", v2)} accentHex={colors.primary} style={{ color: "#9CA3AF", fontSize: 11 }} />
           {v("city") && v("year") ? ", " : ""}
-          <Editable value={v("year")} onChange={v2 => onUpdate("year", v2)} accent={accent} style={{ color: "#9CA3AF", fontSize: 11 }} />
+          <Editable value={v("year")} onChange={v2 => onUpdate("year", v2)} accentHex={colors.primary} style={{ color: "#9CA3AF", fontSize: 11 }} />
         </span>
       </div>
     </div>
@@ -207,13 +330,14 @@ function SlideTitle({
 }
 
 function SlideToc({
-  sl, accent, onUpdate,
+  sl, colors, onUpdate, layout = "modern",
 }: {
-  sl: Slide; accent: string;
+  sl: Slide; colors: PresentonThemeColors;
   onUpdate: (field: string, val: string) => void;
   onUpdateItem?: (i: number, val: string) => void;
+  layout?: PresentonTemplateId;
 }) {
-  const ac = accentColor(accent);
+  const ac = colors.primary;
   const items = (sl.items || []).map(String);
   const half = Math.ceil(items.length / 2);
 
@@ -231,10 +355,33 @@ function SlideToc({
     );
   }
 
+  const lf = layoutFlags(layout);
+  const headerClass = lf.swift ? styles.modernHeaderSwift : styles.modernHeader;
+
+  if (lf.modernHeader) {
+    return (
+      <div className={styles.slide}>
+        <div className={headerClass} style={{ borderBottomColor: ac }}>
+          <Editable value={sl.heading || "Содержание"} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+            className={styles.modernHeaderTitle} style={{ color: "#111827" }} />
+          <span className={styles.modernSlideBadge}>{sl.slide_num} / {sl.total}</span>
+        </div>
+        <div className={styles.tocBody}>
+          <TocCol arr={items.slice(0, half)} startIdx={0} />
+          <TocCol arr={items.slice(half)} startIdx={half} />
+        </div>
+        <div className={styles.footer}>
+          <span className={styles.footerText}>{sl.topic || ""}</span>
+          <span className={styles.footerText}>{sl.slide_num} / {sl.total}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.slide}>
       <div className={`${styles.topBar} ${styles.topBarTitle}`} style={{ background: ac }}>
-        <Editable value={sl.heading || "Содержание"} onChange={v => onUpdate("heading", v)} accent={accent}
+        <Editable value={sl.heading || "Содержание"} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
           style={{ color: "#fff", fontSize: 24, fontWeight: 700 }} />
         <span className={styles.slideNum}>{String(sl.slide_num || 1).padStart(2, "0")}</span>
       </div>
@@ -251,18 +398,19 @@ function SlideToc({
 }
 
 function SlideContent({
-  sl, accent, slideIdx, images, onImageChange, onUpdate, onUpdateBullet, onUpdateStat,
+  sl, colors, slideIdx, images, onImageChange, onUpdate, onUpdateBullet, onUpdateStat, layout = "modern",
 }: {
-  sl: Slide; accent: string; slideIdx: number;
+  sl: Slide; colors: PresentonThemeColors; slideIdx: number;
   images: Record<number, string>;
   onImageChange: (i: number, data: string | null) => void;
   onUpdate: (field: string, val: string) => void;
   onUpdateBullet: (bi: number, field: "bold" | "text", val: string) => void;
   onUpdateStat: (si: number, field: "num" | "desc", val: string) => void;
+  layout?: PresentonTemplateId;
 }) {
-  const ac = accentColor(accent);
-  const pb = panelBg(accent);
-  const bc = borderColor(accent);
+  const ac = colors.primary;
+  const pb = colors.panel;
+  const bc = colors.border;
 
   const bullets  = (sl.bullets || []).slice(0, 5);
   const stats    = (sl.stats   || []).filter(s => s.num).slice(0, 3);
@@ -273,14 +421,7 @@ function SlideContent({
   const fontSize = hasSplit ? 15 : 17;
   const gap      = hasSplit ? 22 : 28;
 
-  return (
-    <div className={styles.slide}>
-      <div className={`${styles.topBar} ${styles.topBarTitle}`} style={{ background: ac }}>
-        <Editable value={sl.heading || ""} onChange={v => onUpdate("heading", v)} accent={accent}
-          style={{ color: "#fff", fontSize: 24, fontWeight: 700 }} />
-        <span className={styles.slideNum}>{String(sl.slide_num || 1).padStart(2, "0")}</span>
-      </div>
-
+  const body = (
       <div className={styles.contentBody}>
         <div
           className={styles.bulletsCol}
@@ -294,10 +435,10 @@ function SlideContent({
                 <div className={styles.dot} style={{ background: ac, marginTop: hasSplit ? 5 : 6 }} />
                 <div className={styles.bulletText} style={{ fontSize }}>
                   {(bold !== undefined) && (
-                    <><Editable value={bold} onChange={v => onUpdateBullet(i, "bold", v)} accent={accent}
+                    <><Editable value={bold} onChange={v => onUpdateBullet(i, "bold", v)} accentHex={colors.primary}
                       style={{ color: ac, fontWeight: 700 }} />{" "}</>
                   )}
-                  <Editable value={text} onChange={v => onUpdateBullet(i, "text", v)} accent={accent} />
+                  <Editable value={text} onChange={v => onUpdateBullet(i, "text", v)} accentHex={colors.primary} />
                 </div>
               </div>
             );
@@ -316,9 +457,9 @@ function SlideContent({
               <>
                 {i > 0 && <div key={`d${i}`} className={styles.statDivider} style={{ background: bc }} />}
                 <div key={i} className={styles.statItem}>
-                  <Editable value={s.num} onChange={v => onUpdateStat(i, "num", v)} accent={accent}
+                  <Editable value={s.num} onChange={v => onUpdateStat(i, "num", v)} accentHex={colors.primary}
                     className={styles.statNum} style={{ color: ac }} />
-                  <Editable value={s.desc} onChange={v => onUpdateStat(i, "desc", v)} accent={accent}
+                  <Editable value={s.desc} onChange={v => onUpdateStat(i, "desc", v)} accentHex={colors.primary}
                     className={styles.statDesc} />
                 </div>
               </>
@@ -326,7 +467,36 @@ function SlideContent({
           </div>
         )}
       </div>
+  );
 
+  const lf = layoutFlags(layout);
+  const headerClass = lf.swift ? styles.modernHeaderSwift : styles.modernHeader;
+
+  if (lf.modernHeader) {
+    return (
+      <div className={styles.slide}>
+        <div className={headerClass} style={{ borderBottomColor: ac }}>
+          <Editable value={sl.heading || ""} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+            className={styles.modernHeaderTitle} style={{ color: "#111827" }} />
+          <span className={styles.modernSlideBadge}>{sl.slide_num} / {sl.total}</span>
+        </div>
+        {body}
+        <div className={styles.footer}>
+          <span className={styles.footerText}>{sl.topic || ""}</span>
+          <span className={styles.footerText}>{sl.slide_num} / {sl.total}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.slide}>
+      <div className={`${styles.topBar} ${styles.topBarTitle}`} style={{ background: ac }}>
+        <Editable value={sl.heading || ""} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+          style={{ color: "#fff", fontSize: 24, fontWeight: 700 }} />
+        <span className={styles.slideNum}>{String(sl.slide_num || 1).padStart(2, "0")}</span>
+      </div>
+      {body}
       <div className={styles.footer}>
         <span className={styles.footerText}>{sl.topic || ""}</span>
         <span className={styles.footerText}>{sl.slide_num} / {sl.total}</span>
@@ -336,24 +506,70 @@ function SlideContent({
 }
 
 function SlideConclusion({
-  sl, accent, onUpdate, onUpdateItem,
+  sl, colors, onUpdate, onUpdateItem, layout = "modern",
 }: {
-  sl: Slide; accent: string;
+  sl: Slide; colors: PresentonThemeColors;
   onUpdate: (field: string, val: string) => void;
   onUpdateItem: (i: number, field: "title" | "text", val: string) => void;
+  layout?: PresentonTemplateId;
 }) {
-  const ac = accentColor(accent);
-  const pb = panelBg(accent);
-  const bc = borderColor(accent);
+  const ac = colors.primary;
+  const pb = colors.panel;
+  const bc = colors.border;
   const items = (sl.items || []).slice(0, 4);
+  const lf = layoutFlags(layout);
+  const headerClass = lf.swift ? styles.modernHeaderSwift : styles.modernHeader;
+
+  if (lf.modernConclusion) {
+    return (
+      <div className={styles.slide} style={{ background: "#F8FAFC" }}>
+        <div className={headerClass} style={{ borderBottomColor: ac }}>
+          <Editable value={sl.heading || "Выводы"} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+            className={styles.modernHeaderTitle} style={{ color: "#111827" }} />
+          <span className={styles.modernSlideBadge}>{sl.slide_num} / {sl.total}</span>
+        </div>
+        <div className={styles.modernConclusionList}>
+          {items.map((it, i) => {
+            const title = typeof it === "string" ? it : (it.title || "");
+            const text  = typeof it === "string" ? "" : (it.text  || "");
+            return (
+              <div key={i} className={styles.modernConclusionCard}>
+                <div className={styles.modernConclusionStripe} style={{ background: ac }} />
+                <div style={{ flex: 1 }}>
+                  <Editable value={title} onChange={v => onUpdateItem(i, "title", v)} accentHex={colors.primary}
+                    style={{ color: ac, fontWeight: 700, fontSize: 16, display: "block" }} />
+                  <Editable value={text} onChange={v => onUpdateItem(i, "text", v)} accentHex={colors.primary}
+                    className={styles.conclusionText} style={{ display: "block", marginTop: 8 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className={styles.footer}>
+          <span className={styles.footerText}>{sl.topic || sl.heading || ""}</span>
+          <span className={styles.footerText}>{sl.slide_num} / {sl.total}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const headerBlock = lf.modernHeader ? (
+    <div className={headerClass} style={{ borderBottomColor: ac }}>
+      <Editable value={sl.heading || "Выводы"} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+        className={styles.modernHeaderTitle} style={{ color: "#111827" }} />
+      <span className={styles.modernSlideBadge}>{sl.slide_num} / {sl.total}</span>
+    </div>
+  ) : (
+    <div className={`${styles.topBar} ${styles.topBarTitle}`} style={{ background: ac }}>
+      <Editable value={sl.heading || "Выводы"} onChange={v => onUpdate("heading", v)} accentHex={colors.primary}
+        style={{ color: "#fff", fontSize: 24, fontWeight: 700 }} />
+      <span className={styles.slideNum}>{String(sl.slide_num || 1).padStart(2, "0")}</span>
+    </div>
+  );
 
   return (
-    <div className={styles.slide}>
-      <div className={`${styles.topBar} ${styles.topBarTitle}`} style={{ background: ac }}>
-        <Editable value={sl.heading || "Выводы"} onChange={v => onUpdate("heading", v)} accent={accent}
-          style={{ color: "#fff", fontSize: 24, fontWeight: 700 }} />
-        <span className={styles.slideNum}>{String(sl.slide_num || 1).padStart(2, "0")}</span>
-      </div>
+    <div className={styles.slide} style={lf.modernHeader ? { background: "#F8FAFC" } : undefined}>
+      {headerBlock}
       <div className={styles.conclusionBody}>
         {items.map((it, i) => {
           const title = typeof it === "string" ? it : (it.title || "");
@@ -362,11 +578,11 @@ function SlideConclusion({
             <div key={i} className={styles.conclusionCard} style={{ background: pb, borderColor: bc }}>
               <div className={styles.conclusionCardHeader}>
                 <div className={styles.conclusionNum} style={{ background: ac }}>{i + 1}</div>
-                <Editable value={title} onChange={v => onUpdateItem(i, "title", v)} accent={accent}
+                <Editable value={title} onChange={v => onUpdateItem(i, "title", v)} accentHex={colors.primary}
                   style={{ color: ac, fontWeight: 700, fontSize: 15 }} />
               </div>
               {(text !== undefined) && (
-                <Editable value={text} onChange={v => onUpdateItem(i, "text", v)} accent={accent}
+                <Editable value={text} onChange={v => onUpdateItem(i, "text", v)} accentHex={colors.primary}
                   className={styles.conclusionText} style={{ display: "block" }} />
               )}
             </div>
@@ -382,13 +598,35 @@ function SlideConclusion({
 }
 
 function SlideFinal({
-  sl, accent, onUpdate,
+  sl, colors, onUpdate, layout = "modern",
 }: {
-  sl: Slide; accent: string;
+  sl: Slide; colors: PresentonThemeColors;
   onUpdate: (field: string, val: string) => void;
+  layout?: PresentonTemplateId;
 }) {
-  const ac = accentColor(accent);
-  const bc = borderColor(accent);
+  const ac = colors.primary;
+  const bc = colors.border;
+
+  if (layoutFlags(layout).modernTitle) {
+    return (
+      <div className={styles.slide}>
+        <div className={styles.modernFinalBg}>
+          <div className={styles.finalCircle} style={{ borderColor: ac }}>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <path d="M5 14 L11 20 L23 8" stroke={ac} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <span className={styles.finalLabel}>Спасибо за внимание</span>
+          <Editable value={sl.title || ""} onChange={v => onUpdate("title", v)} accentHex={colors.primary}
+            className={styles.finalTitle} style={{ color: ac }} tag="div" />
+          {sl.full_name !== undefined && (
+            <Editable value={sl.full_name || ""} onChange={v => onUpdate("full_name", v)} accentHex={colors.primary}
+              className={styles.finalName} />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.slide}>
@@ -400,11 +638,11 @@ function SlideFinal({
           </svg>
         </div>
         <span className={styles.finalLabel}>Спасибо за внимание</span>
-        <Editable value={sl.title || ""} onChange={v => onUpdate("title", v)} accent={accent}
+        <Editable value={sl.title || ""} onChange={v => onUpdate("title", v)} accentHex={colors.primary}
           className={styles.finalTitle} style={{ color: ac }} tag="div" />
         <div className={styles.finalDivider} style={{ background: bc }} />
         {sl.full_name !== undefined && (
-          <Editable value={sl.full_name || ""} onChange={v => onUpdate("full_name", v)} accent={accent}
+          <Editable value={sl.full_name || ""} onChange={v => onUpdate("full_name", v)} accentHex={colors.primary}
             className={styles.finalName} />
         )}
       </div>
@@ -444,7 +682,11 @@ function SlideWrapper({
 // ─── Основной компонент ───────────────────────────────────────────────────────
 type Props = {
   slides: Slide[];
+  /** Тема Presenton — задаёт реальные цвета превью */
+  presentonTheme?: PresentonThemeId;
   accent?: string;
+  /** Шаблон макета Presenton: general | modern | standard | swift */
+  layout?: PresentonTemplateId;
   mode?: "standalone" | "embedded";
   images?: Record<number, string>;
   onSlidesChange?: (slides: Slide[]) => void;
@@ -455,7 +697,9 @@ type Props = {
 
 export default function PresentationViewer({
   slides: initialSlides,
+  presentonTheme = "professional-blue",
   accent = "blue",
+  layout = "modern",
   mode = "standalone",
   images: externalImages,
   onSlidesChange,
@@ -581,8 +825,10 @@ export default function PresentationViewer({
     });
   }, [onImagesChange]);
 
+  const slideColors = resolveSlideColors(presentonTheme, accent);
+
   function renderSlide(sl: Slide, slideIdx: number) {
-    const common = { accent, slideIdx };
+    const common = { colors: slideColors, slideIdx, layout };
     switch ((sl.type || "").toUpperCase()) {
       case "TITLE":
         return <SlideTitle sl={sl} {...common}

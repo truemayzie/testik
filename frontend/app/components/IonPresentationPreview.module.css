@@ -1,0 +1,251 @@
+.root {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ececf3;
+}
+
+.header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px 6px;
+}
+
+.headerBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #5c4d66;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(30, 20, 40, 0.06);
+}
+
+.stageWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px 0;
+}
+
+.stage {
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow:
+    0 8px 28px rgba(40, 16, 48, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.6);
+  background: #fff;
+}
+
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.structureLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d2433;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.navBtn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: #4a1942;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(30, 20, 40, 0.12);
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.navBtn:hover:not(:disabled) {
+  background: #faf7fb;
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.navCounter {
+  min-width: 52px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5c4d66;
+}
+
+/* ── Slides ─────────────────────────────────────────────── */
+
+.slideTitle {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 10%;
+  background:
+    radial-gradient(circle at 30% 40%, #8b2d78 0%, #4a1942 55%, #2d1030 100%);
+  border: 10px solid #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.slideTitleText {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(14px, 2.4vw, 22px);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.slideTitleSub {
+  margin: 0;
+  color: #f06eb4;
+  font-size: clamp(10px, 1.4vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.slideContent {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.slideHeader {
+  position: relative;
+  flex-shrink: 0;
+  padding: 5% 6% 4%;
+  background: linear-gradient(135deg, #5c1a52 0%, #8b2d78 100%);
+  border-bottom-left-radius: 4% 40%;
+  border-bottom-right-radius: 4% 40%;
+}
+
+.slideHeaderAccent {
+  position: absolute;
+  top: 10%;
+  right: 4%;
+  width: 5%;
+  height: 18%;
+  background: #f06eb4;
+  border-radius: 2px;
+}
+
+.slideHeaderText {
+  margin: 0;
+  padding-right: 8%;
+  color: #fff;
+  font-size: clamp(12px, 2vw, 18px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.slideBody {
+  flex: 1;
+  min-height: 0;
+  padding: 5% 7% 6%;
+  overflow: hidden;
+}
+
+.bulletList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+}
+
+.bulletItem {
+  position: relative;
+  padding-left: 1.1em;
+  color: #2d2433;
+  font-size: clamp(9px, 1.35vw, 12px);
+  line-height: 1.35;
+}
+
+.bulletItem::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 0;
+  height: 0;
+  border-top: 0.28em solid transparent;
+  border-bottom: 0.28em solid transparent;
+  border-left: 0.45em solid #c2187a;
+}
+
+.bulletBold {
+  font-weight: 700;
+}
+
+.slideFinal {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #faf7fb 0%, #fff 100%);
+  padding: 8%;
+}
+
+.slideFinalText {
+  margin: 0;
+  text-align: center;
+  color: #4a1942;
+  font-size: clamp(16px, 2.8vw, 26px);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+@media (max-width: 768px) {
+  .stageWrap {
+    padding: 4px 8px 0;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .nav {
+    justify-content: center;
+  }
+}

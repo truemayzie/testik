@@ -41,7 +41,7 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
   }
 
   const isOwner = fullContent !== null;
-  const paymentUrl = `/payment?workType=${encodeURIComponent(data.workType)}&previewSlug=${slug}`;
+  const orderUrl = `/?workType=${encodeURIComponent(data.workType)}#generator`;
 
   async function handleDownload() {
     setDownloading(true);
@@ -282,9 +282,9 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
                 <span>✓ {data.pages} страниц</span>
                 <span>✓ Антиплагиат 80%+</span>
               </div>
-              <a href={paymentUrl} className={styles.ctaButton}>
-                ⬇ Скачать DOCX — {WORK_PRICES[data.workType]?.price ?? 299} ₽
-              </a>
+              <Link href={orderUrl} className={styles.ctaButton}>
+                Создать такую же — {WORK_PRICES[data.workType]?.price ?? 299} ₽
+              </Link>
               <p className={styles.ctaNote}>
                 или <Link href="/auth/signin">войдите</Link>, если уже оплачивали
               </p>

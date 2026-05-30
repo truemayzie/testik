@@ -78,19 +78,35 @@ export function getProgressSteps(workType: string): Step[] {
  */
 export function computeProgress(workType: string, elapsed: number): { percent: number; stepLabel: string } {
   const steps = getProgressSteps(workType);
+  return computeProgressFromSteps(steps, elapsed);
+}
+
+/** Прогресс по массиву шагов — единый источник для таймера UI. */
+export function computeProgressFromSteps(
+  steps: Step[],
+  elapsedMs: number,
+): { percent: number; stepIndex: number; stepLabel: string } {
+  if (!steps.length) {
+    return { percent: 0, stepIndex: 0, stepLabel: "" };
+  }
   const total = steps.reduce((s, st) => s + st.duration, 0);
+  const elapsed = Math.max(0, elapsedMs);
 
   let acc = 0;
+  let stepIndex = 0;
   let stepLabel = steps[0].label;
-  for (const step of steps) {
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
     if (elapsed < acc + step.duration) {
+      stepIndex = i;
       stepLabel = step.label;
       break;
     }
     acc += step.duration;
+    stepIndex = i;
     stepLabel = step.label;
   }
 
-  const percent = Math.min(Math.round((elapsed / total) * 100), 98);
-  return { percent, stepLabel };
+  const percent = total > 0 ? Math.min(97, Math.round((elapsed / total) * 97)) : 0;
+  return { percent, stepIndex, stepLabel };
 }

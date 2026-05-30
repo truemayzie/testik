@@ -201,6 +201,16 @@
   text-wrap: balance;
 }
 
+.heroWorksStat {
+  font-size: clamp(0.82rem, 2.4vw, 0.92rem);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.58);
+  margin: 4px auto 0;
+  line-height: 1.4;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
 /* Generator card */
 .genCard {
   text-align: left;
@@ -485,11 +495,11 @@
 }
 
 
-/* Work types (inside gen card) */
+/* Work types (inside gen card) — одна строка */
 .workTypes {
   display: flex;
-  gap: 8px;
-  justify-content: flex-start;
+  gap: 5px;
+  justify-content: stretch;
   flex-wrap: nowrap;
   width: 100%;
   max-width: 100%;
@@ -498,13 +508,12 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scroll-behavior: smooth;
-  scroll-padding-inline: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  margin: 0 0 16px;
-  padding: 4px 0 8px;
+  margin: 0 0 14px;
+  padding: 2px 0 4px;
   touch-action: pan-x;
 }
 
@@ -514,15 +523,16 @@
 
 .workType {
   position: relative;
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  min-width: 108px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 8px 4px;
+  border-radius: 10px;
   border: 1.5px solid #e2e8f0;
   background: #f8fafc;
   cursor: pointer;
@@ -530,7 +540,7 @@
   font-family: inherit;
   outline: none;
   -webkit-tap-highlight-color: transparent;
-  text-align: left;
+  text-align: center;
 }
 
 .workType:focus-visible {
@@ -560,10 +570,11 @@
 }
 
 .workTypeLabel {
-  font-size: 0.88rem;
+  font-size: clamp(0.62rem, 2.6vw, 0.78rem);
   font-weight: 700;
   color: #0f172a;
-  line-height: 1.2;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .workTypeActive .workTypeLabel {
@@ -572,10 +583,10 @@
 
 .workTypeMeta,
 .workTypePages {
-  font-size: 0.68rem;
+  font-size: clamp(0.52rem, 2vw, 0.62rem);
   font-weight: 500;
   color: #64748b;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -584,22 +595,35 @@
   color: #b45309;
 }
 
-@media (min-width: 901px) {
+@media (max-width: 420px) {
   .workTypes {
-    flex-wrap: wrap;
-    overflow: visible;
-    mask-image: none;
-    margin-left: 0;
-    margin-right: 0;
-    justify-content: center;
+    gap: 4px;
   }
 
   .workType {
-    min-width: 0;
-    flex: 1 1 calc(33.333% - 8px);
-    max-width: calc(33.333% - 6px);
-    align-items: center;
-    text-align: center;
+    flex: 0 0 auto;
+    min-width: 72px;
+    padding: 7px 5px;
+  }
+}
+
+@media (min-width: 901px) {
+  .workTypes {
+    overflow: visible;
+    gap: 6px;
+  }
+
+  .workType {
+    padding: 9px 6px;
+  }
+
+  .workTypeLabel {
+    font-size: 0.8rem;
+  }
+
+  .workTypeMeta,
+  .workTypePages {
+    font-size: 0.62rem;
   }
 }
 
@@ -1315,1895 +1339,6 @@
   from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-/* ══════════════════════════════════════════
-   PROGRESS
-══════════════════════════════════════════ */
-.progressSection {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 40px 24px;
-}
-
-.progressCard {
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E") center/24px 24px,
-    linear-gradient(145deg, #061525 0%, #0F2645 60%, #1B3A6B 100%);
-  border: 1px solid rgba(27, 58, 107, 0.2);
-  border-radius: 24px;
-  padding: 36px 40px;
-  box-shadow: 0 6px 32px rgba(0, 0, 0, 0.20), 0 0 0 1px rgba(255,255,255,0.05) inset;
-}
-
-/* Верхняя строка: шаг N из M  +  процент */
-.progressTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.progressStepCount {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.progressPercent {
-  font-size: clamp(1.25rem, 5vw, 2.4rem);
-  font-weight: 700;
-  font-family: 'PT Serif', Georgia, serif;
-  color: #FBBF24;
-  line-height: 1.18;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  margin-left: auto;
-  white-space: normal;
-  word-break: break-word;
-  max-width: 100%;
-}
-
-/* Тема работы */
-.progressTopic {
-  font-size: 0.83rem;
-  color: rgba(255, 255, 255, 0.4);
-  margin: 0 0 20px;
-  font-style: italic;
-  line-height: 1.45;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-/* Полоса прогресса */
-.progressBar {
-  height: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 99px;
-  overflow: hidden;
-  margin-bottom: 20px;
-  position: relative;
-}
-
-.progressFill {
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #0F2645 0%, #D97706 100%);
-  border-radius: 99px;
-  transform-origin: left center;
-  transition: transform 0.2s ease-out;
-  position: relative;
-  overflow: hidden;
-  will-change: transform;
-}
-
-.progressFill::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: progressShimmer 2s ease-in-out infinite;
-}
-
-@keyframes progressShimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(280%); }
-}
-
-/* Ряд точек — по одной на каждый шаг */
-.progressDotRow {
-  display: flex;
-  gap: 5px;
-  margin-bottom: 14px;
-  align-items: center;
-}
-
-.progressDotPending {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  flex-shrink: 0;
-  transition: background 0.3s;
-}
-
-.progressDotDone {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #D97706;
-  flex-shrink: 0;
-  transition: background 0.3s;
-}
-
-.progressDotActive {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #FBBF24;
-  flex-shrink: 0;
-  animation: dotPulse 1.4s ease-in-out infinite;
-}
-
-@keyframes dotPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5); }
-  50%       { box-shadow: 0 0 0 5px rgba(251, 191, 36, 0); }
-}
-
-/* Текущий шаг — анимируется при смене через key */
-@keyframes stepLabelIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.progressCurrentLabel {
-  font-size: 0.97rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  letter-spacing: 0.01em;
-  margin: 0 0 24px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  animation: stepLabelIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.progressSectionMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: -14px 0 18px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #FDE68A;
-  background: rgba(217, 119, 6, 0.16);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-}
-
-/* Анимированные точки "..." */
-.progressDots {
-  display: inline-block;
-  width: 1.4em;
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.05em;
-}
-
-.progressHint {
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.35);
-  font-style: italic;
-  text-align: center;
-  margin: 0;
-}
-
-.f5RecoveryHint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.progressDashLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #D97706;
-  text-decoration: none;
-  padding: 8px 18px;
-  border: 1px solid rgba(27, 58, 107, 0.25);
-  border-radius: 8px;
-  background: rgba(27, 58, 107, 0.08);
-  transition: all 0.2s;
-}
-.progressDashLink:hover {
-  background: rgba(27, 58, 107, 0.12);
-  border-color: rgba(27, 58, 107, 0.4);
-  color: #FDE68A;
-}
-
-/* Карточка с фактом под прогресс-баром */
-.factCard {
-  margin-top: 14px;
-  padding: 28px 36px 24px;
-  background: linear-gradient(135deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
-  border: 1px solid rgba(27, 58, 107, 0.25);
-  border-radius: 20px;
-  box-shadow: 0 8px 40px rgba(6, 21, 37, 0.25);
-  transition: opacity 0.5s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.factBadge {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #D97706;
-  margin-bottom: 14px;
-}
-
-.factText {
-  font-size: 1.05rem;
-  color: rgba(255, 255, 255, 0.88);
-  line-height: 1.65;
-  margin: 0 0 20px;
-  font-weight: 400;
-  max-width: 90%;
-}
-
-.factFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.factDots {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  max-width: 200px;
-}
-
-.factDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(27, 58, 107, 0.15);
-  flex-shrink: 0;
-}
-
-.factDotActive {
-  width: 16px;
-  height: 5px;
-  border-radius: 3px;
-  background: #D97706;
-  flex-shrink: 0;
-  transition: width 0.3s ease;
-}
-
-.factCounter {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.25);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.05em;
-}
-
-/* ══════════════════════════════════════════
-   ERROR
-══════════════════════════════════════════ */
-.errorWrap {
-  max-width: 680px;
-  margin: 32px auto;
-  padding: 0 24px;
-}
-
-.error {
-  display:       flex;
-  gap:           16px;
-  align-items:   flex-start;
-  padding:       20px 24px;
-  background:    #fff5f5;
-  border:        2px solid #fca5a5;
-  border-radius: 14px;
-  box-shadow:    0 4px 20px rgba(239, 68, 68, 0.08);
-}
-
-.errorIcon {
-  font-size:   1.4rem;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-top:  2px;
-}
-
-.errorBody {
-  display:        flex;
-  flex-direction: column;
-  gap:            4px;
-}
-
-.errorTitle {
-  margin:      0;
-  font-weight: 600;
-  font-size:   1rem;
-  color:       #b91c1c;
-}
-
-.errorText {
-  margin:    0;
-  font-size: 0.88rem;
-  color:     #dc2626;
-  opacity:   0.85;
-  line-height: 1.5;
-}
-
-/* ══════════════════════════════════════════
-   RESULT
-══════════════════════════════════════════ */
-.result {
-  max-width: 720px;
-  margin: 48px auto 80px;
-  padding: 0 24px;
-  animation: fadeIn 0.4s ease;
-  font-family: 'Golos Text', -apple-system, sans-serif;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.docHeader {
-  background: #fff;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 28px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-
-.docHeaderTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.docTitle {
-  font-family: 'PT Serif', Georgia, serif;
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: #0F172A;
-  flex: 1;
-  line-height: 1.35;
-}
-
-.downloadBtn {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #fff;
-  background: #D97706;
-  border: none;
-  border-radius: 12px;
-  padding: 13px 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
-  letter-spacing: -0.01em;
-  flex-shrink: 0;
-}
-
-.downloadBtn:hover:not(:disabled) {
-  background: #B45309;
-  box-shadow: 0 6px 18px rgba(217, 119, 6, 0.45);
-  transform: translateY(-1px);
-}
-
-.downloadBtn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
-}
-
-.downloadBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.downloadIcon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.buttonLoading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.docButtons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
-.presentationBtn {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1B3A6B;
-  background: transparent;
-  border: 2px solid #1B3A6B;
-  border-radius: 10px;
-  padding: 12px 22px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.presentationBtn:hover {
-  background: #EFF6FF;
-  transform: translateY(-1px);
-}
-
-/* ── Модальное окно результата ── */
-
-@keyframes overlayFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes modalSlideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes overlayFadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-@keyframes modalSlideDown {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(20px); }
-}
-
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: overlayFadeIn 300ms ease forwards;
-}
-
-.modalOverlayClosing {
-  animation: overlayFadeOut 200ms ease forwards;
-}
-
-.modalBox {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 90vw;
-  height: 90vh;
-  max-width: 1400px;
-  background: #F8FAFC;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.22);
-  animation: modalSlideUp 350ms ease-out forwards;
-}
-
-.modalBody {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.modalBoxClosing {
-  animation: modalSlideDown 200ms ease-in forwards;
-}
-
-.modalClose {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  z-index: 20;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.08);
-  color: #374151;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-.modalClose:hover { background: rgba(0,0,0,0.18); }
-
-/* ── Табы модального окна ────────────────────────────────── */
-.modalTabs {
-  display: flex;
-  align-items: stretch;
-  height: 48px;
-  border-bottom: 1px solid #E5E7EB;
-  padding: 0 8px;
-  flex-shrink: 0;
-  background: #fff;
-  position: relative;
-  z-index: 5;
-}
-
-.modalTab {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 20px;
-  height: 100%;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6B7280;
-  border: none;
-  background: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-  margin-bottom: -1px;
-  white-space: nowrap;
-}
-
-.modalTabIcon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.modalTabActive {
-  color: #1E3A5F;
-  border-bottom-color: #1E3A5F;
-  font-weight: 600;
-}
-
-.modalLeft {
-  flex: 0 0 70%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: #1e2a3a;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
-  background-size: 24px 24px;
-  position: relative;
-  border-radius: 20px 0 0 20px;
-}
-
-.modalRight {
-  flex: 0 0 30%;
-  display: flex;
-  flex-direction: column;
-  padding: 32px 28px;
-  overflow-y: auto;
-  background: #fff;
-  border-left: 1px solid #E2E8F0;
-}
-
-.modalTitle {
-  font-family: 'PT Serif', Georgia, serif;
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: #0F172A;
-  line-height: 1.4;
-  margin-bottom: 14px;
-}
-
-.modalBadges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.badge {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #1B3A6B;
-  background: #EFF6FF;
-  border-radius: 20px;
-  padding: 4px 12px;
-}
-
-.modalDivider {
-  border: none;
-  border-top: 1px solid #E2E8F0;
-  margin: 20px 0;
-}
-
-.featureList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.featureList li {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.88rem;
-  color: #374151;
-  line-height: 1.4;
-}
-
-.modalActions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.speechBtn {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1B3A6B;
-  background: transparent;
-  border: 2px solid #1B3A6B;
-  border-radius: 10px;
-  padding: 12px 22px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.speechBtn:hover { background: #EFF6FF; transform: translateY(-1px); }
-
-/* ── Мобильные тогл-чипы ── */
-.mobileToggles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.mobileToggleChip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  background: #F8FAFC;
-  border: 1.5px solid #E2E8F0;
-  border-radius: 12px;
-  padding: 12px 8px 10px;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.15s;
-  min-width: 0;
-  text-align: center;
-}
-
-.mobileToggleChip:active {
-  transform: scale(0.97);
-}
-
-.mobileToggleChipActive {
-  background: #EFF6FF;
-  border-color: #1B3A6B;
-  box-shadow: 0 0 0 1px rgba(27,58,107,0.2);
-}
-
-.mobileChipIcon {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.mobileChipLabel {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: #374151;
-  line-height: 1.3;
-}
-
-.mobileToggleChipActive .mobileChipLabel {
-  color: #15305A;
-}
-
-.mobileChipPrice {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #1B3A6B;
-}
-
-.mobileChipToggle {
-  flex-shrink: 0;
-  width: 28px;
-  height: 16px;
-  background: #CBD5E1;
-  border-radius: 20px;
-  position: relative;
-  transition: background 0.2s;
-}
-
-.mobileToggleChipActive .mobileChipToggle {
-  background: #1B3A6B;
-}
-
-.mobileChipToggle span {
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  background: #fff;
-  border-radius: 50%;
-  top: 2.5px;
-  left: 2.5px;
-  transition: left 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-}
-
-.mobileToggleChipActive .mobileChipToggle span {
-  left: 14.5px;
-}
-
-.savedNote {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.78rem;
-  color: #94A3B8;
-  text-align: center;
-  margin-top: auto;
-  padding-top: 12px;
-}
-
-/* ── Extras toggles ── */
-.extrasSection {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.toggleRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.toggleInput {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggleSlider {
-  flex-shrink: 0;
-  width: 36px;
-  height: 20px;
-  background: #CBD5E1;
-  border-radius: 20px;
-  position: relative;
-  transition: background 0.2s;
-}
-
-.toggleSlider::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  background: #fff;
-  border-radius: 50%;
-  top: 3px;
-  left: 3px;
-  transition: left 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-}
-
-.toggleInput:checked + .toggleSlider {
-  background: #1B3A6B;
-}
-
-.toggleInput:checked + .toggleSlider::after {
-  left: 19px;
-}
-
-.toggleLabel {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.88rem;
-  color: #374151;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toggleLabelIcon {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.togglePrice {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #1B3A6B;
-}
-
-.payExtrasBtn {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #fff;
-  background: #1B3A6B;
-  border: none;
-  border-radius: 10px;
-  padding: 12px;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
-  margin-top: 4px;
-}
-.payExtrasBtn:hover { opacity: 0.9; transform: translateY(-1px); }
-
-.payExtrasBtnMobile {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  background: linear-gradient(135deg, #1E3A5F 0%, #1B3A6B 55%, #35578A 100%);
-  box-shadow: 0 8px 18px rgba(27, 58, 107, 0.28);
-}
-
-/* ── Extras: статус и скачивание ── */
-.extrasLoading {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 0 4px;
-  font-family: 'Golos Text', sans-serif;
-}
-
-.extrasProgressRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.extrasProgressLabel {
-  font-size: 0.83rem;
-  color: #1B3A6B;
-  font-weight: 500;
-}
-
-.extrasProgressPct {
-  font-size: 0.78rem;
-  color: #1B3A6B;
-  font-weight: 600;
-  min-width: 32px;
-  text-align: right;
-}
-
-.extrasProgressBar {
-  height: 6px;
-  background: rgba(27, 58, 107, 0.12);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.extrasProgressFill {
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #1B3A6B, #93B5D9);
-  border-radius: 4px;
-  transform-origin: left center;
-  transition: transform 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  will-change: transform;
-}
-
-.extrasProgressFill::after {
-  content: "";
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-  animation: extrasShimmer 1.4s infinite;
-}
-
-@keyframes extrasShimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.extrasErrorMsg {
-  font-size: 0.83rem;
-  color: #EF4444;
-  margin: 8px 0 0;
-  font-family: 'Golos Text', sans-serif;
-}
-
-.extrasDownloads {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.extrasDownloadsMobile {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.extrasDownloadBtn {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.88rem;
-  font-weight: 600;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  background: #1B3A6B;
-  color: #fff;
-  text-align: left;
-  transition: opacity 0.2s, transform 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.extrasDownloadBtn:hover { opacity: 0.9; transform: translateY(-1px); }
-
-.extrasDownloadIcon {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-/* ── Титульный лист ── */
-.titleSection {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.titleSectionHeading {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #64748B;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0;
-}
-
-.titleSectionSub {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.75rem;
-  color: #9CA3AF;
-  margin-bottom: 4px;
-}
-
-.titleInput {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.85rem;
-  color: #0F172A;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  padding: 9px 12px;
-  outline: none;
-  transition: border-color 0.15s;
-  width: 100%;
-  box-sizing: border-box;
-}
-.titleInput:focus { border-color: #1B3A6B; background: #fff; }
-.titleInput::placeholder { color: #94A3B8; }
-
-.updateDocBtn {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #1B3A6B;
-  background: #EFF6FF;
-  border: none;
-  border-radius: 8px;
-  padding: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-  margin-top: 4px;
-}
-.updateDocBtn:hover:not(:disabled) { background: #DBEAFE; }
-.updateDocBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.saveProfileRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.82rem;
-  color: #64748B;
-  cursor: pointer;
-  user-select: none;
-  margin-top: 2px;
-}
-.saveProfileCheck {
-  width: 15px;
-  height: 15px;
-  accent-color: #1B3A6B;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.skipRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
-  color: #64748B;
-  cursor: pointer;
-  user-select: none;
-  margin-top: 2px;
-}
-.skipRow input[type="checkbox"] {
-  width: 13px;
-  height: 13px;
-  accent-color: #1B3A6B;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.previewSpinner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px;
-  color: #94A3B8;
-  font-size: 0.9rem;
-}
-
-.spinnerDark {
-  width: 14px; height: 14px;
-  border: 2px solid rgba(0,0,0,0.15);
-  border-top-color: #1B3A6B;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-.previewContainer {
-  min-height: 100%;
-  padding: 16px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* zoomControls — убран со всех устройств; зум только в mobileZoomRow */
-.zoomControls {
-  display: none;
-}
-
-/* Зум-ряд в мобильной нижней панели */
-.mobileZoomRow {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-@media (max-width: 768px) {
-  .mobileZoomRow { display: flex; }
-}
-
-.mobileZoomBtn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1.5px solid #E2E8F0;
-  background: #F8FAFC;
-  color: #374151;
-  font-size: 1.1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-
-.mobileZoomBtn:active { background: #EFF6FF; border-color: #1B3A6B; color: #1B3A6B; }
-
-.mobileZoomLabel {
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #64748B;
-  min-width: 42px;
-  text-align: center;
-}
-
-.zoomBtn {
-  pointer-events: all;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(15, 23, 42, 0.72);
-  color: #fff;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(6px);
-  transition: background 0.15s, transform 0.1s;
-}
-
-.zoomBtn:hover {
-  background: rgba(15, 23, 42, 0.9);
-  transform: scale(1.08);
-}
-
-.zoomLevel {
-  pointer-events: none;
-  font-family: 'Golos Text', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #fff;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(6px);
-  padding: 3px 8px;
-  border-radius: 20px;
-  min-width: 40px;
-  text-align: center;
-}
-
-@media (max-width: 768px) {
-  .previewContainer {
-    padding: 0;
-    overflow: hidden;
-    width: 100%;
-    display: block;
-    align-items: unset;
-  }
-}
-
-/* ── Мобильная шапка модалки (скрыта на десктопе) ── */
-.mobileModalHeader {
-  display: none;
-}
-
-/* ── Кнопка «Титульный лист» (только мобиль) ── */
-.mobileTitleBtn {
-  display: none;
-}
-
-/* ── Bottom-sheet редактора титульника ── */
-.titleSheetOverlay {
-  display: none;
-}
-
-/* ── Мобильная нижняя панель (скрыта на десктопе) ── */
-.mobileBottom {
-  display: none;
-}
-
-.mobileCloseBtn {
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.07);
-  color: #374151;
-  font-size: 0.95rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.featureGrid {
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 12px;
-  padding: 0;
-  margin-bottom: 12px;
-}
-.featureGrid li {
-  font-size: 0.8rem;
-  color: #374151;
-}
-
-@media (max-width: 768px) {
-  .modalOverlay {
-    padding: 0;
-    align-items: flex-end;
-    touch-action: none;
-    overscroll-behavior: contain;
-  }
-
-  .modalBox {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr auto;
-    width: 100%;
-    height: 100dvh;
-    border-radius: 0;
-    overflow: hidden;
-  }
-
-  /* На мобиле modalBody прозрачен — дети участвуют в grid напрямую */
-  .modalBody {
-    display: contents;
-  }
-
-  /* Скрываем десктопные элементы */
-  .modalClose  { display: none; }
-  .modalRight  { display: none; }
-
-  /* Мобильная шапка — строка 1 */
-  .mobileModalHeader {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px 16px 12px;
-    background: #fff;
-    border-bottom: 1px solid #E2E8F0;
-    grid-row: 1;
-  }
-  .mobileModalHeader .modalTitle {
-    font-size: 1.05rem;
-    margin-bottom: 6px;
-  }
-
-  /* Табы — строка 2 */
-  .modalTabs {
-    grid-row: 2;
-    border-radius: 0;
-  }
-
-  /* Предпросмотр — строка 3, занимает всё свободное место */
-  .modalLeft {
-    flex: unset;
-    height: unset;
-    border-left: none;
-    border-radius: 0;
-    grid-column: 1;
-    grid-row: 3;
-    overflow-y: auto;
-    overflow-x: hidden;
-    touch-action: pan-y;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  /* Кнопка «Титульный лист» */
-  .mobileTitleBtn {
-    display: block;
-    width: 100%;
-    padding: 9px 16px;
-    border: 1.5px dashed #93B5D9;
-    border-radius: 10px;
-    background: #EFF6FF;
-    color: #15305A;
-    font-family: 'Golos Text', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 500;
-    cursor: pointer;
-    text-align: center;
-    transition: background 0.15s;
-  }
-  .mobileTitleBtn:hover { background: #DBEAFE; }
-
-  /* Bottom-sheet редактора титульника */
-  .titleSheetOverlay {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 10000;
-  }
-  .titleSheet {
-    width: 100%;
-    max-height: 88vh;
-    background: #fff;
-    border-radius: 20px 20px 0 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .titleSheetHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px 12px;
-    border-bottom: 1px solid #E2E8F0;
-    flex-shrink: 0;
-  }
-  .titleSheetTitle {
-    font-family: 'Golos Text', sans-serif;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #0F172A;
-  }
-  .titleSheetClose {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(0,0,0,0.07);
-    color: #475569;
-    font-size: 0.85rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .titleSheetBody {
-    overflow-y: auto;
-    padding: 16px 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  /* Нижняя панель — строка 4 */
-  .mobileBottom {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: #fff;
-    border-top: 1px solid #E2E8F0;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
-    padding: 12px 14px 14px;
-    grid-row: 4;
-  }
-}
-
-.spinner {
-  width: 14px; height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-.metaGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.metaItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: #F8FAFC;
-  border-radius: 8px;
-  padding: 10px 14px;
-  border: 1px solid #F1F5F9;
-}
-
-.metaKey {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #94A3B8;
-}
-
-.metaVal {
-  font-size: 0.88rem;
-  color: #0F172A;
-  font-weight: 500;
-}
-
-/* TOC */
-.toc {
-  background: #fff;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-
-.tocTitle {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #94A3B8;
-  margin-bottom: 16px;
-}
-
-.tocList {
-  list-style: none;
-  padding: 0; margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tocItem {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.93rem;
-  color: #334155;
-  transition: background 0.15s;
-}
-
-.tocItem:hover { background: #F8FAFC; }
-
-.tocItemActive {
-  background: #EFF6FF;
-  color: #1B3A6B;
-  font-weight: 600;
-}
-
-.tocDots {
-  flex: 1;
-  border-bottom: 1px dotted #E2E8F0;
-  margin: 0 6px;
-  position: relative;
-  top: -3px;
-}
-
-.tocPage { color: #94A3B8; font-size: 0.82rem; }
-
-/* Sections accordion */
-.sections {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 20px;
-}
-
-.sectionBlock {
-  border: 1px solid #E2E8F0;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.sectionOpen {
-  border-color: #1B3A6B;
-  box-shadow: 0 2px 16px rgba(27, 58, 107, 0.07);
-}
-
-.sectionToggle {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 18px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #0F172A;
-  text-align: left;
-  transition: background 0.15s;
-}
-
-.sectionToggle:hover { background: #F8FAFC; }
-
-.sectionOpen .sectionToggle {
-  background: #1B3A6B;
-  color: #fff;
-}
-
-.chevron { font-size: 0.65rem; opacity: 0.6; flex-shrink: 0; }
-
-.sectionContent {
-  padding: 20px 18px;
-  background: #fff;
-  border-top: 1px solid #F1F5F9;
-  font-family: 'Golos Text', -apple-system, sans-serif;
-}
-
-/* Sources */
-.sources {
-  background: #fff;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-
-.sourcesTitle {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #94A3B8;
-  margin-bottom: 16px;
-}
-
-.sourcesList {
-  list-style: none;
-  padding: 0; margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sourceItem {
-  font-size: 0.88rem;
-  line-height: 1.6;
-  color: #334155;
-  font-style: italic;
-  padding-left: 14px;
-  position: relative;
-}
-
-.sourceItem::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  width: 4px;
-  height: 4px;
-  background: #1B3A6B;
-  border-radius: 50%;
-}
-
-/* Tables */
-.tableWrapper { margin: 16px 0 20px; overflow-x: auto; }
-
-.tableCaption {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #0F172A;
-  margin-bottom: 8px;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.88rem;
-}
-
-.th {
-  background: #0F172A;
-  color: #fff;
-  font-weight: 600;
-  padding: 9px 12px;
-  text-align: center;
-  border: 1px solid #0F172A;
-  font-size: 0.82rem;
-}
-
-.td {
-  padding: 8px 12px;
-  border: 1px solid #E2E8F0;
-  color: #334155;
-  vertical-align: top;
-}
-
-.table tr:nth-child(even) .td { background: #F8FAFC; }
-
-.para {
-  margin: 0 0 10px;
-  line-height: 1.8;
-  font-size: 0.95rem;
-  color: #334155;
-  font-weight: 400;
-}
-
-.para:last-child { margin-bottom: 0; }
-
-/* ══════════════════════════════════════════
-   YUKASSA TEST BANNER
-══════════════════════════════════════════ */
-.yukassaBanner {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  background: rgba(27,58,107,0.06);
-  border: 1px solid rgba(147,181,217,0.35);
-  border-radius: 14px;
-  padding: 16px 20px;
-  margin-bottom: 24px;
-  text-align: left;
-}
-
-.yukassaBannerUsed {
-  background: rgba(52,211,153,0.08);
-  border-color: rgba(52,211,153,0.25);
-}
-
-.yukassaBannerIcon {
-  font-size: 1.3rem;
-  flex-shrink: 0;
-  line-height: 1.3;
-  margin-top: 1px;
-}
-
-.yukassaBannerTitle {
-  font-family: 'PT Serif', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 4px;
-  line-height: 1.3;
-}
-
-.yukassaBannerText {
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.6);
-  margin: 0;
-  line-height: 1.55;
-}
-
-.yukassaBannerLink {
-  color: #D97706;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* ══════════════════════════════════════════
-   PREVIEW PROMO (внутри genCard)
-══════════════════════════════════════════ */
-.previewPromo {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  text-align: left;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
-  border: 1px solid #dbeafe;
-}
-
-.previewPromoIcon {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: #fff;
-  border: 1px solid #bfdbfe;
-  color: #1b3a6b;
-}
-
-.previewPromoBody {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.previewPromoTitle {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #0f172a;
-  margin: 0 0 4px;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-.previewPromoText {
-  font-size: 0.76rem;
-  line-height: 1.45;
-  color: #64748b;
-  margin: 0;
-}
-
-.previewPromoBadge {
-  flex-shrink: 0;
-  align-self: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  background: #1b3a6b;
-  border-radius: 999px;
-  line-height: 1;
-}
-
-@media (max-width: 520px) {
-  .previewPromo {
-    flex-wrap: wrap;
-    padding: 11px 12px;
-    gap: 10px;
-  }
-
-  .previewPromoBadge {
-    align-self: flex-start;
-  }
-}
-
-/* ══════════════════════════════════════════
-   PROFILE BANNER
-══════════════════════════════════════════ */
-.profileBanner {
-  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%);
-  color: #fff;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.profileBannerContent {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.profileBannerIcon {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.profileBannerTitle {
-  font-family: 'PT Serif', Georgia, serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 0 0 2px;
-}
-
-.profileBannerSub {
-  font-size: 0.82rem;
-  opacity: 0.75;
-  margin: 0;
-}
-
-.profileBannerActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.profileBannerBtn {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #1a2744;
-  background: #fff;
-  border-radius: 6px;
-  padding: 8px 16px;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: opacity 0.2s;
-}
-
-.profileBannerBtn:hover { opacity: 0.9; }
-
-.profileBannerClose {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.7);
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 4px 8px;
-  transition: color 0.2s;
-}
-
-.profileBannerClose:hover { color: #fff; }
-
-/* ── Preview link ── */
-.previewLink {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #EFF6FF;
-  border: 1px solid #BFCFE3;
-  border-radius: 10px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  font-size: 0.88rem;
-  color: #475569;
-}
-
-.previewLinkIcon { font-size: 1rem; flex-shrink: 0; }
-
-.previewLinkUrl {
-  color: #1B3A6B;
-  text-decoration: none;
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.previewLinkUrl:hover { text-decoration: underline; }
-
-.previewLinkCopy {
-  font-family: 'Golos Text', -apple-system, sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #1B3A6B;
-  background: #fff;
-  border: 1px solid #BFCFE3;
-  border-radius: 6px;
-  padding: 5px 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.previewLinkCopy:hover { background: #1B3A6B; color: #fff; }
 
 /* ══════════════════════════════════════════
    WHY US
@@ -4043,35 +2178,64 @@
 }
 
 /* ══════════════════════════════════════════
-   MOBILE — планшет/телефон (герой на весь экран под шапкой)
+   MOBILE — планшет/телефон
 ══════════════════════════════════════════ */
 @media (max-width: 768px) {
   .hero {
     box-sizing: border-box;
-    /* Высота первого экрана минус примерная высота header (60px) + lang-баннер (~56px) */
-    min-height: calc(100vh - 120px);
-    min-height: calc(100svh - 120px);
-    display: flex;
-    flex-direction: column;
+    min-height: 0;
+    padding: 16px 12px 28px;
+    display: block;
   }
 
   .heroInner {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
+    flex: none;
+    display: block;
     width: 100%;
+    max-width: 100%;
     min-height: 0;
   }
 
-  .heroTitle {
-    font-size: clamp(2.1rem, 5vw, 2.8rem);
-    line-height: 1.14;
+  .heroIntro {
+    margin-bottom: 14px;
   }
 
-  .heroSub {
-    font-size: 0.9rem;
-    line-height: 1.52;
+  .heroTitle {
+    font-size: clamp(1.42rem, 5.8vw, 1.75rem);
+    line-height: 1.22;
+    max-width: 100%;
+    margin-bottom: 14px;
+  }
+
+  .genCard {
+    padding: 14px 12px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+  }
+
+  .heroForm {
+    gap: 12px;
+  }
+
+  .topicLabelRow {
+    margin-bottom: 2px;
+  }
+
+  .pagesControl {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px 10px;
+    align-items: center;
+  }
+
+  .range {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .formControls {
+    width: 100%;
   }
 }
 
@@ -4080,103 +2244,55 @@
 ══════════════════════════════════════════ */
 @media (max-width: 480px) {
   .hero {
-    padding: 40px 14px 36px;
+    padding: 12px 10px 24px;
   }
 
   .heroTitle {
-    font-size: clamp(2.05rem, 9vw, 2.85rem);
-    line-height: 1.14;
-    margin-bottom: 10px;
+    font-size: clamp(1.35rem, 6.2vw, 1.62rem);
+    line-height: 1.2;
+    margin-bottom: 12px;
   }
 
-  .heroSub {
-    font-size: 0.86rem;
-    line-height: 1.5;
-    margin-bottom: 8px;
-  }
-
-  .heroScrollHints {
-    gap: 4px 10px;
-    margin-bottom: 16px;
-  }
-
-  .heroScrollHint {
-    font-size: 0.72rem;
-  }
-
-  .heroBadgeRow {
-    gap: 6px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .heroBadge, .heroBadgeFree {
-    font-size: 0.64rem;
-    padding: 4px 10px;
-    white-space: nowrap;
-  }
-
-  .metaBadges {
-    display: none;
+  .genCard {
+    padding: 12px 10px;
+    border-radius: 14px;
   }
 
   .workTypes {
-    gap: 8px;
-    margin: 0 0 16px;
-    padding: 4px 0 8px;
+    gap: 4px;
+    margin-bottom: 10px;
   }
 
   .workType {
-    padding: 10px 12px;
-    min-width: 112px;
-    max-width: 85vw;
-    scroll-snap-align: center;
-  }
-
-  .heroTrustIcon {
-    width: 19px;
-    height: 19px;
-  }
-
-  .heroTrustIcon + .heroTrustIcon {
-    margin-left: -5px;
-  }
-
-  .workTypeLabel { font-size: 0.8rem; }
-
-  .genCardTrust li {
-    font-size: 0.64rem;
-  }
-
-  .genCardTrustIcon {
-    width: 26px;
-    height: 26px;
+    min-width: 68px;
+    padding: 7px 4px;
+    border-radius: 9px;
   }
 
   .heroInput {
     font-size: 16px;
-    padding: 14px 16px;
+    padding: 14px 14px;
     border-radius: 12px;
   }
 
   .typedPlaceholder {
     font-size: 1rem;
-    padding: 14px 16px;
+    padding: 14px 14px;
   }
 
   .heroBtn {
-    font-size: 0.88rem;
-    padding: 14px 14px;
+    font-size: 0.92rem;
+    padding: 14px 16px;
     border-radius: 12px;
-    min-height: 50px;
-    white-space: nowrap;
+    min-height: 48px;
+    white-space: normal;
+    line-height: 1.25;
   }
 
   .formControls {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .btnRow {
@@ -4188,57 +2304,6 @@
     flex: unset;
   }
 
-
-  .progressSection {
-    padding: 22px 12px;
-  }
-
-  .progressCard {
-    padding: 18px 14px;
-    border-radius: 16px;
-  }
-
-  .progressTop {
-    align-items: flex-start;
-    gap: 6px 10px;
-  }
-
-  .progressStepCount {
-    font-size: 0.62rem;
-    letter-spacing: 0.07em;
-    max-width: 100%;
-  }
-
-  .progressPercent {
-    font-size: clamp(1rem, 4.8vw, 1.28rem);
-    line-height: 1.25;
-    max-width: 100%;
-  }
-
-  .progressTopic {
-    font-size: 0.75rem;
-    margin-bottom: 12px;
-  }
-
-  .progressBar {
-    margin-bottom: 12px;
-  }
-
-  .progressCurrentLabel {
-    font-size: 0.86rem;
-    margin-bottom: 12px;
-  }
-
-  .progressSectionMeta {
-    margin: -6px 0 10px;
-    font-size: 0.66rem;
-    padding: 3px 8px;
-  }
-
-  .progressHint {
-    font-size: 0.72rem;
-  }
-
   .stepsSection,
   .whySection,
   .faqSection {
@@ -4248,7 +2313,6 @@
   .trustSection {
     padding: 52px 20px 60px;
   }
-
 
   .sectionTitle {
     font-size: clamp(1.5rem, 7vw, 2rem);
@@ -4269,7 +2333,6 @@
     padding: 6px 10px;
   }
 
-
   .faqQ {
     font-size: 0.9rem;
     padding: 14px 16px;
@@ -4288,6 +2351,67 @@
   box-sizing: border-box;
 }
 
+.presentationExtrasHeroConfig {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px 14px 10px;
+}
+
+.presentationExtrasHeroMaterials {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.presentationExtrasHeroMaterialsCompact {
+  gap: 6px;
+  align-items: stretch;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationExtrasHeroHint {
+  font-size: 0.7rem;
+  line-height: 1.3;
+  text-align: left;
+  max-width: none;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationExtrasHeroGrid {
+  gap: 8px;
+  max-width: 100%;
+  width: 100%;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationHeroCard {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border-width: 1.5px;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationHeroIcon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationHeroTitle {
+  font-size: 0.74rem;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.presentationExtrasHeroMaterialsCompact .presentationHeroPrice {
+  font-size: 0.68rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .presentationExtrasHeroHint {
   margin: 0;
   font-family: "Golos Text", sans-serif;
@@ -4296,6 +2420,18 @@
   color: rgba(255, 255, 255, 0.65);
   text-align: center;
   max-width: 360px;
+}
+
+.presPresentonNotice {
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+  flex-shrink: 0;
 }
 
 .presentationExtrasHeroGrid {
@@ -4381,18 +2517,50 @@
   transform: scale(0.98);
 }
 
+@media (max-width: 768px) {
+  .presentationExtrasHeroConfig {
+    padding: 8px 10px 6px;
+    gap: 6px;
+  }
+
+  .presentationExtrasHeroMaterialsCompact .presentationExtrasHeroHint {
+    display: none;
+  }
+
+  .presentationExtrasHeroMaterialsCompact .presentationExtrasHeroGrid {
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .presentationExtrasHeroMaterialsCompact .presentationHeroCard {
+    padding: 6px 8px;
+    gap: 6px;
+    min-height: 0;
+  }
+
+  .presentationExtrasHeroMaterialsCompact .presentationHeroIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .presentationExtrasHeroMaterialsCompact .presentationHeroTitle {
+    font-size: 0.7rem;
+  }
+}
+
 @media (max-width: 560px) {
-  .presentationExtrasHero {
+  .presentationExtrasHero:not(.presentationExtrasHeroConfig) {
     padding: 18px 12px 22px;
   }
 
-  .presentationExtrasHeroGrid {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationExtrasHeroGrid {
     grid-template-columns: 1fr;
     max-width: 100%;
     width: min(100%, 340px);
   }
 
-  .presentationHeroCard {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroCard {
     flex-direction: row;
     justify-content: flex-start;
     padding: 16px 14px;
@@ -4400,28 +2568,28 @@
     min-height: 86px;
   }
 
-  .presentationHeroIcon {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroIcon {
     width: 44px;
     height: 44px;
     flex-shrink: 0;
   }
 
-  .presentationHeroTitle,
-  .presentationHeroPrice {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroTitle,
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroPrice {
     text-align: left;
   }
 
-  .presentationHeroTitle {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroTitle {
     font-size: 0.92rem;
     line-height: 1.2;
   }
 
-  .presentationHeroPrice {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroPrice {
     font-size: 0.9rem;
     white-space: nowrap;
   }
 
-  .presentationHeroCard .presentationHeroPrice {
+  .presentationExtrasHeroMaterials:not(.presentationExtrasHeroMaterialsCompact) .presentationHeroCard .presentationHeroPrice {
     margin-left: auto;
   }
 }

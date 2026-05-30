@@ -157,8 +157,10 @@ const VKProvider = {
 console.info("[auth] oauth http timeout configured", { timeoutMs: 15000 });
 
 // ── Настройки NextAuth ───────────────────────────────────────────
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],
+  useSecureCookies: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+  allowDangerousEmailAccountLinking: true,
 
   providers: [
     YandexProvider,
@@ -194,7 +196,13 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async redirect({ baseUrl }) {
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      try {
+        if (new URL(url).origin === new URL(baseUrl).origin) return url;
+      } catch {
+        /* ignore malformed url */
+      }
       return baseUrl;
     },
     // Добавляем id, role, banned пользователя в сессию + флаг бесплатного предпросмотра
@@ -207,8 +215,6 @@ export const authOptions: NextAuthOptions = {
             role: true,
             banned: true,
             createdAt: true,
-            freePreviewUses: true,
-            freePreviewQuota: true,
           },
         });
         if (db) {
@@ -217,14 +223,7 @@ export const authOptions: NextAuthOptions = {
           (session.user as { banned: boolean }).banned = db.banned ?? false;
           (session.user as { createdAt?: string }).createdAt =
             db.createdAt instanceof Date ? db.createdAt.toISOString() : undefined;
-          const isAdmin = db.role === "admin";
-          const quota = Math.max(0, db.freePreviewQuota ?? 1);
-          const used = Math.max(0, db.freePreviewUses ?? 0);
-          const remaining = Math.max(0, quota - used);
-          (session.user as { previewAvailable?: boolean }).previewAvailable = isAdmin || remaining > 0;
-          (session.user as { previewQuota?: number }).previewQuota = quota;
-          (session.user as { previewUses?: number }).previewUses = used;
-          (session.user as { previewRemaining?: number }).previewRemaining = remaining;
+          (session.user as { previewAvailable?: boolean }).previewAvailable = true;
           (session.user as { firstOrderDiscountEligible?: boolean }).firstOrderDiscountEligible =
             await isFirstOrderDiscountEligible(db.id, db.role);
         }
@@ -243,6 +242,68 @@ export const authOptions: NextAuthOptions = {
     strategy: "database",
   },
 
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.callback-url"
+          : "next-auth.callback-url",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+      },
+    },
+    csrfToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Host-next-auth.csrf-token"
+          : "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+      },
+    },
+    pkceCodeVerifier: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.pkce.code_verifier"
+          : "next-auth.pkce.code_verifier",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+        maxAge: 60 * 15,
+      },
+    },
+    state: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.state"
+          : "next-auth.state",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
+        maxAge: 60 * 15,
+      },
+    },
+  },
+
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
-};
+  debug: process.env.NODE_ENV === "development",
+} satisfies NextAuthOptions & { allowDangerousEmailAccountLinking?: boolean };

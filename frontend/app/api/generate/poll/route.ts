@@ -49,6 +49,26 @@ export async function GET(request: NextRequest) {
     });
     if (!gen) return NextResponse.json({ status: "not_found" }, { status: 404 });
     if (gen.status === "completed") {
+      if (includeResult) {
+        const full = await prisma.generation.findFirst({
+          where: { id: gen.id, userId },
+          select: { result: true },
+        });
+        let result: unknown;
+        if (full?.result) {
+          try {
+            result = JSON.parse(full.result);
+          } catch {
+            result = undefined;
+          }
+        }
+        return NextResponse.json({
+          status: "done",
+          slug: gen.slug,
+          id: gen.id,
+          ...(result ? { result } : {}),
+        });
+      }
       return NextResponse.json({ status: "done", slug: gen.slug, id: gen.id });
     }
     if (gen.status === "failed") {

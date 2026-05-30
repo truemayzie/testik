@@ -1,4 +1,4 @@
-/** Единый источник цветов слайдов для PresentationViewer и render_slides.js */
+/** Цвета слайдов для PresentationViewer */
 
 export const ACCENT_COLOR: Record<string, string> = {
   blue:     "#1E3A5F",

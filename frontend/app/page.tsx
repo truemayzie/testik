@@ -1,124 +1,31 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TypewriterInput from "./components/TypewriterInput";
-import PaymentWidget from "./components/PaymentWidget";
 import ExamplesSection from "./components/ExamplesSection";
-import { WORK_PRICES, WORK_PAGES, WORK_GEN_TIME } from "../lib/prices";
-import {
-  applyFirstOrderDiscount,
-  calcWorkOrderTotals,
-  FIRST_ORDER_DISCOUNT_PERCENT,
-} from "../lib/firstOrderDiscount";
+import { getHeroTitle } from "@/lib/heroCopy";
+import { WORK_PRICES, WORK_PAGES } from "../lib/prices";
 import { prepareTopic } from "../lib/topicValidate";
-import { writeGenState, patchGenState, clearGenState, readGenState } from "./lib/genState";
-import { getProgressSteps, type Step } from "./lib/progressSteps";
-import { useModalContext } from "./lib/ModalContext";
-import { useModalA11y } from "./lib/useModalA11y";
-import { trackWorkActivityClient } from "@/app/lib/trackWorkActivity";
-import { detectPaymentMarket } from "@/lib/paymentMarket";
 import { safeJsonLd } from "@/lib/safeJsonLd";
-import { clearPaymentPreviewClientCaches } from "@/lib/paymentPreviewClient";
+import {
+  clearPendingOrderDraft,
+  hasPendingPreviewAfterAuth,
+  loadPendingOrderDraft,
+  markPendingPreviewAfterAuth,
+  savePendingOrderDraft,
+  consumePendingPreviewAfterAuth,
+} from "@/lib/pendingOrderDraft";
 import styles from "./page.module.css";
-import PresentationViewer, { type Slide } from "./components/PresentationViewer";
 
-type ReferatResult = {
-  title: string;
-  structure: string[];
-  content: Record<string, string>;
-  sources: string[];
-  meta: Record<string, string | number>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  profile?: Record<string, any>;
-};
-
-const GENERATE_MAX_WAIT_MS = 25 * 60 * 1000;
-const GENERATE_POLL_MS = 5_000;
-
-type TitleForm = {
-  fullName: string;
-  university: string;
-  faculty: string;
-  department: string;
-  groupNumber: string;
-  teacherName: string;
-  city: string;
-  speciality: string;
-  discipline: string;
-};
-
-// ── Состояние текущей генерации (живёт между client-side навигациями) ────────
-// Модульная переменная — не сбрасывается при router.push/Link, только при F5
-type PendingCb = (data: ReferatResult | null, error: string) => void;
-const _gen = (() => {
-  let _topic = ""; let _pages = 0; let _workType = ""; let _startedAt = 0;
-  let _done = false; let _data: ReferatResult | null = null; let _err = "";
-  const _cbs: PendingCb[] = [];
-  return {
-    get active()    { return _startedAt > 0 && !_done; },
-    get done()      { return _done; },
-    get startedAt() { return _startedAt; },
-    get topic()     { return _topic; },
-    get pages()     { return _pages; },
-    get workType()  { return _workType; },
-    start(t: string, p: number, wt: string) {
-      _topic = t; _pages = p; _workType = wt;
-      _startedAt = Date.now(); _done = false; _data = null; _err = "";
-    },
-    resolve(d: ReferatResult | null, e: string) {
-      _done = true; _data = d; _err = e;
-      _cbs.splice(0).forEach(cb => cb(d, e));
-      setTimeout(() => { if (_done) _startedAt = 0; }, 60_000); // сбрасываем через минуту
-    },
-    listen(cb: PendingCb) {
-      if (_done || !_startedAt) { cb(_data, _err); return; }
-      _cbs.push(cb);
-    },
-    cancel() { _cbs.splice(0); _startedAt = 0; _done = false; },
-  };
-})();
-
-// ── Состояние extras-генерации (живёт между навигациями, как _gen) ───────────
-type ExtrasCb = (ready: string[], error: string) => void;
-const _extras = (() => {
-  let _jobId: string | null   = null;
-  let _done  = false;
-  let _ready: string[]        = [];
-  let _err   = "";
-  const _cbs: ExtrasCb[]      = [];
-  return {
-    get active() { return !!_jobId && !_done; },
-    get jobId()  { return _jobId; },
-    get done()   { return _done; },
-    get ready()  { return _ready; },
-    start(jobId: string) { _jobId = jobId; _done = false; _ready = []; _err = ""; },
-    resolve(ready: string[], err: string) {
-      _done = true; _ready = ready; _err = err;
-      _cbs.splice(0).forEach(cb => cb(ready, err));
-    },
-    listen(cb: ExtrasCb) {
-      if (_done || !_jobId) { cb(_ready, _err); return; }
-      _cbs.push(cb);
-    },
-    clear() { _jobId = null; _done = false; _ready = []; _err = ""; },
-  };
-})();
-
-// Флаг: поллинг extras уже запущен (один на весь модуль — не дублируется при ремонте)
-let _extrasPollingStarted = false;
-// ID генерации (для записи extras в БД после завершения)
-let _extrasGenId: string | null = null;
-// JSON-структура слайдов (получена при поллинге extras)
-let _extrasSlides: { accent: string; slides: unknown[] } | null = null;
-// Pending extras items от предварительного выбора в форме (до оплаты)
-let _pendingExtrasItems: string[] | null = null;
-
-// Сортировка по возрастанию страниц: Сочинение < Эссе < Доклад < Реферат < Курсовая < ВКР
 const WORK_TYPES = ["Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР"];
+
+function formatWorksCreatedLabel(count: number): string {
+  const display = count >= 100 ? Math.floor(count / 100) * 100 : count;
+  return `Создано уже более ${display.toLocaleString("ru-RU")} работ`;
+}
 
 const WHY_FEATURES = [
   { label: "Скорость",       value: "7–10 минут",          note: "Реалистичный срок с учетом объемных работ" },
@@ -128,7 +35,6 @@ const WHY_FEATURES = [
   { label: "Везде",          value: "Любой браузер",        note: "Со смартфона или компьютера, без установки" },
 ];
 
-// SVG-иконки для WHY_FEATURES (amber, 18×18)
 const WHY_ICONS: Record<string, React.ReactNode> = {
   "Скорость": (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -157,42 +63,13 @@ const WHY_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-const GEN_TRUST_ICONS = {
-  gost: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="8" y1="13" x2="16" y2="13" />
-      <line x1="8" y1="17" x2="13" y2="17" />
-    </svg>
-  ),
-  sources: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-      <line x1="8" y1="7" x2="16" y2="7" />
-      <line x1="8" y1="11" x2="14" y2="11" />
-    </svg>
-  ),
-  fast: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  ),
-} as const;
-
-// SVG-иконки для шагов
 const STEP_ICONS = [
-  // 01: Ввести тему — карандаш
   <svg key="edit" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>,
-  // 02: Превью — глаз
   <svg key="eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
   </svg>,
-  // 03: Скачать — download
   <svg key="download" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
   </svg>,
@@ -204,8 +81,8 @@ const HOW_STEPS = [
     text: "Выберите формат — от сочинения до ВКР — и введите тему. Можно кратко, главное передать суть.",
   },
   {
-    title: "Превью до оплаты",
-    text: "Бесплатно смотрите содержание и фрагмент текста. Полная версия — после оплаты.",
+    title: "Превью перед оплатой",
+    text: "Смотрите содержание и фрагмент текста. Полная версия — после оплаты.",
   },
   {
     title: "DOCX по ГОСТ",
@@ -323,7 +200,7 @@ function CompareAiCell({
 const FAQ = [
   {
     q: "Как работает генерация?",
-    a: "Введите тему, выберите тип и объём работы, нажмите «Сгенерировать». Refai строит план, ищет реальные источники через научные базы, пишет введение, все главы, заключение и список литературы. Готовый DOCX-файл скачивается сразу.",
+    a: "Введите тему, выберите тип работы и нажмите «Посмотреть превью». На странице заказа увидите содержание и фрагмент текста, затем оплатите полную генерацию. Refai строит план, ищет реальные источники, пишет все разделы и оформляет DOCX по ГОСТ.",
   },
   {
     q: "Какой файл получу на выходе?",
@@ -351,7 +228,6 @@ const FAQ = [
   },
 ];
 
-// ── Пул из 50 работ для имитации живой ленты ─────────────────────────────────
 const MOCK_WORKS_POOL = [
   { type: "Курсовая",  title: "Народное художественное творчество как материал для речевого развития школьников" },
   { type: "ВКР",       title: "Цифровая трансформация банковского сектора России в условиях санкционного давления" },
@@ -405,7 +281,6 @@ const MOCK_WORKS_POOL = [
   { type: "Эссе",      title: "Одиночество как феномен современного общества потребления" },
 ];
 
-// Fisher-Yates shuffle
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -413,26 +288,6 @@ function shuffleArray<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-function getDailyGenCount(): number {
-  const now = new Date();
-  const h = now.getHours() + now.getMinutes() / 60;
-  let target: number;
-  if (h < 8)       target = Math.round(h * 3);
-  else if (h < 13) target = Math.round(24 + (h - 8) * 18);
-  else if (h < 20) target = Math.round(114 + (h - 13) * 14);
-  else             target = Math.round(212 + (h - 20) * 10);
-  const jitter = Math.floor((Math.random() - 0.5) * 6);
-  return Math.max(0, target + jitter);
-}
-
-function timeAgo(minutesAgo: number): string {
-  if (minutesAgo < 1) return "только что";
-  if (minutesAgo < 60) return `${minutesAgo} мин. назад`;
-  const h = Math.floor(minutesAgo / 60);
-  if (h < 24) return `${h} ч. назад`;
-  return `${Math.floor(h / 24)} дн. назад`;
 }
 
 type DisplayWork = {
@@ -456,7 +311,7 @@ function buildInitialWorks(pool: typeof MOCK_WORKS_POOL): DisplayWork[] {
     id: `mock-${i}-${Date.now()}`,
     workType: w.type,
     topic: w.title,
-    minutesAgo: 2 + Math.floor(Math.random() * 53), // 2–55 мин назад
+    minutesAgo: 2 + Math.floor(Math.random() * 53),
     isNew: false,
   }));
 }
@@ -470,39 +325,20 @@ const WORK_TYPE_COLORS: Record<string, string> = {
   "ВКР":       "#DC2626",
 };
 
-const WORK_TYPE_ICONS: Record<string, string> = {
-  "Сочинение": "✍️",
-  "Эссе":      "📝",
-  "Доклад":    "📋",
-  "Реферат":   "📄",
-  "Курсовая":  "📚",
-  "ВКР":       "🎓",
+const SLOT_WEIGHTS: Record<string, number> = {
+  "Сочинение": 1,
+  "Эссе": 1,
+  "Доклад": 2,
+  "Реферат": 2,
+  "Курсовая": 4,
+  "ВКР": 5,
+  "Тест": 1,
 };
-
-const FUN_FACTS = [
-  "Средний студент тратит около 17 часов в неделю на подготовку к занятиям",
-  "Исследования показывают что написание конспектов от руки улучшает запоминание на 40%",
-  "Первый университет в мире — Болонский — был основан в 1088 году",
-  "Чтение вслух помогает запомнить материал лучше чем молчаливое чтение",
-  "В среднем человек может удерживать концентрацию внимания около 25 минут",
-  "Метод Помодоро — 25 минут работы и 5 минут отдыха — повышает продуктивность на 30%",
-  "Сон после изучения нового материала улучшает его запоминание на 20–30%",
-  "Первая печатная книга была создана Гутенбергом около 1450 года",
-  "Объяснение материала другому человеку — один из лучших способов его выучить",
-  "В России насчитывается более 700 высших учебных заведений",
-  "Средняя длина научной статьи составляет около 8000 слов",
-  "Библиотека Конгресса США содержит более 170 миллионов единиц хранения",
-  "Написание от руки активирует больше областей мозга чем печать на клавиатуре",
-  "Перерывы во время учёбы повышают эффективность усвоения материала",
-  "Первая электронная книга была создана в 1971 году в рамках проекта Гутенберг",
-];
 
 export default function Home() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
 
-  // Цель Метрики "Успешная регистрация" — у NextAuth нет отдельного URL для sign-up,
-  // поэтому фиксируем событие при первом входе (создание User в БД) по createdAt.
   useEffect(() => {
     try {
       if (sessionStatus !== "authenticated") return;
@@ -512,7 +348,6 @@ export default function Home() {
       const createdAtMs = Date.parse(createdAtIso);
       if (!Number.isFinite(createdAtMs)) return;
 
-      // окно "новый пользователь": 10 минут
       const isNewUser = Date.now() - createdAtMs < 10 * 60 * 1000;
       if (!isNewUser) return;
 
@@ -527,30 +362,13 @@ export default function Home() {
       ymFn(108284268, "reachGoal", "signup_success");
       window.localStorage.setItem(key, "1");
     } catch {
-      // no-op: не ломаем UI из-за аналитики
+      // no-op
     }
   }, [sessionStatus, session]);
 
-  // Тестовый аккаунт ЮКасса
   const userRole  = (session?.user as { role?: string } | null)?.role;
   const isYukassa = userRole === "yukassa_test";
   const isAdmin   = userRole === "admin";
-  const previewUser = session?.user as {
-    previewRemaining?: number;
-    previewQuota?: number;
-  } | null;
-  const previewQuota = previewUser?.previewQuota ?? 1;
-  const previewRemaining = previewUser?.previewRemaining ?? 0;
-  const previewAvailable =
-    sessionStatus === "authenticated" && session?.user?.previewAvailable === true;
-  const firstOrderDiscountEligible =
-    (session?.user as { firstOrderDiscountEligible?: boolean } | undefined)
-      ?.firstOrderDiscountEligible === true;
-  const showFirstOrderDiscount =
-    !isYukassa &&
-    !isAdmin &&
-    sessionStatus !== "loading" &&
-    (sessionStatus === "unauthenticated" || firstOrderDiscountEligible);
   const YUKASSA_TYPES = ["Сочинение", "Эссе", "Доклад"];
 
   const [workType, setWorkType]               = useState("");
@@ -558,111 +376,22 @@ export default function Home() {
   const [topicFieldError, setTopicFieldError] = useState<string | null>(null);
   const [workTypeError, setWorkTypeError]     = useState<string | null>(null);
   const [pages, setPages]                     = useState(20);
-  const [loading, setLoading]                 = useState(false);
-  const [result, setResult]                   = useState<ReferatResult | null>(null);
-  const [error, setError]                     = useState<{ message: string; status: number } | null>(null);
-  const [activeSection, setActiveSection]     = useState("");
-  const [downloading, setDownloading]         = useState(false);
-  const [previewLoading, setPreviewLoading]   = useState(false);
-  const [showResultModal, setShowResultModal] = useState(false);
-  const [modalClosing, setModalClosing]       = useState(false);
-  const { setModalOpen }                      = useModalContext();
-  const wantPresentation = false;
-  const wantSpeech       = false;
-  const [presentationSel, setPresentationSel]   = useState(false);
-  const [speechSel, setSpeechSel]               = useState(false);
-  const [extrasJobId, setExtrasJobId]         = useState<string | null>(null);
-  const [extrasGenerating, setExtrasGenerating] = useState(false);
-  const [extrasReady, setExtrasReady]         = useState<string[]>([]);
-  const [extrasError, setExtrasError]         = useState<string | null>(null);
-  const [generationId, setGenerationId]       = useState<string | null>(null);
-  const [generationSlug, setGenerationSlug]   = useState<string | null>(null);
-  const extrasProgressRef                     = useRef<number>(0);
-  const [extrasProgress, setExtrasProgress]   = useState(0);
-  const [modalTab, setModalTab]               = useState<"work" | "presentation">("work");
-  const [slidesData, setSlidesData]           = useState<{ accent: string; slides: unknown[] } | null>(null);
-  const [presentationImages, setPresentationImages] = useState<Record<number, string>>({});
-  const [downloadingPptx, setDownloadingPptx] = useState(false);
-  const [titleForm, setTitleForm]             = useState<TitleForm>({ fullName: "", university: "", faculty: "", department: "", groupNumber: "", teacherName: "", city: "", speciality: "", discipline: "" });
-  const [titleUpdating, setTitleUpdating]     = useState(false);
-  const [saveProfile, setSaveProfile]         = useState(false);
-  const [skipFaculty, setSkipFaculty]         = useState(false);
-  const [skipSpeciality, setSkipSpeciality]   = useState(false);
-  const [skipDiscipline, setSkipDiscipline]   = useState(false);
-  const [showTitleModal, setShowTitleModal]   = useState(false);
-  const previewContainerRef                   = useRef<HTMLDivElement>(null);
-  const baseScaleRef                          = useRef<number>(1);
-  const resultModalRef                        = useRef<HTMLDivElement>(null);
-  const resultModalCloseRef                   = useRef<HTMLButtonElement>(null);
-  const [previewZoom, setPreviewZoom]         = useState(1);
-  const [bannerDismissed, setBannerDismissed] = useState(true); // true пока не проверили
-  const [profileFilled, setProfileFilled]     = useState(true); // true пока не проверили
+  const [submitting, setSubmitting]           = useState(false);
+  const [capacityError, setCapacityError]     = useState<string[] | null>(null);
   const [recentWorks, setRecentWorks]         = useState<RecentWorkItem[]>([]);
   const [displayedWorks, setDisplayedWorks]   = useState<DisplayWork[]>([]);
   const [usingRealWorks, setUsingRealWorks]   = useState(false);
   const poolRef                               = useRef<typeof MOCK_WORKS_POOL>([]);
   const poolCursorRef                         = useRef(0);
-  /** Не вызывать getDailyGenCount в useState: там есть Math.random() → разный HTML на SSR и при гидрации. */
-  const [dailyCount, setDailyCount]           = useState(0);
   const [faqOpen, setFaqOpen]                 = useState<number | null>(null);
   const [trialUsed, setTrialUsed]             = useState(false);
-  const [f5Recovery, setF5Recovery]           = useState(false);
-  const [paymentLoading, setPaymentLoading]   = useState(false);
-  type PaymentWidgetData = { workType: string; extras: string[]; topic: string };
-  const [paymentWidgetData, setPaymentWidgetData] = useState<PaymentWidgetData | null>(null);
-  const [capacityError, setCapacityError]     = useState<string[] | null>(null); // null = нет ошибки, [] = всё занято, [...] = доступные типы
+  const [worksCreated, setWorksCreated]       = useState(0);
 
-  // Прогресс
-  const [stepIndex, setStepIndex]       = useState(0);
-
-  const [totalProgress, setTotalProgress] = useState(0);
-  const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
-  const [backendStageLabel, setBackendStageLabel] = useState<string>("");
-  const [dots, setDots] = useState(".");
-
-  const [factIndex, setFactIndex]   = useState(0);
-  const [factVisible, setFactVisible] = useState(true);
-  const [isMobileViewport, setIsMobileViewport] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= 768
-  );
-
-  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const smoothProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stepsRef        = useRef<Step[]>([]);
-  const autoStarted     = useRef(false); // защита от двойного запуска (React Strict Mode)
-  const authReturnHandled = useRef(false);
-  const f5InfoRef       = useRef<{ workType: string; startedAt: number; generationId?: string }>({ workType: "Реферат", startedAt: 0 });
-  const f5IdleStreakRef = useRef(0);
-  const isUnloadingRef  = useRef(false); // флаг F5 / ухода со страницы
-  const loadingRef      = useRef(false);  // актуальное значение loading для beforeunload
-  const currentGenRef   = useRef<{ topic: string; pages: number; workType: string; startedAt: number; generationId?: string } | null>(null);
   const heroRef             = useRef<HTMLElement>(null);
-  const progressSectionRef  = useRef<HTMLElement>(null);
   const workTypesRef        = useRef<HTMLDivElement>(null);
   const workTypeElsRef      = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  useEffect(() => {
-    const updateViewport = () => setIsMobileViewport(window.innerWidth <= 768);
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
-
-  // После старта генерации прокручиваем к прогресс-бару (мобилки не видят его под hero)
-  useEffect(() => {
-    if (!loading) return;
-    const id = requestAnimationFrame(() => {
-      setTimeout(() => {
-        progressSectionRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block:    "center",
-          inline:   "nearest",
-        });
-      }, 80);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [loading]);
+  const prevUserIdRef       = useRef<string | undefined>(undefined);
+  const previewRedirectStarted = useRef(false);
 
   function scrollWorkTypeIntoView(type: string, behavior: ScrollBehavior = "smooth") {
     const container = workTypesRef.current;
@@ -691,9 +420,6 @@ export default function Home() {
     setWorkType(type);
     setWorkTypeError(null);
     setPages(WORK_PAGES[type]?.default ?? 20);
-    stepsRef.current = getProgressSteps(type);
-    setResult(null);
-    setError(null);
     setCapacityError(null);
     requestAnimationFrame(() => scrollWorkTypeIntoView(type));
   }
@@ -705,724 +431,37 @@ export default function Home() {
     }, 50);
   }
 
-  // Мобилка: один раз центрируем выбранный тип при загрузке (без повторного скролла при смене)
-  useLayoutEffect(() => {
-    if (!workType || !window.matchMedia("(max-width: 900px)").matches) return;
-    const id = requestAnimationFrame(() => scrollWorkTypeIntoView(workType, "instant"));
-    return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function startProgress(elapsedOffset = 0) {
-    if (timerRef.current) clearInterval(timerRef.current);
-    const steps = stepsRef.current;
-    const totalDuration = steps.reduce((s: number, x: Step) => s + x.duration, 0);
-    let elapsed = elapsedOffset;
-
-    // Находим шаг, соответствующий уже прошедшему времени
-    let currentStep = 0;
-    let stepElapsed = 0;
-    let cumulative = 0;
-    for (let i = 0; i < steps.length; i++) {
-      const end = cumulative + steps[i].duration;
-      if (end > elapsedOffset || i === steps.length - 1) {
-        currentStep = i;
-        stepElapsed = elapsedOffset - cumulative;
-        break;
-      }
-      cumulative = end;
-    }
-
-    const rawInit = Math.min(1, elapsed / totalDuration);
-    const tpInit  = rawInit * 90;
-    setTotalProgress(tpInit);
-    setStepIndex(currentStep);
-
-    let syncTick = 0;
-    timerRef.current = setInterval(() => {
-      elapsed     += 100;
-      stepElapsed += 100;
-      syncTick++;
-
-      const step = steps[currentStep];
-      if (!step) return;
-
-      const rawRatio = Math.min(1, elapsed / totalDuration);
-      const tp = rawRatio * 90;
-
-      setTotalProgress(tp);
-      setStepIndex(currentStep);
-
-      if (stepElapsed >= step.duration) {
-        const next = Math.min(currentStep + 1, steps.length - 1);
-        if (next !== currentStep) {
-          currentStep = next;
-          stepElapsed = 0;
-          // Обновляем localStorage при смене шага
-          patchGenState({ percent: tp, stepLabel: steps[currentStep]?.label ?? "" });
-        } else {
-          stepElapsed = 0;
-        }
-      }
-
-      // Синхронизируем процент каждые 2 секунды
-      if (syncTick % 20 === 0) {
-        patchGenState({ percent: tp });
-      }
-    }, 100);
-  }
-
-  function stopProgress() {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
-    setTotalProgress(100);
-    setStepIndex(stepsRef.current.length - 1);
-    setEtaSeconds(0);
-  }
-
-  type BackendProgress = {
-    step?: number;
-    total_steps?: number;
-    label?: string;
-    percent?: number;
-    eta_seconds?: number | null;
-  };
-
-  function applyBackendProgress(progress?: BackendProgress) {
-    if (!progress) return;
-    if (typeof progress.label === "string" && progress.label.trim()) {
-      setBackendStageLabel(progress.label.trim());
-      patchGenState({ stepLabel: progress.label.trim() });
-    }
-    if (typeof progress.percent === "number") {
-      const percent = Math.min(99, progress.percent);
-      setTotalProgress(prev => Math.max(prev, percent));
-      patchGenState({ percent });
-      // Синхронизируем шаг по проценту прогресса (а не по грубому backend step),
-      // чтобы не было несоответствия вида "шаг 4/8, но уже 80%".
-      const stepsTotal = Math.max(stepsRef.current.length, 1);
-      const mappedIdx = Math.min(stepsTotal - 1, Math.floor((percent / 100) * stepsTotal));
-      setStepIndex(prev => Math.max(prev, mappedIdx));
-    }
-    if (typeof progress.eta_seconds === "number") {
-      setEtaSeconds(Math.max(0, progress.eta_seconds));
-      if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
-      // Плавная интерполяция между poll-ответами: каждую 1с аккуратно
-      // поднимаем процент на основе ETA, не перескакивая в 100 до факта done.
-      if (progress.eta_seconds > 0) {
-        smoothProgressRef.current = setInterval(() => {
-          setTotalProgress(prev => {
-            if (prev >= 99) return prev;
-            const remaining = Math.max(1, progress.eta_seconds ?? 1);
-            const delta = Math.max(0.05, (99 - prev) / remaining);
-            return Math.min(99, prev + delta);
-          });
-        }, 1000);
-      }
-    }
-  }
-
-  function formatEta(sec: number | null): string {
-    if (sec == null) return "";
-    if (sec <= 0) return "меньше минуты";
-    const min = Math.ceil(sec / 60);
-    if (min < 60) return `~${min} мин`;
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return m === 0 ? `~${h} ч` : `~${h} ч ${m} мин`;
-  }
-
-  async function persistProfile() {
-    if (!saveProfile || !session?.user) return;
+  async function openOrderPage(cleanTopic: string, wt: string, p: number, extras: string[]) {
     try {
-      await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(titleForm),
-      });
-    } catch {}
-  }
-
-  function buildProfilePayload() {
-    return { ...titleForm, skipFaculty, skipSpeciality, skipDiscipline };
-  }
-
-  async function handleDownload() {
-    if (!result) return;
-    persistProfile();
-    setDownloading(true);
-    const downloadData = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
-    try {
-      const response = await fetch("/api/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...downloadData,
-          _activity: {
-            action: "DOCX_DOWNLOAD",
-            source: "home",
-            generationId,
-            slug: generationSlug,
-            workType,
-          },
-        }),
-      });
-      if (!response.ok) throw new Error();
-      const blob = await response.blob();
-      const url  = window.URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `${result.title.replace(/[«»:]/g, "").trim()}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert("Не удалось скачать файл.");
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  // Сброс состояния генерации при смене пользователя
-  const prevUserIdRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (sessionStatus === "loading") return;
-    const userId = (session?.user as { id?: string } | null)?.id;
-    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
-      _gen.cancel();
-      clearGenState();
-      sessionStorage.removeItem("activeGeneration");
-      sessionStorage.removeItem("pendingGeneration");
-      setLoading(false);
-      setResult(null);
-      setError(null);
-    }
-    prevUserIdRef.current = userId;
-  }, [session, sessionStatus]);
-
-  useEffect(() => {
-    if (result) {
-      setShowResultModal(true);
-      setPresentationSel(false);
-      setSpeechSel(false);
-      setTitleForm({
-        fullName:    String(result.profile?.fullName    ?? ""),
-        university:  String(result.profile?.university  ?? ""),
-        faculty:     String(result.profile?.faculty     ?? ""),
-        department:  String(result.profile?.department  ?? ""),
-        groupNumber: String(result.profile?.groupNumber ?? ""),
-        teacherName: String(result.profile?.teacherName ?? ""),
-        city:        String(result.profile?.city        ?? ""),
-        speciality:  String(result.profile?.speciality  ?? ""),
-        discipline:  String(result.profile?.discipline  ?? ""),
-      });
-    }
-  }, [result]);
-
-  // Инициализируем slidesData когда презентация готова
-  useEffect(() => {
-    if (_extrasSlides && extrasReady.includes("presentation") && !slidesData) {
-      setSlidesData(_extrasSlides as { accent: string; slides: unknown[] });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extrasReady]);
-
-  // Синхронизируем titleForm → TITLE слайд в slidesData
-  // Срабатывает при изменении любого поля формы И при переключении на таб презентации
-  useEffect(() => {
-    const data = slidesData ?? (_extrasSlides && extrasReady.includes("presentation") ? _extrasSlides as { accent: string; slides: unknown[] } : null);
-    if (!data) return;
-    const slides = data.slides as Slide[];
-    const idx = slides.findIndex((s: Slide) => s.type === "TITLE");
-    if (idx < 0) return;
-    const updated = slides.map((s: Slide, i: number) => i === idx ? {
-      ...s,
-      university:  titleForm.university  || "",
-      faculty:     titleForm.faculty     || "",
-      department:  titleForm.department  || "",
-      full_name:   titleForm.fullName    || "",
-      group:       titleForm.groupNumber || "",
-      teacher:     titleForm.teacherName || "",
-      city:        titleForm.city        || "",
-    } : s);
-    setSlidesData(() => ({ ...data, slides: updated }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titleForm, modalTab, extrasReady]);
-
-  const DOC_WIDTH = 816; // стандартная ширина A4-страницы в docx-preview
-
-  // Применяет transform: scale к контейнеру и схлопывает лишнее пространство
-  function applyScale(container: HTMLElement, scale: number) {
-    container.style.setProperty("--docx-scale", String(scale));
-    if (scale < 1) {
-      const w = DOC_WIDTH;
-      const h = container.scrollHeight;
-      container.style.transform = `scale(${scale})`;
-      container.style.transformOrigin = "top center";
-      container.style.marginBottom = `${Math.round(h * scale - h)}px`;
-      // Центрируем контейнер внутри родителя
-      container.style.position = "relative";
-      container.style.left = "50%";
-      container.style.marginLeft = `-${w / 2}px`;
-    } else {
-      container.style.transform = "";
-      container.style.transformOrigin = "";
-      container.style.marginBottom = "";
-      container.style.position = "";
-      container.style.left = "";
-      container.style.marginLeft = "";
-    }
-  }
-
-  // Рендер превью — вызывается и при открытии модала, и при обновлении титульника
-  async function renderPreview(data: ReferatResult) {
-    const container = previewContainerRef.current;
-    if (!container) return;
-
-    // Сбрасываем предыдущий рендер
-    container.innerHTML = "";
-    container.style.transform    = "";
-    container.style.marginBottom = "";
-
-    // Читаем целевую ширину ДО фиксации контейнера.
-    // Math.min с window.innerWidth защищает от случаев когда parentElement.clientWidth
-    // шире viewport (скроллбар, overflow и т.п.) — особенно актуально на мобилке.
-    const targetWidth = container.parentElement?.clientWidth
-      ? Math.min(container.parentElement.clientWidth, window.innerWidth)
-      : window.innerWidth;
-    const isDesktop = targetWidth >= DOC_WIDTH;
-
-    // ignoreWidth: false на всех устройствах — документ рендерится в нативной ширине
-    // (816px для A4 при 96dpi). Это единственный способ получить корректные
-    // tab stops и точки-лидеры в оглавлении. Затем масштабируем через CSS transform.
-    container.style.width = `${DOC_WIDTH}px`;
-
-    setPreviewLoading(true);
-    try {
-      const response = await fetch("/api/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const { renderAsync } = await import("docx-preview");
-
-      await renderAsync(blob, container, undefined, {
-        className: "docx-preview",
-        inWrapper: true,
-        ignoreWidth: false,
-        ignoreHeight: false,
-        experimental: true,
-      });
-
-      // experimental=true запускает refreshTabStops через setTimeout(500мс).
-      // Применяем scale только ПОСЛЕ него — иначе dot-leader расчёт ломается.
-      await new Promise<void>(r => setTimeout(r, 600));
-      const base = Math.min(1, targetWidth / DOC_WIDTH);
-      baseScaleRef.current = base;
-      setPreviewZoom(1);
-      applyScale(container, base);
-    } catch (e) {
-      console.error("[Preview] Error:", e);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
-
-  // Применяем масштаб когда пользователь нажимает +/−
-  function applyZoom(delta: number) {
-    const container = previewContainerRef.current;
-    if (!container) return;
-    const next = Math.min(2, Math.max(0.3, previewZoom + delta));
-    setPreviewZoom(next);
-    applyScale(container, baseScaleRef.current * next);
-  }
-
-  function closeResultModal() {
-    setModalClosing(true);
-    setTimeout(() => {
-      setShowResultModal(false);
-      setModalClosing(false);
-    }, 200);
-  }
-
-  useModalA11y({
-    active: !!(result && showResultModal) && !showTitleModal,
-    containerRef: resultModalRef,
-    initialFocusRef: resultModalCloseRef,
-    onClose: closeResultModal,
-  });
-
-  // Блокируем скролл фона когда модал открыт.
-  // position:fixed надёжнее overflow:hidden на iOS Safari.
-  useEffect(() => {
-    if (showResultModal) {
-      const y = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top      = `-${y}px`;
-      document.body.style.width    = "100%";
-      document.body.style.overflow = "hidden";
-      document.documentElement.style.overflow = "hidden";
-      document.body.classList.add("modal-open");
-      setModalOpen(true);
-    } else {
-      const y = parseInt(document.body.style.top || "0") * -1;
-      document.body.style.position = "";
-      document.body.style.top      = "";
-      document.body.style.width    = "";
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      document.body.classList.remove("modal-open");
-      setModalOpen(false);
-      if (y) window.scrollTo(0, y);
-    }
-    return () => {
-      const y = parseInt(document.body.style.top || "0") * -1;
-      document.body.style.position = "";
-      document.body.style.top      = "";
-      document.body.style.width    = "";
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      document.body.classList.remove("modal-open");
-      setModalOpen(false);
-      if (y) window.scrollTo(0, y);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showResultModal]);
-
-  // Запускаем превью когда модал открылся (showResultModal гарантирует что ref доступен)
-  useEffect(() => {
-    if (!result || !showResultModal) return;
-    renderPreview(result);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showResultModal]);
-
-  // При открытии модалки — загружаем профиль и заполняем поля титульника
-  useEffect(() => {
-    if (!showResultModal || !session?.user) return;
-    fetch("/api/profile")
-      .then(r => r.json())
-      .then((data: Record<string, string>) => {
-        const hasData = !!(data.fullName || data.university || data.groupNumber);
-        setSaveProfile(hasData);
-        setTitleForm(prev => ({
-          fullName:    data.fullName    || prev.fullName    || "",
-          university:  data.university  || prev.university  || "",
-          faculty:     data.faculty     || prev.faculty     || "",
-          department:  data.department  || prev.department  || "",
-          groupNumber: data.groupNumber || prev.groupNumber || "",
-          teacherName: data.teacherName || prev.teacherName || "",
-          city:        data.city        || prev.city        || "",
-          speciality:  data.speciality  || prev.speciality  || "",
-          discipline:  data.discipline  || prev.discipline  || "",
-        }));
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showResultModal]);
-
-  async function handleTitleUpdate() {
-    if (!result) return;
-    setTitleUpdating(true);
-    persistProfile();
-    const updated: ReferatResult = { ...result, profile: { ...(result.profile ?? {}), ...buildProfilePayload() } };
-    await renderPreview(updated);
-    // Синхронизируем TITLE слайд в презентации
-    setSlidesData(prev => {
-      const data = prev ?? (_extrasSlides as { accent: string; slides: unknown[] } | null);
-      if (!data) return prev;
-      const slides = data.slides as Slide[];
-      const idx = slides.findIndex((s: Slide) => s.type === "TITLE");
-      if (idx < 0) return prev;
-      const newSlides = slides.map((s: Slide, i: number) => i === idx ? {
-        ...s,
-        university: titleForm.university || "",
-        faculty:    titleForm.faculty    || "",
-        department: titleForm.department || "",
-        full_name:  titleForm.fullName   || "",
-        group:      titleForm.groupNumber|| "",
-        teacher:    titleForm.teacherName|| "",
-        city:       titleForm.city       || "",
-      } : s);
-      return { ...data, slides: newSlides };
-    });
-    setTitleUpdating(false);
-  }
-
-  async function runGeneration(t: string, p: number, wt: string) {
-    stepsRef.current = getProgressSteps(wt);
-
-    // Регистрируем генерацию в модульном состоянии (для восстановления при навигации)
-    _gen.start(t, p, wt);
-    currentGenRef.current = { topic: t, pages: p, workType: wt, startedAt: _gen.startedAt } as typeof currentGenRef.current & { generationId?: string };
-    writeGenState({ active: true, percent: 0, stepLabel: stepsRef.current[0]?.label ?? "", workType: wt, topic: t, pages: p, startedAt: _gen.startedAt });
-    sessionStorage.setItem("activeGeneration", JSON.stringify({ topic: t, pages: p, workType: wt, startedAt: _gen.startedAt }));
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setGenerationId(null);
-    setGenerationSlug(null);
-    setActiveSection("");
-    setTotalProgress(0);
-    setStepIndex(0);
-    setEtaSeconds(null);
-    setBackendStageLabel("");
-    if (smoothProgressRef.current) clearInterval(smoothProgressRef.current);
-    startProgress();
-
-    try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: t, pages: p, workType: wt }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        stopProgress();
-        if (response.status === 401) {
-          const errMsg = "Нужно войти в аккаунт, чтобы запустить генерацию.";
-          _gen.resolve(null, errMsg);
-          _gen.cancel();
-          clearGenState();
-          try {
-            sessionStorage.removeItem("activeGeneration");
-            sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
-            sessionStorage.setItem("pendingAuthReturn", "1");
-          } catch { /* ignore */ }
-          setError({ message: errMsg, status: 401 });
-          setLoading(false);
-          router.push("/auth/signin");
-          return;
-        }
-        if (data.code === "PAYMENT_REQUIRED") {
-          _gen.cancel();
-          clearGenState();
-          sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: t, pages: p, workType: wt }));
-          router.push(`/payment?workType=${encodeURIComponent(wt)}`);
-          return;
-        }
-        if (response.status === 403) {
-          const errMsg = data.error || "Для генерации нужна оплата или доступ к выбранному типу работы.";
-          _gen.resolve(null, errMsg);
-          setError({ message: errMsg, status: 403 });
-          return;
-        }
-        if (data.code === "SAVED") {
-          // Соединение прервалось, но работа сохранена — направляем в Мои работы
-          const errMsg = "Соединение прервалось, но работа сохранена. Найдите её в разделе «Мои работы».";
-          _gen.resolve(null, errMsg);
-          setError({ message: errMsg, status: response.status });
-          return;
-        }
-        const errMsg = data.error || "Произошла ошибка";
-        _gen.resolve(null, errMsg);
-        setError({ message: errMsg, status: response.status });
-      } else {
-        // Сервер мог создать running-запись в БД (для «Мои работы») — сохраняем её id,
-        // чтобы поллинг мог финализировать даже после F5/закрытия вкладки.
-        try {
-          const genId = typeof data.generationId === "string" ? data.generationId : "";
-          if (genId && currentGenRef.current) {
-            (currentGenRef.current as unknown as { generationId?: string }).generationId = genId;
-            sessionStorage.setItem("activeGeneration", JSON.stringify({ ...currentGenRef.current, generationId: genId }));
-            const st = readGenState();
-            if (st) writeGenState({ ...st, generationId: genId });
-          }
-        } catch {}
-
-        const deadline = Date.now() + GENERATE_MAX_WAIT_MS;
-        while (Date.now() < deadline) {
-          const pollRes = await fetch(
-            `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${_gen.startedAt}&includeResult=1` +
-            ((currentGenRef.current as unknown as { generationId?: string })?.generationId ? `&generationId=${encodeURIComponent((currentGenRef.current as unknown as { generationId?: string }).generationId!)}` : ""),
-            { cache: "no-store" }
-          );
-          const pollData = await pollRes.json();
-          applyBackendProgress(pollData.progress);
-
-          if (pollData.status === "done" && pollData.result) {
-            stopProgress();
-            const resultData = pollData.result as ReferatResult;
-            if (pollData.id) { setGenerationId(pollData.id); _extrasGenId = pollData.id; }
-            if (pollData.slug) setGenerationSlug(String(pollData.slug));
-            _gen.resolve(resultData, "");
-            setResult(resultData);
-            if (resultData.structure?.length > 0) setActiveSection(resultData.structure[0]);
-            if (isYukassa) setTrialUsed(true);
-            if (_pendingExtrasItems && _pendingExtrasItems.length > 0) {
-              const items = [..._pendingExtrasItems];
-              _pendingExtrasItems = null;
-              setExtrasGenerating(true);
-              setTimeout(() => triggerExtrasGeneration(items, resultData), 50);
-            }
-            return;
-          }
-
-          if (pollData.status === "error" || pollData.status === "not_found") {
-            stopProgress();
-            const errMsg = pollData.error || "Сервис сейчас перегружен. Попробуйте снова.";
-            _gen.resolve(null, errMsg);
-            setError({ message: errMsg, status: 503 });
-            return;
-          }
-
-          await new Promise(r => setTimeout(r, GENERATE_POLL_MS));
-        }
-
-        stopProgress();
-        const errMsg = "Превышено время ожидания (25 минут). Попробуйте снова.";
-        _gen.resolve(null, errMsg);
-        setError({ message: errMsg, status: 503 });
+      if (extras.length > 0) {
+        sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(extras));
       }
-    } catch (err) {
-      console.error('[Refai] Ошибка генерации:', err);
-      stopProgress();
-      if (isUnloadingRef.current) {
-        // Страница выгружается (F5 / закрытие вкладки) — сохраняем genState для восстановления
-        return;
-      }
-      const errMsg = "Не удалось подключиться к серверу";
-      _gen.resolve(null, errMsg);
-      setError({ message: errMsg, status: 0 });
-    } finally {
-      if (!isUnloadingRef.current) {
-        currentGenRef.current = null;
-        clearGenState();
-        sessionStorage.removeItem("activeGeneration");
-        setLoading(false);
-      }
-    }
-  }
+      savePendingOrderDraft({ topic: cleanTopic, pages: p, workType: wt });
+    } catch { /* ignore */ }
 
-  async function triggerExtrasGeneration(items: string[], savedResult?: ReferatResult) {
-    const src = savedResult ?? result;
-    if (!src) return;
-    _extras.clear();
-    _extrasPollingStarted = false;
-    setExtrasGenerating(true);
-    setExtrasReady([]);
-    setExtrasError(null);
-    setExtrasJobId(null);
-    try {
-      const res = await fetch("/api/generate/extras", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic:     src.title || topic,
-          work_type: workType,
-          items,
-          result:    src,
-          profile:   src.profile ?? null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.extrasJobId) {
-        setExtrasError(data.error || "Ошибка запуска генерации");
-        setExtrasGenerating(false);
-        return;
-      }
-      // Сохраняем в модульную переменную (живёт между навигациями)
-      _extras.start(data.extrasJobId);
-      setExtrasJobId(data.extrasJobId);
-    } catch {
-      setExtrasError("Сервер недоступен");
-      setExtrasGenerating(false);
-    }
-  }
-
-  async function handleExtrasPayment() {
-    const items: string[] = [];
-    if (presentationSel) items.push("presentation");
-    if (speechSel) items.push("speech");
-    if (!items.length) return;
-
-    // Для администратора — бесплатно и без редиректа
-    if (isAdmin) {
-      triggerExtrasGeneration(items);
+    if (sessionStatus === "unauthenticated") {
+      markPendingPreviewAfterAuth();
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent("/order")}`);
       return;
     }
 
-    // Сохраняем result в sessionStorage на случай редиректа
     try {
-      sessionStorage.setItem("pendingExtras", JSON.stringify({ result, workType, pages, topic, items }));
-    } catch {}
-
-    try {
-      const res = await fetch("/api/payment/extras", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ items, market: detectPaymentMarket() }),
+      const { createOrderTask, savePendingGeneration } = await import("@/lib/createOrderTask");
+      const created = await createOrderTask({
+        topic: cleanTopic,
+        workType: wt,
+        pages: p,
+        extras,
       });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Ошибка создания платежа"); return; }
-
-      if (data.autoSucceed) {
-        // Dev режим — сразу генерируем
-        sessionStorage.removeItem("pendingExtras");
-        triggerExtrasGeneration(items);
-      } else {
-        // Редирект на ЮКассу
-        window.location.href = data.paymentUrl;
+      if ("error" in created) {
+        alert(created.error);
+        return;
       }
+      savePendingGeneration({ taskId: created.id, topic: cleanTopic, workType: wt, pages: p });
+      router.push(`/order/${created.id}`);
     } catch {
-      alert("Не удалось создать платёж. Попробуйте снова.");
+      alert("Не удалось создать заказ. Попробуйте ещё раз.");
     }
-  }
-
-  async function downloadPresentation() {
-    const data = slidesData || _extrasSlides;
-    if (!data) { alert("Слайды ещё не готовы"); return; }
-    setDownloadingPptx(true);
-    try {
-      const res = await fetch("/api/generate/presentation/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, images: presentationImages }),
-      });
-      if (!res.ok) throw new Error("bad response");
-      const blob = await res.blob();
-      trackWorkActivityClient({
-        action: "PPTX_DOWNLOAD",
-        source: "home",
-        generationId,
-        slug: generationSlug,
-        workType,
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "presentation.pptx";
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert("Ошибка скачивания, попробуйте снова");
-    } finally {
-      setDownloadingPptx(false);
-    }
-  }
-
-  async function downloadSpeech() {
-    if (!extrasJobId) return;
-    try {
-      const res = await fetch(`/api/download/speech/${extrasJobId}`);
-      if (!res.ok) { alert("Файл недоступен"); return; }
-      const blob = await res.blob();
-      trackWorkActivityClient({
-        action: "SPEECH_DOWNLOAD",
-        source: "home",
-        generationId,
-        slug: generationSlug,
-        workType,
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "speech.docx";
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch { alert("Не удалось скачать файл."); }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -1442,18 +481,11 @@ export default function Home() {
 
     setCapacityError(null);
 
-    // Вычисляем items допматериалов
-    const formExtrasItems: string[] = [];
-    if (wantPresentation) formExtrasItems.push("presentation");
-    if (wantSpeech) formExtrasItems.push("speech");
-
-    // Проверяем доступность слотов на сервере
     try {
       const capRes = await fetch("/api/capacity");
       if (capRes.ok) {
         const capData = await capRes.json() as { used: number; max: number; available: string[] };
-        const SLOTS: Record<string, number> = { "Сочинение": 1, "Эссе": 1, "Доклад": 2, "Реферат": 2, "Курсовая": 4, "ВКР": 5 };
-        const needed = SLOTS[workType] ?? 2;
+        const needed = SLOT_WEIGHTS[workType] ?? 2;
         if (capData.used + needed > capData.max) {
           setCapacityError(capData.available);
           return;
@@ -1461,196 +493,69 @@ export default function Home() {
       }
     } catch { /* при ошибке — пропускаем, бэкенд сам вернёт 503 */ }
 
-    // Admin — генерация бесплатно
-    if (isAdmin) {
-      if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-      runGeneration(cleanTopic, pages, workType);
-      return;
-    }
-
-    // Тестовый аккаунт ЮКасса — минуем проверку оплаты
-    if (isYukassa) {
-      if (trialUsed) return;
-      if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-      runGeneration(cleanTopic, pages, workType);
-      return;
-    }
-
-    // Гость: сохраняем тему и ведём на вход → после входа откроется превью в окне оплаты
-    if (sessionStatus === "unauthenticated") {
-      try {
-        sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
-        sessionStorage.setItem("pendingAuthReturn", "1");
-        sessionStorage.setItem("pendingPreviewAfterAuth", "1");
-        if (formExtrasItems.length > 0) {
-          sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
-        }
-      } catch { /* ignore */ }
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent("/?fromAuth=1")}`);
-      return;
-    }
-
-    // Проверяем оплату перед генерацией
+    setSubmitting(true);
     try {
-      const checkRes = await fetch(`/api/payment/check?workType=${encodeURIComponent(workType)}`);
-      if (checkRes.status === 401) {
-        try {
-          sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
-          sessionStorage.setItem("pendingAuthReturn", "1");
-          sessionStorage.setItem("pendingPreviewAfterAuth", "1");
-          if (formExtrasItems.length > 0) {
-            sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
-          }
-        } catch { /* ignore */ }
-        router.push(`/auth/signin?callbackUrl=${encodeURIComponent("/?fromAuth=1")}`);
-        return;
-      }
-      const checkData = await checkRes.json();
-      if (!checkData.hasPaid) {
-        sessionStorage.setItem("pendingGeneration", JSON.stringify({ topic: cleanTopic, pages, workType }));
-        if (formExtrasItems.length > 0) {
-          sessionStorage.setItem("pendingExtrasChoice", JSON.stringify(formExtrasItems));
-        }
-
-        if (checkData.devMode) {
-          // Dev-режим: YOKASSA_SHOP_ID не задан — создаём платёж сразу, без виджета
-          setPaymentLoading(true);
-          const devCheckRes = await fetch("/api/payment/create", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              workType,
-              extras: formExtrasItems.length > 0 ? formExtrasItems : undefined,
-              market: detectPaymentMarket(),
-            }),
-          }).catch(() => null);
-          setPaymentLoading(false);
-
-          if (devCheckRes?.ok) {
-            const devData = await devCheckRes.json();
-            if (devData.provider === "dev" && devData.paymentUrl) {
-              // Dev-режим: платёж уже succeeded, сразу запускаем генерацию
-              sessionStorage.removeItem("pendingGeneration");
-              if (formExtrasItems.length > 0) {
-                _pendingExtrasItems = formExtrasItems;
-                sessionStorage.removeItem("pendingExtrasChoice");
-              }
-              runGeneration(cleanTopic, pages, workType);
-              return;
-            }
-            if (typeof devData.paymentUrl === "string" && devData.paymentUrl) {
-              window.location.href = devData.paymentUrl;
-              return;
-            }
-          }
-        }
-
-        // Prod: показываем виджет с выбором метода оплаты (payment/create вызывает сам виджет при выборе метода)
-        setPaymentWidgetData({ workType, extras: formExtrasItems, topic: cleanTopic });
-        return;
-      }
-    } catch {
-      setError({ message: "Не удалось проверить статус оплаты", status: 0 });
-      return;
+      await openOrderPage(cleanTopic, workType, pages, []);
+    } finally {
+      setSubmitting(false);
     }
-
-    if (formExtrasItems.length > 0) _pendingExtrasItems = formExtrasItems;
-    runGeneration(cleanTopic, pages, workType);
-  }
-
-  function toggleSection(section: string) {
-    setActiveSection(prev => prev === section ? "" : section);
-  }
-
-  function renderContent(text: string) {
-    const parts = text.split(/(\[TABLE\][\s\S]*?\[\/TABLE\])/g);
-    return parts.map((part, i) => {
-      if (part.startsWith("[TABLE]")) {
-        try {
-          const json = part.replace("[TABLE]", "").replace("[/TABLE]", "").trim();
-          const data = JSON.parse(json);
-          return (
-            <div key={i} className={styles.tableWrapper}>
-              {data.caption && (
-                <p className={styles.tableCaption}>{data.caption}</p>
-              )}
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    {data.headers.map((h: string, j: number) => (
-                      <th key={j} className={styles.th}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row: string[], j: number) => (
-                    <tr key={j}>
-                      {row.map((cell: string, k: number) => (
-                        <td key={k} className={styles.td}>{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        } catch {
-          return null;
-        }
-      }
-      return part.split("\n").filter(p => p.trim()).map((para, j) => (
-        <p key={`${i}-${j}`} className={styles.para}>{para}</p>
-      ));
-    });
   }
 
   useEffect(() => {
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    if (sessionStatus === "loading") return;
+    const userId = (session?.user as { id?: string } | null)?.id;
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+      clearPendingOrderDraft();
+    }
+    prevUserIdRef.current = userId;
+  }, [session, sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || previewRedirectStarted.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autoGenerate") === "1") {
+      previewRedirectStarted.current = true;
+      const autoDraft = loadPendingOrderDraft();
+      if (autoDraft?.taskId) {
+        router.replace(`/order/${autoDraft.taskId}?autoGenerate=1`);
+      } else {
+        router.replace("/dashboard");
+      }
+      return;
+    }
+
+    const wantsPreview = hasPendingPreviewAfterAuth();
+    const draft = loadPendingOrderDraft();
+    if (!wantsPreview || !draft?.topic || !draft.workType) return;
+
+    previewRedirectStarted.current = true;
+    consumePendingPreviewAfterAuth();
+    if (draft.taskId) {
+      router.replace(`/order/${draft.taskId}`);
+      return;
+    }
+    router.replace("/order");
+  }, [sessionStatus, router]);
+
+  useLayoutEffect(() => {
+    if (!workType || !window.matchMedia("(max-width: 900px)").matches) return;
+    const id = requestAnimationFrame(() => scrollWorkTypeIntoView(workType, "instant"));
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Анимация точек "..." пока идёт генерация
   useEffect(() => {
-    if (!loading) { setDots("."); return; }
-    const id = setInterval(() => {
-      setDots(d => d.length >= 3 ? "." : d + ".");
-    }, 500);
-    return () => clearInterval(id);
-  }, [loading]);
-
-  // Смена фактов — равномерно на весь период генерации (каждый факт ровно 1 раз)
-  useEffect(() => {
-    if (!loading) { setFactVisible(true); return; }
-    const steps    = getProgressSteps(workType);
-    const totalMs  = steps.reduce((sum, s) => sum + s.duration, 0);
-    const interval = Math.max(6000, Math.floor(totalMs / FUN_FACTS.length));
-    const id = setInterval(() => {
-      setFactVisible(false);
-      setTimeout(() => {
-        setFactIndex(i => (i + 1) % FUN_FACTS.length);
-        setFactVisible(true);
-      }, 500);
-    }, interval);
-    return () => clearInterval(id);
-  }, [loading, workType]);
-
-  // Баннер профиля: показываем только авторизованным с незаполненным профилем
-  // и только если пользователь ещё не закрыл его (localStorage)
-  useEffect(() => {
-    if (!session?.user) return; // не авторизован — баннер не нужен
-    if (localStorage.getItem("profileBannerDismissed") === "1") {
-      setBannerDismissed(true);
-      setProfileFilled(true); // не важно, скрыт навсегда
-      return;
-    }
-    fetch("/api/profile")
+    fetch("/api/generations/works-count")
       .then(r => r.json())
-      .then((data: { university?: string; fullName?: string; groupNumber?: string }) => {
-        const filled = !!(data.university || data.fullName || data.groupNumber);
-        setProfileFilled(filled);
-        setBannerDismissed(false); // разрешаем показ (если не заполнен)
+      .then((data: unknown) => {
+        const n = typeof data === "object" && data !== null
+          ? (data as { worksCreated?: unknown }).worksCreated
+          : 0;
+        if (typeof n === "number" && n > 0) setWorksCreated(n);
       })
-      .catch(() => { setBannerDismissed(true); }); // ошибка — не мешаем
-  }, [session]);
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/generations/recent")
@@ -1672,22 +577,13 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  // Инициализация пула мок-работ
   useEffect(() => {
     const shuffled = shuffleArray(MOCK_WORKS_POOL);
     poolRef.current = shuffled;
-    poolCursorRef.current = 4; // первые 4 уже использованы в начальном списке
+    poolCursorRef.current = 4;
     setDisplayedWorks(buildInitialWorks(shuffled));
   }, []);
 
-  // Счётчик генераций — только на клиенте + обновление каждые 37 с (без расхождения SSR/гидрации)
-  useEffect(() => {
-    setDailyCount(getDailyGenCount());
-    const t = setInterval(() => setDailyCount(getDailyGenCount()), 37_000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Ротация карточек каждые 5 минут (только если не используем реальные данные)
   useEffect(() => {
     if (usingRealWorks) return;
     const t = setInterval(() => {
@@ -1711,10 +607,8 @@ export default function Home() {
     return () => clearInterval(t);
   }, [usingRealWorks]);
 
-  // Для тестового аккаунта ЮКасса: проверяем использование пробной генерации
   useEffect(() => {
     if (!isYukassa) return;
-    // Устанавливаем Эссе как тип по умолчанию для тестового аккаунта
     selectWorkType("Эссе");
     fetch("/api/generations")
       .then(r => r.json())
@@ -1725,540 +619,62 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isYukassa]);
 
-  // После входа: восстановить тему и открыть окно с предпросмотром (если был «Попробовать»)
   useEffect(() => {
-    if (sessionStatus !== "authenticated") return;
-    if (authReturnHandled.current) return;
-
-    const previewIntent = sessionStorage.getItem("pendingPreviewAfterAuth") === "1";
-    const authReturn = sessionStorage.getItem("pendingAuthReturn") === "1";
-    if (!previewIntent && !authReturn) return;
-
-    authReturnHandled.current = true;
-    sessionStorage.removeItem("pendingPreviewAfterAuth");
-    sessionStorage.removeItem("pendingAuthReturn");
-
-    if (new URLSearchParams(window.location.search).get("fromAuth") === "1") {
-      window.history.replaceState({}, "", "/");
-    }
-
-    let t = topic.trim();
-    let p = pages;
-    let wt = workType;
-    try {
-      const raw = sessionStorage.getItem("pendingGeneration");
-      if (raw) {
-        const parsed = JSON.parse(raw) as { topic?: string; pages?: number; workType?: string };
-        if (parsed.workType) {
-          wt = parsed.workType;
-          selectWorkType(wt);
-        }
-        if (typeof parsed.topic === "string") setTopic(parsed.topic);
-        if (typeof parsed.pages === "number" && parsed.pages > 0) setPages(parsed.pages);
-        t = typeof parsed.topic === "string" ? parsed.topic : t;
-        p = typeof parsed.pages === "number" && parsed.pages > 0 ? parsed.pages : p;
-      }
-    } catch { /* ignore */ }
-
-    try {
-      const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
-      if (extrasRaw) _pendingExtrasItems = JSON.parse(extrasRaw) as string[];
-    } catch { /* ignore */ }
-
-    if (!t) return;
-
-    const extras = [...(_pendingExtrasItems ?? [])];
-    window.setTimeout(() => {
-      setPaymentWidgetData({ topic: t, workType: wt, extras });
-    }, 150);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStatus]);
-
-  // Вернулись с Robokassa/внешней оплаты — снова открыть модалку превью
-  useEffect(() => {
-    function tryRestorePaymentWidget() {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("autoGenerate") === "1") return;
-
-      if (params.get("restorePreview") === "1") {
-        window.history.replaceState({}, "", "/");
-      }
-
-      try {
-        const raw = sessionStorage.getItem("paymentWidgetRestore");
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as {
-          topic?: string;
-          workType?: string;
-          extras?: string[];
-          pages?: number;
-          openedAt?: number;
-        };
-        if (!parsed.topic?.trim() || !parsed.workType) return;
-        if (parsed.openedAt && Date.now() - parsed.openedAt > 2 * 60 * 60 * 1000) {
-          sessionStorage.removeItem("paymentWidgetRestore");
-          return;
-        }
-        selectWorkType(parsed.workType);
-        setTopic(parsed.topic);
-        if (typeof parsed.pages === "number" && parsed.pages > 0) {
-          setPages(parsed.pages);
-        }
-        if (Array.isArray(parsed.extras) && parsed.extras.length > 0) {
-          _pendingExtrasItems = parsed.extras;
-        }
-        setPaymentWidgetData({
-          topic: parsed.topic,
-          workType: parsed.workType,
-          extras: Array.isArray(parsed.extras) ? parsed.extras : [],
-        });
-      } catch { /* ignore */ }
-    }
-    tryRestorePaymentWidget();
-    window.addEventListener("pageshow", tryRestorePaymentWidget);
-    return () => window.removeEventListener("pageshow", tryRestorePaymentWidget);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // При монтировании: восстанавливаем прерванную генерацию или запускаем после оплаты
-  useEffect(() => {
-    // Защита от двойного запуска (React Strict Mode дважды вызывает useEffect в dev)
-    if (autoStarted.current) return;
-    autoStarted.current = true;
-
     const params = new URLSearchParams(window.location.search);
-
-    // 0. Вернулись после оплаты extras
-    if (params.get("extrasAutoGenerate") === "1") {
-      try {
-        const raw = sessionStorage.getItem("pendingExtras");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed.returnTo === "dashboard" && parsed.generationId) {
-            window.history.replaceState({}, "", "/");
-            router.replace("/dashboard?extrasAutoGenerate=1");
-            return;
-          }
-          const { result: savedResult, workType: savedWt, pages: savedPages, topic: savedTopic, items } = parsed;
-          sessionStorage.removeItem("pendingExtras");
-          window.history.replaceState({}, "", "/");
-          selectWorkType(savedWt);
-          if (savedPages) setPages(savedPages);
-          if (savedTopic) setTopic(savedTopic);
-          setResult(savedResult);
-          // Открываем модал и запускаем extras
-          setTimeout(() => triggerExtrasGeneration(items, savedResult), 600);
-        }
-      } catch {}
-      return;
-    }
-
-    // 1. Вернулись после оплаты
-    if (params.get("autoGenerate") === "1") {
-      const raw = sessionStorage.getItem("pendingGeneration");
-      if (raw) {
-        try {
-          const { topic: t, pages: p, workType: wt } = JSON.parse(raw);
-          sessionStorage.removeItem("pendingGeneration");
-          window.history.replaceState({}, "", "/");
-          // Восстанавливаем предварительно выбранные extras
-          try {
-            const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
-            if (extrasRaw) {
-              _pendingExtrasItems = JSON.parse(extrasRaw);
-              sessionStorage.removeItem("pendingExtrasChoice");
-            }
-          } catch {}
-          // selectWorkType сбрасывает pages на дефолт → setPages(p) вызываем после
-          selectWorkType(wt);
-          setTopic(t);
-          setPages(p);
-          // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
-          // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
-          setTimeout(() => runGeneration(t, p, wt), 0);
-        } catch {}
-      }
-      return;
-    }
-
-    // 3. Переход из футера по типу работы (?workType=...)
     const wtParam = params.get("workType");
-    if (wtParam && !params.get("autoGenerate") && !readGenState()) {
-      const VALID = ["Сочинение","Эссе","Доклад","Реферат","Курсовая","ВКР"];
-      if (VALID.includes(wtParam)) {
-        selectWorkType(wtParam);
-        window.history.replaceState({}, "", "/");
-        setTimeout(() => {
-          heroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 80);
-        return;
-      }
-    }
-
-    // 2. Пользователь ушёл на другую страницу и вернулся — восстанавливаем
-    const genSt = readGenState();
-    const active = sessionStorage.getItem("activeGeneration");
-    if (genSt || active) {
-      (async () => {
-        try {
-          const activeParsed = active ? (JSON.parse(active) as { startedAt?: number; topic?: string; pages?: number; workType?: string; generationId?: string }) : null;
-          // Предпочитаем localStorage (переживает F5), но fallback на sessionStorage
-          const startedAt = genSt?.startedAt ?? (activeParsed?.startedAt ?? 0);
-          const t  = genSt?.topic    ?? (activeParsed?.topic ?? "");
-          const p  = genSt?.pages != null ? genSt.pages : (activeParsed?.pages ?? 0);
-          const wt = genSt?.workType ?? (activeParsed?.workType ?? "Реферат");
-          const savedPercent = genSt?.percent ?? 0;
-
-          const elapsed = Date.now() - startedAt;
-          if (elapsed >= 10 * 60 * 1000) {
-            clearGenState();
-            sessionStorage.removeItem("activeGeneration");
-            return;
-          }
-          selectWorkType(wt);
-          setTopic(t);
-          if (p) setPages(p);
-
-          // Случай 1: клиентская навигация (router.push/Link) — модуль жив,
-          // _gen знает об активной генерации → просто подключаемся к ней.
-          if (_gen.active || (_gen.done && _gen.startedAt === startedAt)) {
-            stepsRef.current = getProgressSteps(wt);
-            if (!_gen.done) {
-              setLoading(true); setError(null); setResult(null);
-              setTotalProgress(savedPercent); setStepIndex(0);
-              // setTimeout(0): выходим за пределы синхронного цикла mount→cleanup→remount
-              // React Strict Mode убивает setInterval в cleanup — defer спасает от этого
-              const elapsedAtMount = elapsed;
-              setTimeout(() => { if (!_gen.done) startProgress(elapsedAtMount + 100); }, 0);
-            }
-            _gen.listen((data, err) => {
-              stopProgress();
-              if (data) {
-                setResult(data);
-                if (data.structure?.length > 0) setActiveSection(data.structure[0]);
-              } else {
-                setError({ message: err || "Генерация не удалась", status: 0 });
-              }
-              clearGenState();
-              sessionStorage.removeItem("activeGeneration");
-              setLoading(false);
-            });
-            return;
-          }
-
-          // Случай 2: жёсткая перезагрузка (F5) — модуль сброшен.
-          // Возобновляем анимацию прогресса с нужного момента + запускаем поллинг статуса.
-          stepsRef.current = getProgressSteps(wt);
-          // В F5 режиме предпочтительно поллить по generationId — это не зависит от рассинхрона времени (client startedAt vs server createdAt)
-          f5IdleStreakRef.current = 0;
-          f5InfoRef.current = { workType: wt, startedAt, generationId: genSt?.generationId ?? activeParsed?.generationId };
-          setLoading(true);
-          setError(null);
-          setResult(null);
-          setTotalProgress(savedPercent);
-          setF5Recovery(true);
-          // НЕ чистим genState здесь — поллинг-эффект сделает это когда найдёт результат
-          sessionStorage.removeItem("activeGeneration");
-          setTimeout(() => startProgress(elapsed), 0);
-        } catch {
-          clearGenState();
-          sessionStorage.removeItem("activeGeneration");
-        }
-      })();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!wtParam) return;
+    const VALID = [...WORK_TYPES, "Тест"];
+    if (!VALID.includes(wtParam)) return;
+    selectWorkType(wtParam);
+    window.history.replaceState({}, "", "/");
+    setTimeout(() => {
+      heroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Держим loadingRef в синхронизации
-  useEffect(() => { loadingRef.current = loading; }, [loading]);
-
-  // Показываем диалог подтверждения при попытке уйти во время генерации
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!loadingRef.current) return;
-      e.preventDefault();
-      e.returnValue = "Генерация в процессе"; // непустая строка — нужна для Firefox
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
-
-  // pagehide — гарантированно выполняется перед выгрузкой (после подтверждения «Уйти»).
-  // Записываем genState в localStorage прямо (без dispatchEvent) до отмены fetch.
-  useEffect(() => {
-    const onPageHide = () => {
-      if (!loadingRef.current || !currentGenRef.current) return;
-      isUnloadingRef.current = true;
-      try {
-        const raw = localStorage.getItem("refai_gen");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          parsed.active = true;
-          // Если generationId пришёл уже после старта генерации — не теряем его при pagehide
-          if (!parsed.generationId && currentGenRef.current?.generationId) {
-            parsed.generationId = currentGenRef.current.generationId;
-          }
-          localStorage.setItem("refai_gen", JSON.stringify(parsed));
-        } else {
-          const { topic, pages, workType, startedAt, generationId } = currentGenRef.current;
-          localStorage.setItem("refai_gen", JSON.stringify({
-            active: true, percent: 0, stepLabel: "", workType, topic, pages, startedAt,
-            ...(generationId ? { generationId } : {}),
-          }));
-        }
-      } catch {}
-    };
-    window.addEventListener("pagehide", onPageHide);
-    return () => window.removeEventListener("pagehide", onPageHide);
-  }, []);
-
-  // Анимация прогресса extras — имитируем заполнение до ~90%
-  useEffect(() => {
-    if (!extrasGenerating) {
-      extrasProgressRef.current = 0;
-      setExtrasProgress(0);
-      return;
-    }
-    extrasProgressRef.current = 5;
-    setExtrasProgress(5);
-    const id = setInterval(() => {
-      const cur = extrasProgressRef.current;
-      // Логарифмическое замедление: быстро до 40%, медленно к 88%
-      const inc = cur < 40 ? 1.5 : cur < 70 ? 0.5 : 0.15;
-      const next = Math.min(88, cur + inc);
-      extrasProgressRef.current = next;
-      setExtrasProgress(next);
-    }, 300);
-    return () => clearInterval(id);
-  }, [extrasGenerating]);
-
-  // Поллинг extras — запускается при монтировании (подключается к _extras)
-  // и перезапускается когда extrasJobId меняется
-  useEffect(() => {
-    // Если модуль уже завершён — сразу покажем результат
-    if (_extras.done) {
-      if (_extras.ready.length > 0) {
-        setExtrasGenerating(false);
-        setExtrasReady(_extras.ready);
-      }
-      return;
-    }
-
-    // Если нет активного jobId — ничего не делаем
-    const jobId = _extras.jobId ?? extrasJobId;
-    if (!jobId) return;
-
-    // Синхронизируем state с модулем
-    if (!extrasGenerating && _extras.active) setExtrasGenerating(true);
-
-    // Регистрируем колбэк (сработает когда модульный поллинг завершится)
-    _extras.listen((ready, err) => {
-      extrasProgressRef.current = 100;
-      setExtrasProgress(100);
-      setExtrasGenerating(false);
-      if (err) {
-        setExtrasError(err);
-      } else {
-        setExtrasReady(ready);
-      }
-    });
-
-    // Запускаем поллинг только если ещё не запущен (один поллинг на весь модуль)
-    if (_extrasPollingStarted) return;
-    _extrasPollingStarted = true;
-
-    async function poll() {
-      const currentJobId = _extras.jobId;
-      if (!currentJobId || _extras.done) {
-        _extrasPollingStarted = false;
-        return;
-      }
-      try {
-        const res  = await fetch(`/api/generate/extras/status/${currentJobId}`, { cache: "no-store" });
-        const data = await res.json();
-
-        if (data.status === "done") {
-          const readyItems: string[] = data.ready ?? [];
-          // Сохраняем JSON-структуру слайдов для скачивания PPTX
-          if (data.slides) _extrasSlides = data.slides;
-          _extras.resolve(readyItems, "");
-          _extrasPollingStarted = false;
-          // Сохраняем extras в БД: merge с уже существующими полями, await — чтобы не терять presentationSlides
-          try {
-            const savedGenId = _extrasGenId;
-            if (savedGenId && readyItems.length > 0) {
-              void (async () => {
-                let prev: Record<string, unknown> = {};
-                try {
-                  const gr = await fetch(`/api/generations/${savedGenId}`);
-                  if (gr.ok) {
-                    const row = await gr.json();
-                    if (row.extras && typeof row.extras === "string") {
-                      try {
-                        prev = JSON.parse(row.extras) as Record<string, unknown>;
-                      } catch {
-                        prev = {};
-                      }
-                    }
-                  }
-                } catch {
-                  prev = {};
-                }
-                const merged: Record<string, unknown> = { ...prev };
-                readyItems.forEach((item) => {
-                  merged[item] = currentJobId;
-                });
-                if (data.slides) merged.presentationSlides = data.slides;
-                try {
-                  const rr = await fetch(`/api/generations/${savedGenId}/extras`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ extras: merged }),
-                  });
-                  if (!rr.ok)
-                    console.error("[extras/save]", rr.status, await rr.text());
-                } catch (e) {
-                  console.error("[extras/save]", e);
-                }
-              })();
-            }
-          } catch {
-            /* noop */
-          }
-          return;
-        }
-        if (data.status === "error" || data.status === "not_found") {
-          _extras.resolve([], data.error || "Ошибка генерации дополнительных материалов");
-          _extrasPollingStarted = false;
-          return;
-        }
-      } catch { /* сеть — повторим */ }
-      // status === "running" — ждём и повторяем
-      setTimeout(poll, 4_000);
-    }
-
-    poll();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extrasJobId]);
-
-  // Поллинг статуса после F5-восстановления
-  useEffect(() => {
-    if (!f5Recovery) return;
-
-    const { workType: wt, startedAt, generationId } = f5InfoRef.current;
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const qs =
-          `/api/generate/poll?workType=${encodeURIComponent(wt)}&startedAt=${startedAt}` +
-          (generationId ? `&generationId=${encodeURIComponent(generationId)}` : "");
-        const res = await fetch(qs);
-        if (!res.ok) return;
-        const data = await res.json();
-        applyBackendProgress(data.progress);
-
-        if (data.status === "idle") {
-          f5IdleStreakRef.current += 1;
-          // Если несколько раз подряд idle — значит мы потеряли контекст (jobId/generationId),
-          // но работа могла уже сохраниться в БД. Уводим в «Мои работы» вместо вечного ожидания.
-          if (f5IdleStreakRef.current >= 3) {
-            clearInterval(pollRef.current!);
-            clearGenState();
-            stopProgress();
-            setF5Recovery(false);
-            setLoading(false);
-            router.push("/dashboard");
-          }
-          return;
-        }
-        // Любой не-idle ответ сбрасывает счётчик
-        f5IdleStreakRef.current = 0;
-
-        if (data.status === "done") {
-          clearInterval(pollRef.current!);
-          clearGenState();
-          stopProgress();
-          setF5Recovery(false);
-          setLoading(false);
-          router.push("/dashboard");
-        } else if (data.status === "error" || data.status === "not_found") {
-          clearInterval(pollRef.current!);
-          clearGenState();
-          stopProgress();
-          setF5Recovery(false);
-          setLoading(false);
-          setError({
-            message: data.status === "not_found"
-              ? "Сервер был перезапущен во время генерации. Проверьте «Мои работы» — если работа сохранилась, она там."
-              : "Генерация завершилась с ошибкой. Проверьте «Мои работы».",
-            status: 500,
-          });
-        }
-        // status === "running" | "idle" — продолжаем ждать
-      } catch { /* сеть недоступна, повторим */ }
-    }, 5_000);
-
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f5Recovery]);
-
-  // Scroll-reveal: IntersectionObserver устанавливает data-visible="true" через setAttribute.
-  // Используем setAttribute вместо classList.add — React не затирает data-* атрибуты при ре-рендерах,
-  // тогда как className полностью перезаписывается React и сбрасывал бы is-visible при клике на FAQ.
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => entries.forEach(e => {
         if (e.isIntersecting) {
-          (e.target as HTMLElement).setAttribute('data-visible', 'true');
+          (e.target as HTMLElement).setAttribute("data-visible", "true");
           obs.unobserve(e.target);
         }
       }),
-      { threshold: 0.08 }
+      { threshold: 0.08 },
     );
     const els = document.querySelectorAll('[data-reveal]:not([data-visible="true"])');
     els.forEach(el => obs.observe(el));
     return () => obs.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, displayedWorks.length, recentWorks.length]);
+  }, [displayedWorks.length, recentWorks.length]);
 
-  const basePrice     = workType ? (WORK_PRICES[workType]?.price ?? 199) : 0;
-  const pageRange     = workType ? WORK_PAGES[workType] : undefined;
-  const EXTRAS_TYPES  = ["Доклад", "Реферат", "Курсовая", "ВКР"];
-  const hasExtrasForm = EXTRAS_TYPES.includes(workType);
-  const extrasPrice   = (wantPresentation ? 199 : 0) + (wantSpeech ? 149 : 0);
-  const orderTotals   = calcWorkOrderTotals(
-    basePrice,
-    extrasPrice,
-    showFirstOrderDiscount
-  );
-  const totalPrice    = orderTotals.totalRub;
-  const originalTotalPrice = orderTotals.originalTotalRub;
-  const priceDiscountApplied = orderTotals.discountApplied;
+  const pageRange = workType ? WORK_PAGES[workType] : undefined;
 
   const faqJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
     mainEntity: FAQ.map((item) => ({
-      '@type': 'Question',
+      "@type": "Question",
       name: item.q,
       acceptedAnswer: {
-        '@type': 'Answer',
+        "@type": "Answer",
         text: item.a,
       },
     })),
-  }
+  };
 
   const websiteJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'Refai',
-    url: 'https://ref-ai.ru',
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Refai",
+    url: "https://ref-ai.ru",
     potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://ref-ai.ru/?topic={search_term_string}',
-      'query-input': 'required name=search_term_string',
+      "@type": "SearchAction",
+      target: "https://ref-ai.ru/?topic={search_term_string}",
+      "query-input": "required name=search_term_string",
     },
-  }
+  };
 
   return (
     <main className={styles.main}>
@@ -2266,7 +682,6 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(websiteJsonLd) }} />
 
-      {/* ── Hero (якорь для PreFooter #generator) ── */}
       <section ref={heroRef} id="generator" className={styles.hero}>
         <div className={styles.heroInner}>
 
@@ -2276,7 +691,7 @@ export default function Home() {
             <div
               className={styles.heroTrust}
               role="status"
-              aria-label="Отзывы Lokli и Google Play, оформление по ГОСТ"
+              aria-label="Отзывы на Яндексе и Отзовике, оформление по ГОСТ"
             >
               <div className={styles.heroTrustLead}>
                 <div className={styles.heroTrustIcons} aria-hidden>
@@ -2310,17 +725,25 @@ export default function Home() {
             </div>
 
             <h1 className={styles.heroTitle}>
-              Учебные работы с&nbsp;оформлением{" "}
-              <span className={styles.heroAccent}>по&nbsp;ГОСТ</span>
+              {workType ? (
+                <>
+                  {getHeroTitle(workType).replace(" с помощью нейросети", "")}
+                  <span className={styles.heroAccent}> с помощью нейросети</span>
+                </>
+              ) : (
+                <>
+                  Учебные работы с&nbsp;оформлением{" "}
+                  <span className={styles.heroAccent}>по&nbsp;ГОСТ</span>
+                </>
+              )}
             </h1>
 
-            <p className={styles.heroSub}>
-              Сочинение, реферат, курсовая или ВКР — введите тему и скачайте готовый Word со списком литературы
-            </p>
+            {worksCreated > 0 && (
+              <p className={styles.heroWorksStat}>{formatWorksCreatedLabel(worksCreated)}</p>
+            )}
           </div>
 
-          {/* Баннер для тестового аккаунта ЮКасса */}
-          {isYukassa && !loading && (
+          {isYukassa && (
             <div className={`${styles.yukassaBanner} ${trialUsed ? styles.yukassaBannerUsed : ""}`}>
               {trialUsed ? (
                 <>
@@ -2352,65 +775,6 @@ export default function Home() {
           )}
 
           <div className={styles.genCard}>
-            {previewAvailable && !loading && (
-              <div className={styles.previewPromo} role="status">
-                <div className={styles.previewPromoIcon} aria-hidden>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </div>
-                <div className={styles.previewPromoBody}>
-                  <p className={styles.previewPromoTitle}>
-                    {isAdmin
-                      ? "Предпросмотр до оплаты"
-                      : previewQuota > 1
-                        ? "Бесплатные предпросмотры"
-                        : "Бесплатный предпросмотр"}
-                  </p>
-                  <p className={styles.previewPromoText}>
-                    {isAdmin
-                      ? "Оглавление и фрагмент текста в окне оплаты — без лимита."
-                      : previewQuota > 1
-                        ? `Структура и начало текста до оплаты · осталось ${previewRemaining} из ${previewQuota}`
-                        : "Структура и начало текста до оплаты — в окне оплаты."}
-                  </p>
-                </div>
-                <span className={styles.previewPromoBadge} aria-hidden>
-                  {isAdmin ? "∞" : String(Math.max(0, previewRemaining))}
-                </span>
-              </div>
-            )}
-
-            <div className={styles.genCardHead}>
-              <span className={styles.genCardTitle}>Создайте работу</span>
-              {!isYukassa && workType && (
-                priceDiscountApplied ? (
-                  <div className={styles.genCardPriceWrap} key={workType}>
-                    <span className={styles.genCardDiscountBadge}>
-                      −{FIRST_ORDER_DISCOUNT_PERCENT}%
-                    </span>
-                    <div className={styles.genCardPrice}>
-                      <span className={styles.genCardPriceOld} aria-hidden>
-                        {originalTotalPrice}
-                        <span className={styles.genCardPriceSuffix}>₽</span>
-                      </span>
-                      <span className={styles.genCardPriceNew}>
-                        {totalPrice}
-                        <span className={styles.genCardPriceSuffix}>₽</span>
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <span className={styles.genCardPrice} key={workType}>
-                    {totalPrice}
-                    <span className={styles.genCardPriceSuffix}>₽</span>
-                  </span>
-                )
-              )}
-            </div>
-
-            <p className={styles.genCardHint}>Тип работы</p>
             <div ref={workTypesRef} className={styles.workTypes}>
               {isAdmin && (
                 <button
@@ -2418,7 +782,7 @@ export default function Home() {
                   ref={(el) => { workTypeElsRef.current["Тест"] = el; }}
                   className={`${styles.workType} ${styles.workTypeTest} ${workType === "Тест" ? styles.workTypeActive : ""}`}
                   onClick={() => selectWorkType("Тест")}
-                  disabled={loading}
+                  disabled={submitting}
                   title="Тестовая генерация — только для администратора"
                   type="button"
                 >
@@ -2434,17 +798,11 @@ export default function Home() {
                     ref={(el) => { workTypeElsRef.current[type] = el; }}
                     className={`${styles.workType} ${workType === type ? styles.workTypeActive : ""}`}
                     onClick={() => selectWorkType(type)}
-                    disabled={loading}
+                    disabled={submitting}
                     type="button"
                   >
                     <span className={styles.workTypeLabel}>{type}</span>
-                    <span className={styles.workTypeMeta}>
-                      {isYukassa
-                        ? info?.pages
-                        : showFirstOrderDiscount && info && info.price > 0
-                          ? `${applyFirstOrderDiscount(info.price)} ₽ · ${info.pages}`
-                          : `${info?.price} ₽ · ${info?.pages}`}
-                    </span>
+                    <span className={styles.workTypeMeta}>{info?.pages}</span>
                   </button>
                 );
               })}
@@ -2455,953 +813,326 @@ export default function Home() {
               </p>
             )}
 
-          <form onSubmit={handleSubmit} className={styles.heroForm}>
-            <div className={styles.topicLabelRow}>
-              <span className={styles.topicLabel}>Тема работы</span>
-              <span className={styles.topicInfoWrap}>
+            <form onSubmit={handleSubmit} className={styles.heroForm}>
+              <div className={styles.topicLabelRow}>
+                <span className={styles.topicLabel}>Тема работы</span>
+                <span className={styles.topicInfoWrap}>
+                  <button
+                    type="button"
+                    className={styles.topicInfoBtn}
+                    aria-label="Как указать тему"
+                    aria-describedby="topic-hint-popover"
+                  >
+                    i
+                  </button>
+                  <span id="topic-hint-popover" role="tooltip" className={styles.topicInfoPopover}>
+                    Одна фраза с темой — без «сделай» и списка 1. 2. 3. Презентацию можно добавить после готовой работы.
+                  </span>
+                </span>
+              </div>
+              <div className={styles.inputWrapper}>
+                <TypewriterInput
+                  value={topic}
+                  onChange={(v) => {
+                    setTopic(v);
+                    if (topicFieldError) setTopicFieldError(null);
+                  }}
+                  disabled={submitting}
+                  className={styles.heroInput}
+                />
+              </div>
+              {topicFieldError && (
+                <p className={styles.topicFieldError} role="alert">
+                  {topicFieldError}
+                </p>
+              )}
+
+              {workType && pageRange && (
+                <div className={styles.formControls}>
+                  <div className={styles.pagesControl}>
+                    <span className={styles.pagesLabel}>Объём:</span>
+                    <input
+                      type="range"
+                      min={pageRange.min}
+                      max={pageRange.max}
+                      step={1}
+                      value={pages}
+                      onChange={e => setPages(Number(e.target.value))}
+                      className={styles.range}
+                      disabled={submitting}
+                    />
+                    <span className={styles.pagesValue}>{pages} стр.</span>
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.btnRow}>
                 <button
-                  type="button"
-                  className={styles.topicInfoBtn}
-                  aria-label="Как указать тему"
-                  aria-describedby="topic-hint-popover"
+                  type="submit"
+                  className={styles.heroBtn}
+                  disabled={submitting || sessionStatus === "loading" || !workType || !topic.trim() || (isYukassa && trialUsed)}
                 >
-                  i
+                  {submitting
+                    ? <><span className={styles.btnSpinner}/> Открываем заказ…</>
+                    : isYukassa
+                      ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
+                      : "Посмотреть превью"}
                 </button>
-                <span id="topic-hint-popover" role="tooltip" className={styles.topicInfoPopover}>
-                  Одна фраза с темой — без «сделай» и списка 1. 2. 3. Презентацию можно добавить после готовой работы.
-                </span>
-              </span>
-            </div>
-            <div className={styles.inputWrapper}>
-              <TypewriterInput
-                value={topic}
-                onChange={(v) => {
-                  setTopic(v);
-                  if (topicFieldError) setTopicFieldError(null);
-                }}
-                disabled={loading}
-                className={styles.heroInput}
-              />
-            </div>
-            {topicFieldError && (
-              <p className={styles.topicFieldError} role="alert">
-                {topicFieldError}
-              </p>
-            )}
-
-            {workType && pageRange && (
-              <div className={styles.formControls}>
-                <div className={styles.pagesControl}>
-                  <span className={styles.pagesLabel}>Объём:</span>
-                  <input
-                    type="range"
-                    min={pageRange.min}
-                    max={pageRange.max}
-                    step={1}
-                    value={pages}
-                    onChange={e => setPages(Number(e.target.value))}
-                    className={styles.range}
-                    disabled={loading}
-                  />
-                  <span className={styles.pagesValue}>{pages} стр.</span>
-                </div>
-                <div className={styles.metaBadges}>
-                  <span className={styles.metaBadge}>Times New Roman 14pt</span>
-                  <span className={styles.metaBadge}>Интервал 1.5</span>
-                  <span className={styles.metaBadge}>Поля 30/10/20/20</span>
-                </div>
               </div>
-            )}
-
-
-            <div className={styles.btnRow}>
-              <button
-                type="submit"
-                className={styles.heroBtn}
-                disabled={loading || paymentLoading || sessionStatus === "loading" || !workType || !topic.trim() || (isYukassa && trialUsed)}
-              >
-                {loading
-                  ? <><span className={styles.btnSpinner}/> Генерируем...</>
-                  : paymentLoading
-                  ? <><span className={styles.btnSpinner}/> Создаём платёж...</>
-                  : isYukassa
-                    ? `🎯 Сгенерировать ${{ "Сочинение": "сочинение", "Эссе": "эссе", "Доклад": "доклад" }[workType] ?? workType.toLowerCase()} — тест`
-                    : sessionStatus === "unauthenticated"
-                      ? "Попробовать бесплатно"
-                      : previewAvailable
-                        ? "Посмотреть превью"
-                        : `Оплатить и начать генерацию — ${totalPrice} ₽`}
-              </button>
-            </div>
-            {capacityError !== null && (
-              <div className={styles.capacityError}>
-                <span className={styles.capacityErrorIcon}>⏳</span>
-                <span>
-                  {workType} сейчас недоступна — сервер занят.
-                  {capacityError.length > 0
-                    ? <> Доступно: <strong>{capacityError.join(", ")}</strong></>
-                    : <> Все слоты заняты, попробуйте через минуту.</>}
-                </span>
-              </div>
-            )}
-            {hasExtrasForm && (
-              <p className={styles.extrasHint}>
-                После генерации — добавьте презентацию или текст выступления
-              </p>
-            )}
-          </form>
-
-            <ul className={styles.genCardTrust} aria-label="Преимущества">
-              <li>
-                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.gost}</span>
-                Word по ГОСТ
-              </li>
-              <li>
-                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.sources}</span>
-                Реальные источники
-              </li>
-              <li>
-                <span className={styles.genCardTrustIcon}>{GEN_TRUST_ICONS.fast}</span>
-                <span className={styles.genCardTrustTime} key={workType}>
-                  {WORK_GEN_TIME[workType] ?? "7–8 мин"}
-                </span>
-              </li>
-            </ul>
+              {capacityError !== null && (
+                <div className={styles.capacityError}>
+                  <span className={styles.capacityErrorIcon}>⏳</span>
+                  <span>
+                    {workType} сейчас недоступна — сервер занят.
+                    {capacityError.length > 0
+                      ? <> Доступно: <strong>{capacityError.join(", ")}</strong></>
+                      : <> Все слоты заняты, попробуйте через минуту.</>}
+                  </span>
+                </div>
+              )}
+            </form>
           </div>
-
-          <div className={styles.heroScrollHints}>
-            <a href="#how-it-works" className={styles.heroScrollHint}>
-              Как это работает ↓
-            </a>
-            <span className={styles.heroScrollHintSep} aria-hidden>·</span>
-            <a href="#examples" className={styles.heroScrollHint}>
-              Примеры работ ↓
-            </a>
-          </div>
-
-          {dailyCount > 0 && (
-            <div className={styles.heroNote}>
-              <span className={styles.heroDailyDot} />
-              <span>{dailyCount} генераций сегодня</span>
-            </div>
-          )}
 
         </div>
       </section>
 
-      {/* ── Прогресс ── */}
-      {loading && (
-        <section ref={progressSectionRef} className={styles.progressSection}>
-          <div className={styles.progressCard}>
-
-            {/* Верхняя строка: шаг N из M + процент */}
-            <div className={styles.progressTop}>
-              <span className={styles.progressStepCount}>
-                Шаг {stepIndex + 1} из {stepsRef.current.length}
-              </span>
-              <span className={styles.progressPercent}>
-                {Math.round(totalProgress)}%
-                {etaSeconds != null && totalProgress < 100 ? ` · ${formatEta(etaSeconds)}` : ""}
-              </span>
-            </div>
-
-            {/* Тема работы */}
-            {topic && (
-              <p className={styles.progressTopic}>«{topic}»</p>
-            )}
-
-            {/* Прогресс-бар */}
-            <div className={styles.progressBar}>
-              <div className={styles.progressFill} style={{ transform: `scaleX(${totalProgress / 100})` }} />
-            </div>
-
-            {/* Точки-шаги */}
-            <div className={styles.progressDotRow}>
-              {stepsRef.current.map((_, i) => (
-                <span
-                  key={i}
-                  className={
-                    i < stepIndex  ? styles.progressDotDone :
-                    i === stepIndex ? styles.progressDotActive :
-                    styles.progressDotPending
-                  }
-                />
-              ))}
-            </div>
-
-            {/* Текущий шаг — key вызывает re-mount → анимация каждый раз */}
-            <p key={`${stepIndex}-${backendStageLabel}`} className={styles.progressCurrentLabel}>
-              {backendStageLabel || stepsRef.current[stepIndex]?.label}
-              <span className={styles.progressDots}>{dots}</span>
+      <section id="how-it-works" className={styles.stepsSection} aria-labelledby="how-it-works-title">
+        <div className={styles.stepsSectionInner}>
+          <header className={styles.stepsHead} data-reveal>
+            <p className={styles.stepsEyebrow}>Как это работает</p>
+            <h2 id="how-it-works-title" className={styles.stepsTitle}>
+              Три шага до готового Word
+            </h2>
+            <p className={styles.stepsLead}>
+              Сначала превью — оплата только за полный текст
             </p>
-            {(() => {
-              const match = (backendStageLabel || "").match(/раздел\s+(\d+)\s+из\s+(\d+)/i);
-              if (!match) return null;
-              return (
-                <p className={styles.progressSectionMeta}>
-                  Раздел {match[1]} / {match[2]}
-                </p>
-              );
-            })()}
+          </header>
 
-            {f5Recovery ? (
-              <div className={styles.f5RecoveryHint}>
-                <p className={styles.progressHint}>
-                  Страница была перезагружена. Генерация продолжается на сервере — ждём результата...
-                </p>
-                <Link href="/dashboard" className={styles.progressDashLink}>
-                  Мои работы →
-                </Link>
-              </div>
-            ) : (
-              <p className={styles.progressHint}>
-                Готовая работа автоматически сохранится в разделе «Мои работы»
-              </p>
-            )}
+          <ol className={styles.stepsList}>
+            {HOW_STEPS.map((step, i) => (
+              <li
+                key={step.title}
+                className={styles.stepsListItem}
+                data-reveal
+                data-delay={String(i + 1)}
+              >
+                <div className={styles.stepsListMarker} aria-hidden>
+                  <span className={styles.stepsListNum}>{String(i + 1).padStart(2, "0")}</span>
+                  <span className={styles.stepsListIcon} data-step-icon>
+                    {STEP_ICONS[i]}
+                  </span>
+                </div>
+                <div className={styles.stepsListBody}>
+                  <h3 className={styles.stepsListTitle}>{step.title}</h3>
+                  <p className={styles.stepsListText}>{step.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div className={styles.stepsFeatures} data-reveal data-delay="4">
+            {HOW_FEATURES.map((label) => (
+              <span key={label} className={styles.stepsFeature}>
+                {label}
+              </span>
+            ))}
           </div>
 
-          {/* Карточка с фактом */}
-          <div className={styles.factCard} style={{ opacity: factVisible ? 1 : 0 }}>
-            <span className={styles.factBadge}>Знаете ли вы?</span>
-            <p className={styles.factText}>{FUN_FACTS[factIndex]}</p>
-            <div className={styles.factFooter}>
-              <div className={styles.factDots}>
-                {FUN_FACTS.map((_, i) => (
-                  <span
-                    key={i}
-                    className={i === factIndex ? styles.factDotActive : styles.factDot}
-                  />
-                ))}
-              </div>
-              <span className={styles.factCounter}>{factIndex + 1} / {FUN_FACTS.length}</span>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Ошибка ── */}
-      {error && (
-        <div className={styles.errorWrap}>
-          <div className={styles.error}>
-            <div className={styles.errorIcon}>⚠</div>
-            <div className={styles.errorBody}>
-              <p className={styles.errorTitle}>
-                {error.status === 401
-                  ? "Требуется вход"
-                  : error.status === 403
-                    ? "Нужна оплата или доступ"
-                    : error.status === 429
-                      ? "Генерация уже запущена"
-                      : "Что-то пошло не так"}
-              </p>
-              <p className={styles.errorText}>{error.message}</p>
-            </div>
+          <div className={styles.stepsCtaWrap} data-reveal data-delay="5">
+            <a href="#generator" className={styles.stepsCta}>
+              Перейти к генератору
+              <span className={styles.stepsCtaIcon} aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </a>
           </div>
         </div>
-      )}
+      </section>
 
-      {/* ── Как это работает (показываем только пока нет результата) ── */}
-      {!loading && (
-        <section id="how-it-works" className={styles.stepsSection} aria-labelledby="how-it-works-title">
-          <div className={styles.stepsSectionInner}>
-            <header className={styles.stepsHead} data-reveal>
-              <p className={styles.stepsEyebrow}>Как это работает</p>
-              <h2 id="how-it-works-title" className={styles.stepsTitle}>
-                Три шага до готового Word
-              </h2>
-              <p className={styles.stepsLead}>
-                Сначала бесплатное превью — оплата только за полный текст
-              </p>
-            </header>
-
-            <ol className={styles.stepsList}>
-              {HOW_STEPS.map((step, i) => (
-                <li
-                  key={step.title}
-                  className={styles.stepsListItem}
-                  data-reveal
-                  data-delay={String(i + 1)}
-                >
-                  <div className={styles.stepsListMarker} aria-hidden>
-                    <span className={styles.stepsListNum}>{String(i + 1).padStart(2, "0")}</span>
-                    <span className={styles.stepsListIcon} data-step-icon>
-                      {STEP_ICONS[i]}
-                    </span>
-                  </div>
-                  <div className={styles.stepsListBody}>
-                    <h3 className={styles.stepsListTitle}>{step.title}</h3>
-                    <p className={styles.stepsListText}>{step.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-
-            <div className={styles.stepsFeatures} data-reveal data-delay="4">
-              {HOW_FEATURES.map((label) => (
-                <span key={label} className={styles.stepsFeature}>
-                  {label}
-                </span>
-              ))}
-            </div>
-
-            <div className={styles.stepsCtaWrap} data-reveal data-delay="5">
-              <a href="#generator" className={styles.stepsCta}>
-                Перейти к генератору
-                <span className={styles.stepsCtaIcon} aria-hidden>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
-                </span>
-              </a>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Примеры работ ── */}
-      {!loading && (
-        <ExamplesSection onCreateFromExample={goToGeneratorFromExample} />
-      )}
-
-      {/* ── ChatGPT vs Refai ── */}
-      {!loading && (
-        <section id="chatgpt-compare" className={styles.compareSection}>
-          <div className={styles.compareInner}>
-            <div className={styles.compareHead} data-reveal>
-              <p className={styles.compareEyebrow}>Сравнение</p>
-              <h2 className={styles.compareHeading}>
-                Обычный ИИ vs <span className={styles.compareAccent}>Refai</span>
-              </h2>
-              <p className={styles.compareSub}>
-                ChatGPT и DeepSeek сильны в диалоге и черновике. Refai — когда нужен готовый файл к сдаче
-              </p>
-            </div>
-            <div className={styles.compareTable} data-reveal data-delay="1">
-              <div className={styles.compareHeader}>
-                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderCriterion}`}>
-                  Критерий
-                </div>
-                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
-                  <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={88} height={28} />
-                </div>
-                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
-                  <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={88} height={28} />
-                </div>
-                <div
-                  className={`${styles.compareHeaderCell} ${styles.compareHeaderAiMobile}`}
-                  aria-label="ChatGPT и DeepSeek"
-                >
-                  <div className={styles.compareAiLogos}>
-                    <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={72} height={24} />
-                    <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={72} height={24} />
-                  </div>
-                </div>
-                <div className={`${styles.compareHeaderCell} ${styles.compareHeaderRefai}`}>
-                  <img src="/compare-refai.png" alt="Refai" className={styles.compareLogo} width={88} height={28} />
-                </div>
-              </div>
-              {AI_COMPARE_ROWS.map((row, i) => (
-                <div key={row.label} className={styles.compareRow} data-reveal data-delay={String(i + 2)}>
-                  <div className={styles.compareRowLabel}>{row.label}</div>
-                  <CompareAiCell text={row.generic} tone={row.aiTone} />
-                  <CompareAiCell
-                    text={row.generic}
-                    tone={row.aiTone}
-                    className={styles.compareRowBadDesktop}
-                  />
-                  <div className={styles.compareRowGood}>
-                    <CompareMarkIcon kind="yes" />
-                    <span className={styles.compareCellText}>{row.refai}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Почему Refai ── */}
-      {!loading && (
-        <section className={styles.whySection}>
-          <div className={styles.whySectionInner}>
-            <div className={styles.whyHead}>
-              <p className={styles.whyEyebrow}>Почему Refai</p>
-              <h2 className={styles.whySectionTitle}>
-                Цифры, а <span className={styles.whyAccent}>не обещания</span>
-              </h2>
-            </div>
-            <dl className={styles.whyStrip}>
-              {WHY_FEATURES.map((f, i) => (
-                <div key={f.label} className={styles.whyItem} data-reveal data-delay={String(i + 1)}>
-                  <div className={styles.whyItemIcon}>{WHY_ICONS[f.label]}</div>
-                  <dt className={styles.whyItemLabel}>{f.label}</dt>
-                  <dd className={styles.whyItemValue}>{f.value}</dd>
-                  <dd className={styles.whyItemNote}>{f.note}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </section>
-      )}
-
-      {/* ── Последние работы ── */}
-      {!loading && (
-        <section className={styles.recentSection}>
-          <div className={styles.recentInner}>
-            <div className={styles.recentHeadRow}>
-              <div>
-                <h2 className={styles.recentHeading}>
-                  Последние <span className={styles.recentAccent}>проекты</span>
-                </h2>
-                <p className={styles.recentSubline}>
-                  {usingRealWorks ? (
-                    <>Реальные работы пользователей Refai</>
-                  ) : (
-                    <>Более <strong>1 000 работ</strong> уже сгенерировано</>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className={styles.recentGrid}>
-              {(usingRealWorks
-                ? recentWorks.slice(0, 4)
-                : displayedWorks
-              ).map((w) => {
-                const isReal = usingRealWorks;
-                const real = isReal ? (w as RecentWorkItem) : null;
-                const mock = !isReal ? (w as DisplayWork) : null;
-                const workType = real?.workType ?? mock!.workType;
-                const topic = real?.topic ?? mock!.topic;
-                const isNew = mock?.isNew ?? false;
-                const typeColor = WORK_TYPE_COLORS[workType] || "#1B3A6B";
-                const cardClass = `${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`;
-
-                const inner = (
-                  <>
-                    <div className={styles.recentCardTop}>
-                      <span className={styles.recentBadge} style={{ color: typeColor }}>{workType}</span>
-                      {isNew && <span className={styles.recentNewDot} aria-hidden />}
-                    </div>
-                    {real?.authorLabel && (
-                      <p className={styles.recentAuthor}>{real.authorLabel}</p>
-                    )}
-                    <p className={styles.recentWorkTitle}>{topic}</p>
-                  </>
-                );
-
-                if (real?.slug) {
-                  return (
-                    <Link
-                      key={real.id}
-                      href={`/preview/${real.slug}`}
-                      className={`${cardClass} ${styles.recentCardLink}`}
-                    >
-                      {inner}
-                    </Link>
-                  );
-                }
-
-                return (
-                  <div key={mock!.id} className={cardClass}>
-                    {inner}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── FAQ ── */}
-      {!loading && (
-        <section className={styles.faqSection}>
-          <div className={styles.faqInner}>
-            <h2 className={styles.faqHeading}>
-              Часто задаваемые <span className={styles.faqAccent}>вопросы</span>
+      <section id="chatgpt-compare" className={styles.compareSection}>
+        <div className={styles.compareInner}>
+          <div className={styles.compareHead} data-reveal>
+            <p className={styles.compareEyebrow}>Сравнение</p>
+            <h2 className={styles.compareHeading}>
+              Обычный ИИ vs <span className={styles.compareAccent}>Refai</span>
             </h2>
-            <div className={styles.faqGrid}>
-              {FAQ.map((item, i) => {
-                const isOpen = faqOpen === i;
+            <p className={styles.compareSub}>
+              ChatGPT и DeepSeek сильны в диалоге и черновике. Refai — когда нужен готовый файл к сдаче
+            </p>
+          </div>
+          <div className={styles.compareTable} data-reveal data-delay="1">
+            <div className={styles.compareHeader}>
+              <div className={`${styles.compareHeaderCell} ${styles.compareHeaderCriterion}`}>
+                Критерий
+              </div>
+              <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
+                <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={88} height={28} />
+              </div>
+              <div className={`${styles.compareHeaderCell} ${styles.compareHeaderAiDesktop}`}>
+                <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={88} height={28} />
+              </div>
+              <div
+                className={`${styles.compareHeaderCell} ${styles.compareHeaderAiMobile}`}
+                aria-label="ChatGPT и DeepSeek"
+              >
+                <div className={styles.compareAiLogos}>
+                  <img src="/compare-chatgpt.png" alt="ChatGPT" className={styles.compareLogo} width={72} height={24} />
+                  <img src="/compare-deepseek.png" alt="DeepSeek" className={styles.compareLogo} width={72} height={24} />
+                </div>
+              </div>
+              <div className={`${styles.compareHeaderCell} ${styles.compareHeaderRefai}`}>
+                <img src="/compare-refai.png" alt="Refai" className={styles.compareLogo} width={88} height={28} />
+              </div>
+            </div>
+            {AI_COMPARE_ROWS.map((row, i) => (
+              <div key={row.label} className={styles.compareRow} data-reveal data-delay={String(i + 2)}>
+                <div className={styles.compareRowLabel}>{row.label}</div>
+                <CompareAiCell text={row.generic} tone={row.aiTone} />
+                <CompareAiCell
+                  text={row.generic}
+                  tone={row.aiTone}
+                  className={styles.compareRowBadDesktop}
+                />
+                <div className={styles.compareRowGood}>
+                  <CompareMarkIcon kind="yes" />
+                  <span className={styles.compareCellText}>{row.refai}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <ExamplesSection onCreateFromExample={goToGeneratorFromExample} />
+
+      <section className={styles.whySection}>
+        <div className={styles.whySectionInner}>
+          <div className={styles.whyHead}>
+            <p className={styles.whyEyebrow}>Почему Refai</p>
+            <h2 className={styles.whySectionTitle}>
+              Цифры, а <span className={styles.whyAccent}>не обещания</span>
+            </h2>
+          </div>
+          <dl className={styles.whyStrip}>
+            {WHY_FEATURES.map((f, i) => (
+              <div key={f.label} className={styles.whyItem} data-reveal data-delay={String(i + 1)}>
+                <div className={styles.whyItemIcon}>{WHY_ICONS[f.label]}</div>
+                <dt className={styles.whyItemLabel}>{f.label}</dt>
+                <dd className={styles.whyItemValue}>{f.value}</dd>
+                <dd className={styles.whyItemNote}>{f.note}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <section className={styles.recentSection}>
+        <div className={styles.recentInner}>
+          <div className={styles.recentHeadRow}>
+            <div>
+              <h2 className={styles.recentHeading}>
+                Последние <span className={styles.recentAccent}>проекты</span>
+              </h2>
+              <p className={styles.recentSubline}>
+                {usingRealWorks ? (
+                  <>Реальные работы пользователей Refai</>
+                ) : (
+                  <>Более <strong>1 000 работ</strong> уже сгенерировано</>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className={styles.recentGrid}>
+            {(usingRealWorks
+              ? recentWorks.slice(0, 4)
+              : displayedWorks
+            ).map((w) => {
+              const isReal = usingRealWorks;
+              const real = isReal ? (w as RecentWorkItem) : null;
+              const mock = !isReal ? (w as DisplayWork) : null;
+              const cardWorkType = real?.workType ?? mock!.workType;
+              const cardTopic = real?.topic ?? mock!.topic;
+              const isNew = mock?.isNew ?? false;
+              const typeColor = WORK_TYPE_COLORS[cardWorkType] || "#1B3A6B";
+              const cardClass = `${styles.recentCard} ${isNew ? styles.recentCardNew : ""}`;
+
+              const inner = (
+                <>
+                  <div className={styles.recentCardTop}>
+                    <span className={styles.recentBadge} style={{ color: typeColor }}>{cardWorkType}</span>
+                    {isNew && <span className={styles.recentNewDot} aria-hidden />}
+                  </div>
+                  {real?.authorLabel && (
+                    <p className={styles.recentAuthor}>{real.authorLabel}</p>
+                  )}
+                  <p className={styles.recentWorkTitle}>{cardTopic}</p>
+                </>
+              );
+
+              if (real?.slug) {
                 return (
-                  <div
-                    key={i}
-                    className={`${styles.faqItem} ${isOpen ? styles.faqItemOpen : ""}`}
-                    data-reveal
-                    data-delay={String((i % 4) + 1)}
+                  <Link
+                    key={real.id}
+                    href={`/preview/${real.slug}`}
+                    className={`${cardClass} ${styles.recentCardLink}`}
                   >
-                    <button
-                      className={styles.faqQ}
-                      onClick={() => setFaqOpen(isOpen ? null : i)}
-                      aria-expanded={isOpen}
-                    >
-                      <span>{item.q}</span>
-                      <svg
-                        className={styles.faqIcon}
-                        width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                        style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s cubic-bezier(0.22,1,0.36,1)' }}
-                      >
-                        <polyline points="6 9 12 15 18 9"/>
-                      </svg>
-                    </button>
-                    <div className={`${styles.faqBody} ${isOpen ? styles.faqBodyOpen : ''}`}>
-                      <p className={styles.faqA}>{item.a}</p>
-                    </div>
-                  </div>
+                    {inner}
+                  </Link>
                 );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
+              }
 
-      {/* ── Модальное окно результата (portal → вне main, поверх header) ── */}
-      {result && showResultModal && createPortal((() => {
-        const hasTitlePage = ["Реферат", "Курсовая", "ВКР", "Доклад"].includes(workType);
-        const hasSources   = !["Эссе", "Сочинение"].includes(workType);
-        const hasExtras    = !["Эссе", "Сочинение"].includes(workType);
-        const extrasTotal  = (presentationSel ? 199 : 0) + (speechSel ? 149 : 0);
-        const DownloadBtn  = () => modalTab === "presentation" && hasPres ? (
-          <button className={styles.downloadBtn} onClick={downloadPresentation} disabled={downloadingPptx}
-            style={{ background: downloadingPptx ? "#374151" : "#1E3A5F" }}>
-            {downloadingPptx
-              ? <span className={styles.buttonLoading}><span className={styles.spinner}/>Генерируем файл...</span>
-              : <><img src="/pptx-icon.svg" alt="" className={styles.downloadIcon} />Скачать PPTX</>
-            }
-          </button>
-        ) : (
-          <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
-            {downloading
-              ? <span className={styles.buttonLoading}><span className={styles.spinner}/>Создаём файл...</span>
-              : <><img src="/docx-icon.png" alt="" className={styles.downloadIcon} />Скачать DOCX</>
-            }
-          </button>
-        );
-        const ExtrasStatus = () => {
-          if (extrasGenerating) return (
-            <div className={styles.extrasLoading}>
-              <div className={styles.extrasProgressRow}>
-                <span className={styles.extrasProgressLabel}>Генерируем дополнительные материалы...</span>
-                <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
-              </div>
-              <div className={styles.extrasProgressBar}>
-                <div className={styles.extrasProgressFill} style={{ transform: `scaleX(${extrasProgress / 100})` }} />
-              </div>
-            </div>
-          );
-          if (extrasError) return (
-            <p className={styles.extrasErrorMsg}>{extrasError}</p>
-          );
-          if (extrasReady.length > 0) return (
-            <div className={styles.extrasDownloads}>
-              {/* PPTX скачивается через большую кнопку — здесь только выступление */}
-              {extrasReady.includes("speech") && (
-                <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
-                  <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
-                  Скачать выступление .txt
-                </button>
-              )}
-            </div>
-          );
-          return null;
-        };
-
-        const Toggles = () => (
-          <div className={styles.extrasSection}>
-            {!extrasGenerating && extrasReady.length === 0 && (
-              <>
-                {!wantPresentation && (
-                  <label className={styles.toggleRow}>
-                    <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
-                    <span className={styles.toggleSlider} />
-                    <span className={styles.toggleLabel}><img src="/pptx-icon.svg" alt="" className={styles.toggleLabelIcon} /> Презентация</span>
-                    <span className={styles.togglePrice}>+199 ₽</span>
-                  </label>
-                )}
-                {!wantSpeech && (
-                  <label className={styles.toggleRow}>
-                    <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
-                    <span className={styles.toggleSlider} />
-                    <span className={styles.toggleLabel}><img src="/txt-icon.svg" alt="" className={styles.toggleLabelIcon} /> Текст выступления</span>
-                    <span className={styles.togglePrice}>+149 ₽</span>
-                  </label>
-                )}
-                {extrasTotal > 0 && (
-                  <button className={styles.payExtrasBtn} onClick={handleExtrasPayment}>
-                    Оплатить {extrasTotal} ₽
-                  </button>
-                )}
-              </>
-            )}
-            <ExtrasStatus />
-          </div>
-        );
-        // Используем slidesData (state) или _extrasSlides (module var) если state ещё не обновился
-        const activeSlidesData = slidesData ?? (_extrasSlides && extrasReady.includes("presentation") ? _extrasSlides as { accent: string; slides: unknown[] } : null);
-        const hasPres = !!activeSlidesData;
-        const showPresentationHero =
-          modalTab === "presentation" &&
-          hasExtras &&
-          !hasPres &&
-          !extrasGenerating &&
-          extrasReady.length === 0 &&
-          (!wantPresentation || !wantSpeech);
-
-        return (
-          <div className={`${styles.modalOverlay} ${modalClosing ? styles.modalOverlayClosing : ""}`}>
-            <div
-              ref={resultModalRef}
-              className={`${styles.modalBox} ${modalClosing ? styles.modalBoxClosing : ""}`}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="result-modal-title"
-            >
-
-              {/* Крестик — только на десктопе */}
-              <button ref={resultModalCloseRef} className={styles.modalClose} onClick={closeResultModal}>✕</button>
-
-              {/* Мобильная шапка (скрыта на десктопе) */}
-              <div className={styles.mobileModalHeader}>
-                <div>
-                  <h2 id="result-modal-title" className={styles.modalTitle}>{result.title}</h2>
-                  <div className={styles.modalBadges}>
-                    <span className={styles.badge}>{workType}</span>
-                    <span className={styles.badge}>{pages} стр.</span>
-                  </div>
+              return (
+                <div key={mock!.id} className={cardClass}>
+                  {inner}
                 </div>
-                <button className={styles.mobileCloseBtn} onClick={closeResultModal}>✕</button>
-              </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-              {/* Табы */}
-              <div className={styles.modalTabs}>
-                <button
-                  className={`${styles.modalTab} ${modalTab === "work" ? styles.modalTabActive : ""}`}
-                  onClick={() => setModalTab("work")}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/docx-icon.png" alt="" className={styles.modalTabIcon} />
-                  Работа
-                </button>
-                <button
-                  className={`${styles.modalTab} ${modalTab === "presentation" ? styles.modalTabActive : ""}`}
-                  onClick={() => setModalTab("presentation")}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/pptx-icon.svg" alt="" className={styles.modalTabIcon} />
-                  Презентация
-                </button>
-              </div>
-
-              <div className={styles.modalBody}>
-
-              {/* Левый столбец */}
-              <div className={styles.modalLeft} style={modalTab === "presentation" ? { background: "#1a1a2e" } : undefined}>
-                {/* DOCX preview — всегда в DOM, скрыт через CSS при табе Презентация */}
-                <div style={{ display: modalTab === "work" ? "block" : "none" }}>
-                  {previewLoading && (
-                    <div className={styles.previewSpinner}>
-                      <span className={styles.spinnerDark}/> Загружаем предпросмотр...
-                    </div>
-                  )}
-                  <div ref={previewContainerRef} className={styles.previewContainer} />
-                </div>
-                {/* PresentationViewer — всегда в DOM если данные есть, скрыт при табе Работа */}
-                {/* PresentationViewer — скрыт при табе Работа, но всегда в DOM если есть данные */}
+      <section className={styles.faqSection}>
+        <div className={styles.faqInner}>
+          <h2 className={styles.faqHeading}>
+            Часто задаваемые <span className={styles.faqAccent}>вопросы</span>
+          </h2>
+          <div className={styles.faqGrid}>
+            {FAQ.map((item, i) => {
+              const isOpen = faqOpen === i;
+              return (
                 <div
-                  style={{
-                    display: modalTab === "presentation" ? "flex" : "none",
-                    flex: 1,
-                    minHeight: 0,
-                    width: "100%",
-                    flexDirection: "column",
-                    position: "relative",
-                  }}
+                  key={i}
+                  className={`${styles.faqItem} ${isOpen ? styles.faqItemOpen : ""}`}
+                  data-reveal
+                  data-delay={String((i % 4) + 1)}
                 >
-                  {showPresentationHero ? (
-                    <div className={styles.presentationExtrasHero}>
-                      <p className={styles.presentationExtrasHeroHint}>
-                        Выберите дополнительные материалы для вашей работы. После оплаты генерация начнется автоматически.
-                      </p>
-                      <div className={styles.presentationExtrasHeroGrid}>
-                        {!wantPresentation && (
-                          <button
-                            type="button"
-                            className={`${styles.presentationHeroCard} ${presentationSel ? styles.presentationHeroCardActive : ""}`}
-                            onClick={() => setPresentationSel(v => !v)}
-                          >
-                            <img src="/pptx-icon.svg" alt="" className={styles.presentationHeroIcon} />
-                            <span className={styles.presentationHeroTitle}>Презентация</span>
-                            <span className={styles.presentationHeroPrice}>+199 ₽</span>
-                          </button>
-                        )}
-                        {!wantSpeech && (
-                          <button
-                            type="button"
-                            className={`${styles.presentationHeroCard} ${speechSel ? styles.presentationHeroCardActive : ""}`}
-                            onClick={() => setSpeechSel(v => !v)}
-                          >
-                            <img src="/txt-icon.svg" alt="" className={styles.presentationHeroIcon} />
-                            <span className={styles.presentationHeroTitle}>Текст выступления</span>
-                            <span className={styles.presentationHeroPrice}>+149 ₽</span>
-                          </button>
-                        )}
-                      </div>
-                      {!isMobileViewport && extrasTotal > 0 && (
-                        <button type="button" className={styles.presentationHeroPayBtn} onClick={handleExtrasPayment}>
-                          Оплатить {extrasTotal} ₽
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <PresentationViewer
-                        slides={hasPres ? (activeSlidesData!.slides as Slide[]) : []}
-                        accent={activeSlidesData?.accent ?? "blue"}
-                        mode="embedded"
-                        images={presentationImages}
-                        onSlidesChange={slides => setSlidesData(prev => prev ? { ...prev, slides } : { ...activeSlidesData!, slides })}
-                        onImagesChange={setPresentationImages}
-                        onOrder={(!extrasGenerating && hasExtras) ? () => { setModalTab("work"); setPresentationSel(true); } : undefined}
-                      />
-                      {extrasGenerating && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            background: "#1a1a2e",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 12,
-                          }}
-                        >
-                          <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>Генерируем презентацию...</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Кнопки зума — вне скролла, прибиты к углу modalBox (absolute) */}
-              {!previewLoading && (
-                <div className={styles.zoomControls}>
-                  <button className={styles.zoomBtn} onClick={() => applyZoom(0.1)} title="Увеличить">＋</button>
-                  <span className={styles.zoomLevel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
-                  <button className={styles.zoomBtn} onClick={() => applyZoom(-0.1)} title="Уменьшить">－</button>
-                </div>
-              )}
-
-              {/* Правый столбец — десктоп (скрыт на мобильном) */}
-              <div className={styles.modalRight}>
-                <h2 className={styles.modalTitle}>{result.title}</h2>
-                <div className={styles.modalBadges}>
-                  <span className={styles.badge}>{workType}</span>
-                  <span className={styles.badge}>{pages} стр.</span>
-                </div>
-                <hr className={styles.modalDivider} />
-                <ul className={styles.featureList}>
-                  <li>✅ Оформление по ГОСТ 7.32-2017</li>
-                  <li>✅ Уникальность текста 80%+</li>
-                  {hasSources && <li>✅ Реальные источники 2020–2025</li>}
-                  <li>✅ Готов к скачиванию</li>
-                </ul>
-                <hr className={styles.modalDivider} />
-                <DownloadBtn />
-                {hasExtras && <Toggles />}
-                {hasTitlePage && (
-                  <>
-                    <hr className={styles.modalDivider} />
-                    <div className={styles.titleSection}>
-                      <p className={styles.titleSectionHeading}>Данные для документов</p>
-                      <p className={styles.titleSectionSub}>Подставляются в работу и презентацию</p>
-                      <input className={styles.titleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
-                      <input className={styles.titleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
-                      <label className={styles.skipRow}>
-                        <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
-                        <span>Не указывать факультет</span>
-                      </label>
-                      {!skipFaculty && <input className={styles.titleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
-                      <label className={styles.skipRow}>
-                        <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
-                        <span>Не указывать специализацию</span>
-                      </label>
-                      {!skipSpeciality && <input className={styles.titleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
-                      <label className={styles.skipRow}>
-                        <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
-                        <span>Не указывать предмет</span>
-                      </label>
-                      {!skipDiscipline && <input className={styles.titleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
-                      <input className={styles.titleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
-                      <input className={styles.titleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
-                      <input className={styles.titleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
-                      <input className={styles.titleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
-                      <button className={styles.updateDocBtn} onClick={handleTitleUpdate} disabled={titleUpdating}>
-                        {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
-                      </button>
-                      <label className={styles.saveProfileRow}>
-                        <input
-                          type="checkbox"
-                          className={styles.saveProfileCheck}
-                          checked={saveProfile}
-                          onChange={e => setSaveProfile(e.target.checked)}
-                        />
-                        <span>Запомнить данные</span>
-                      </label>
-                    </div>
-                  </>
-                )}
-                <p className={styles.savedNote}>Работа сохранена в личном кабинете</p>
-              </div>
-
-              </div>{/* /modalBody */}
-
-              {/* Нижняя панель — только мобильный (sticky) */}
-              <div className={styles.mobileBottom}>
-                {/* Зум-кнопки (мобиль) */}
-                {!previewLoading && (
-                  <div className={styles.mobileZoomRow}>
-                    <button className={styles.mobileZoomBtn} onClick={() => applyZoom(0.1)}>＋</button>
-                    <span className={styles.mobileZoomLabel}>{Math.round(baseScaleRef.current * previewZoom * 100)}%</span>
-                    <button className={styles.mobileZoomBtn} onClick={() => applyZoom(-0.1)}>－</button>
-                  </div>
-                )}
-                <DownloadBtn />
-                {hasTitlePage && (
-                  <button className={styles.mobileTitleBtn} onClick={() => setShowTitleModal(true)}>
-                    ✏ Титульный лист
+                  <button
+                    className={styles.faqQ}
+                    onClick={() => setFaqOpen(isOpen ? null : i)}
+                    aria-expanded={isOpen}
+                    type="button"
+                  >
+                    <span>{item.q}</span>
+                    <svg
+                      className={styles.faqIcon}
+                      width="16" height="16" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                      style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s cubic-bezier(0.22,1,0.36,1)" }}
+                    >
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
                   </button>
-                )}
-                {hasExtras && modalTab === "work" && !extrasGenerating && extrasReady.length === 0 && (!wantPresentation || !wantSpeech) && (
-                  <div className={styles.mobileToggles}>
-                    {!wantPresentation && (
-                      <label className={`${styles.mobileToggleChip} ${presentationSel ? styles.mobileToggleChipActive : ""}`}>
-                        <input type="checkbox" className={styles.toggleInput} checked={presentationSel} onChange={e => setPresentationSel(e.target.checked)} />
-                        <img src="/pptx-icon.svg" alt="" className={styles.mobileChipIcon} />
-                        <span className={styles.mobileChipLabel}>Презентация</span>
-                        <span className={styles.mobileChipPrice}>+199 ₽</span>
-                      </label>
-                    )}
-                    {!wantSpeech && (
-                      <label className={`${styles.mobileToggleChip} ${speechSel ? styles.mobileToggleChipActive : ""}`}>
-                        <input type="checkbox" className={styles.toggleInput} checked={speechSel} onChange={e => setSpeechSel(e.target.checked)} />
-                        <img src="/txt-icon.svg" alt="" className={styles.mobileChipIcon} />
-                        <span className={styles.mobileChipLabel}>Выступление</span>
-                        <span className={styles.mobileChipPrice}>+149 ₽</span>
-                      </label>
-                    )}
+                  <div className={`${styles.faqBody} ${isOpen ? styles.faqBodyOpen : ""}`}>
+                    <p className={styles.faqA}>{item.a}</p>
                   </div>
-                )}
-                {hasExtras && !extrasGenerating && extrasReady.length === 0 && extrasTotal > 0 && (
-                  <button className={`${styles.payExtrasBtn} ${styles.payExtrasBtnMobile}`} onClick={handleExtrasPayment}>
-                    Оплатить {extrasTotal} ₽
-                  </button>
-                )}
-                {extrasGenerating && (
-                  <div className={styles.extrasLoading}>
-                    <div className={styles.extrasProgressRow}>
-                      <span className={styles.extrasProgressLabel}>Генерируем...</span>
-                      <span className={styles.extrasProgressPct}>{Math.round(extrasProgress)}%</span>
-                    </div>
-                    <div className={styles.extrasProgressBar}>
-                      <div className={styles.extrasProgressFill} style={{ transform: `scaleX(${extrasProgress / 100})` }} />
-                    </div>
-                  </div>
-                )}
-                {extrasError && <p className={styles.extrasErrorMsg}>{extrasError}</p>}
-                {extrasReady.length > 0 && (
-                  <div className={styles.extrasDownloadsMobile}>
-                    {/* PPTX — через большую кнопку DownloadBtn выше, здесь только выступление */}
-                    {extrasReady.includes("speech") && (
-                      <button className={styles.extrasDownloadBtn} onClick={downloadSpeech}>
-                        <img src="/txt-icon.svg" alt="" className={styles.extrasDownloadIcon} />
-                        Выступление .txt
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-            </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })(), document.body)}
-
-      {/* Мобильный bottom-sheet редактирования титульника */}
-      {showTitleModal && typeof document !== "undefined" && createPortal(
-        <div className={styles.titleSheetOverlay} onClick={() => setShowTitleModal(false)}>
-          <div className={styles.titleSheet} onClick={e => e.stopPropagation()}>
-            <div className={styles.titleSheetHeader}>
-              <span className={styles.titleSheetTitle}>Титульный лист</span>
-              <button className={styles.titleSheetClose} onClick={() => setShowTitleModal(false)}>✕</button>
-            </div>
-            <div className={styles.titleSheetBody}>
-              <input className={styles.titleInput} placeholder="ФИО студента" value={titleForm.fullName} onChange={e => setTitleForm(prev => ({ ...prev, fullName: e.target.value }))} />
-              <input className={styles.titleInput} placeholder="Университет" value={titleForm.university} onChange={e => setTitleForm(prev => ({ ...prev, university: e.target.value }))} />
-              <label className={styles.skipRow}>
-                <input type="checkbox" checked={skipFaculty} onChange={e => setSkipFaculty(e.target.checked)} />
-                <span>Не указывать факультет</span>
-              </label>
-              {!skipFaculty && <input className={styles.titleInput} placeholder="Направление / факультет" value={titleForm.faculty} onChange={e => setTitleForm(prev => ({ ...prev, faculty: e.target.value }))} />}
-              <label className={styles.skipRow}>
-                <input type="checkbox" checked={skipSpeciality} onChange={e => setSkipSpeciality(e.target.checked)} />
-                <span>Не указывать специализацию</span>
-              </label>
-              {!skipSpeciality && <input className={styles.titleInput} placeholder="Специализация" value={titleForm.speciality} onChange={e => setTitleForm(prev => ({ ...prev, speciality: e.target.value }))} />}
-              <label className={styles.skipRow}>
-                <input type="checkbox" checked={skipDiscipline} onChange={e => setSkipDiscipline(e.target.checked)} />
-                <span>Не указывать предмет</span>
-              </label>
-              {!skipDiscipline && <input className={styles.titleInput} placeholder="Предмет / дисциплина" value={titleForm.discipline} onChange={e => setTitleForm(prev => ({ ...prev, discipline: e.target.value }))} />}
-              <input className={styles.titleInput} placeholder="Кафедра" value={titleForm.department} onChange={e => setTitleForm(prev => ({ ...prev, department: e.target.value }))} />
-              <input className={styles.titleInput} placeholder="Группа" value={titleForm.groupNumber} onChange={e => setTitleForm(prev => ({ ...prev, groupNumber: e.target.value }))} />
-              <input className={styles.titleInput} placeholder="Научный руководитель" value={titleForm.teacherName} onChange={e => setTitleForm(prev => ({ ...prev, teacherName: e.target.value }))} />
-              <input className={styles.titleInput} placeholder="Город" value={titleForm.city} onChange={e => setTitleForm(prev => ({ ...prev, city: e.target.value }))} />
-              <button className={styles.updateDocBtn} onClick={() => { handleTitleUpdate(); setShowTitleModal(false); }} disabled={titleUpdating}>
-                {titleUpdating ? "Обновляем..." : "↻ Обновить документ"}
-              </button>
-              <label className={styles.saveProfileRow}>
-                <input type="checkbox" className={styles.saveProfileCheck} checked={saveProfile} onChange={e => setSaveProfile(e.target.checked)} />
-                <span>Запомнить данные</span>
-              </label>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Виджет оплаты ЮКассы */}
-      {paymentWidgetData && (
-        <PaymentWidget
-          workType={paymentWidgetData.workType}
-          extras={paymentWidgetData.extras}
-          topic={paymentWidgetData.topic}
-          returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/payment/success`}
-          onSuccess={() => {
-            sessionStorage.removeItem("paymentWidgetRestore");
-            clearPaymentPreviewClientCaches();
-            setPaymentWidgetData(null);
-            const raw = sessionStorage.getItem("pendingGeneration");
-            if (raw) {
-              try {
-                const { topic: t, pages: p, workType: wt } = JSON.parse(raw);
-                sessionStorage.removeItem("pendingGeneration");
-                try {
-                  const extrasRaw = sessionStorage.getItem("pendingExtrasChoice");
-                  if (extrasRaw) { _pendingExtrasItems = JSON.parse(extrasRaw); sessionStorage.removeItem("pendingExtrasChoice"); }
-                } catch {}
-                selectWorkType(wt); setTopic(t); setPages(p);
-                setTimeout(() => runGeneration(t, p, wt), 0);
-              } catch {}
-            }
-          }}
-          onClose={() => {
-            sessionStorage.removeItem("paymentWidgetRestore");
-            setPaymentWidgetData(null);
-          }}
-        />
-      )}
+        </div>
+      </section>
 
     </main>
   );

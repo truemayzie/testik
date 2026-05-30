@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tgNotify } from "@/lib/tgNotify";
 import { internalApiHeaders } from "@/lib/internalApi";
-import { tryConsumePreviewSlot } from "@/lib/previewQuota";
 import { prepareTopic } from "@/lib/topicValidate";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
@@ -55,8 +54,6 @@ async function generatePreviewOnce(
     name: string | null;
     email: string | null;
   },
-  quota: number,
-  isAdmin: boolean,
 ): Promise<Record<string, unknown>> {
   let previewJson: Record<string, unknown>;
   try {
@@ -101,13 +98,6 @@ async function generatePreviewOnce(
     );
   }
 
-  if (!isAdmin) {
-    const consumed = await tryConsumePreviewSlot(user.id, quota);
-    if (!consumed) {
-      console.warn("[generate/preview] квота после успеха (гонка): userId=", user.id);
-    }
-  }
-
   const who = user.fullName || user.name || user.email || user.id;
   const topicShort = topic.length > 140 ? `${topic.slice(0, 140)}…` : topic;
   const costRaw = previewJson._cost_usd;
@@ -118,7 +108,7 @@ async function generatePreviewOnce(
     const n = Number(costRaw);
     if (!Number.isNaN(n)) costStr = `\n💰 ~$${n.toFixed(4)}`;
   }
-  const adminTag = isAdmin ? " <i>(админ)</i>" : "";
+  const adminTag = user.role === "admin" ? " <i>(админ)</i>" : "";
   tgNotify(`👁 <b>Предпросмотр до оплаты</b>${adminTag}\n👤 ${who}\n📄 ${workType}: «${topicShort}»${costStr}`);
 
   return previewJson;
@@ -152,8 +142,6 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       role: true,
-      freePreviewUses: true,
-      freePreviewQuota: true,
       fullName: true,
       name: true,
       email: true,
@@ -161,18 +149,6 @@ export async function POST(request: NextRequest) {
   });
   if (!user) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
-  }
-
-  const isAdmin = user.role === "admin";
-  const quota = Math.max(0, user.freePreviewQuota ?? 1);
-  const used = Math.max(0, user.freePreviewUses ?? 0);
-
-  /* Ранний отказ без вызова Claude — пока квота уже исчерпана */
-  if (!isAdmin && used >= quota) {
-    return NextResponse.json(
-      { error: "Лимит бесплатных предпросмотров исчерпан", code: "PREVIEW_USED" },
-      { status: 403 },
-    );
   }
 
   const dKey = previewDedupeKey(sessionUserId, workType, topic);
@@ -196,7 +172,7 @@ export async function POST(request: NextRequest) {
 
   inflightPromise = (async (): Promise<ResolvedPreview> => {
     try {
-      const previewJson = await generatePreviewOnce(topic, workType, user, quota, isAdmin);
+      const previewJson = await generatePreviewOnce(topic, workType, user);
       const boxed = { previewJson, savedAt: Date.now() };
       previewResolvedCache.set(dKey, boxed);
       sweepResolvedPreviewCache(boxed.savedAt);
