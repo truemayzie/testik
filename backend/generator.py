@@ -841,10 +841,33 @@ def _check_volume(label: str, text: str, expected_words: int) -> None:
         print(f"  ✓ «{label}» — {actual_chars} симв. (~{actual_words} слов)")
 
 
+def _normalize_custom_structure(raw: list | None, work_type: str) -> list[str] | None:
+    """Структура из превью: только для типов с главами; иначе None → AI-генерация."""
+    if work_type in ("Сочинение", "Эссе", "Тест"):
+        return None
+    if not raw or not isinstance(raw, list):
+        return None
+    structure: list[str] = []
+    for item in raw:
+        s = str(item).strip()
+        if s:
+            structure.append(s[:300])
+    if len(structure) < 3:
+        return None
+    body = [
+        s for s in structure
+        if _canonical_service_key(s) not in {"intro", "conclusion", "sources", "appendix"}
+    ]
+    if not body:
+        return None
+    return structure
+
+
 # ── Главная функция генерации ───────────────────────────────────────────────
 
 def generate_work(topic: str, pages: int, work_type: str = "Реферат",
-                  profile: dict | None = None, progress_cb=None) -> dict:
+                  profile: dict | None = None, progress_cb=None,
+                  custom_structure: list[str] | None = None) -> dict:
     """Генерирует работу нужного типа через Claude API."""
     global _session_cost
     _session_cost = 0.0
@@ -934,12 +957,20 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 Только для ключевых утверждений со статистикой или важными фактами, максимум 1-2 на подраздел."""
 
     # Шаг 1: Структура
-    print("Шаг 1: Генерирую структуру...")
-    if progress_cb:
-        progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
-    data1     = ask_json(get_structure_prompt(topic, work_type, rules, doc_lang))
-    structure = data1["structure"]
-    progress_done += STRUCTURE_UNITS
+    preset_structure = _normalize_custom_structure(custom_structure, work_type)
+    if preset_structure:
+        print("Шаг 1: Используем структуру из предпросмотра...")
+        if progress_cb:
+            progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
+        structure = preset_structure
+        progress_done += STRUCTURE_UNITS
+    else:
+        print("Шаг 1: Генерирую структуру...")
+        if progress_cb:
+            progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
+        data1     = ask_json(get_structure_prompt(topic, work_type, rules, doc_lang))
+        structure = data1["structure"]
+        progress_done += STRUCTURE_UNITS
 
     section_names = [
         s for s in structure
@@ -1132,9 +1163,9 @@ def _rebuild_preview_toc_chapters(
             rows.append({"num": sk, "title": st[:200], "page": str(p)})
             p += 2
 
-    rows.append({"num": str(chapters_count + 1), "title": concl_title[:200], "page": str(p)})
+    rows.append({"num": "", "title": concl_title[:200], "page": str(p)})
     p += 2
-    rows.append({"num": str(chapters_count + 2), "title": src_title[:200], "page": str(p)})
+    rows.append({"num": "", "title": src_title[:200], "page": str(p)})
     return rows
 
 
@@ -1201,7 +1232,7 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         total_rows = 1 + cc + cc * sc + 2
         structure_hint = (
             f"Тип: {wt} — оглавление СТРОГО по стандарту: ровно {cc} главы с num «1»…«{cc}» (не больше), "
-            f"у каждой главы ровно {sc} подпунктов «N.1»…«N.{sc}». Затем «{concl_w}» (num «{cc + 1}») и «{src_w}» (num «{cc + 2}»). "
+            f"у каждой главы ровно {sc} подпунктов «N.1»…«N.{sc}». Затем «{concl_w}» (num «{cc + 1}») и «{src_w}» (num пустой, как у введения). "
             f"Сначала строка «{intro_w}» с пустым num. Всего ровно {total_rows} строк в toc; не добавляй четвёртую основную главу."
         )
 
@@ -1217,7 +1248,7 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         sc = int(rules.get("subchapters_count") or 2)
         req_tail = f"""Требования:
 - toc: title БЕЗ дублирования номера (номер только в num). page — условная страница строкой.
-- Ровно {cc} нумерованных глав (num «1»…«{cc}»), у каждой ровно {sc} подглав; затем заключение (num «{cc + 1}») и источники (num «{cc + 2}»). Не вставляй лишнюю главу «{cc + 1}» в основную часть.
+- Ровно {cc} нумерованных глав (num «1»…«{cc}»), у каждой ровно {sc} подглав; затем заключение (num «{cc + 1}») и список литературы (num пустой). Не вставляй лишнюю главу «{cc + 1}» в основную часть.
 - introduction_excerpt и first_chapter_excerpt — разный текст: во втором уже основная часть главы 1, не дублируй введение.
 - locked_section_titles: минимум 4 раздела, логично идущие после показанного текста первой главы.
 
@@ -1302,7 +1333,7 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
             {"num": "", "title": intro_w, "page": "3"},
             {"num": "1", "title": mid, "page": "5"},
             {"num": "1.1", "title": sub, "page": "6"},
-            {"num": "2", "title": concl_w, "page": "…"},
+            {"num": "", "title": concl_w, "page": "…"},
         ]
 
     ph = {

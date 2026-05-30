@@ -16,11 +16,15 @@ services:
       - DISABLE_ANONYMOUS_TELEMETRY=true
       - HTTPS_PROXY=http://172.17.0.1:8118
       - HTTP_PROXY=http://172.17.0.1:8118
-      - NO_PROXY=localhost,127.0.0.1
+      - ALL_PROXY=http://172.17.0.1:8118
+      - NO_PROXY=localhost,127.0.0.1,host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - presenton_data:/app_data
+      # aiohttp без trust_env=True не ходит в Privoxy → 403 Anthropic при старте
+      - ./patches/available_models.py:/app/servers/fastapi/utils/available_models.py:ro
+      - ./patches/generate_presentation_structure.py:/app/servers/fastapi/utils/llm_calls/generate_presentation_structure.py:ro
     mem_limit: 1024m
     cpus: 1.0
 

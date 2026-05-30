@@ -1,16 +1,17 @@
-import io
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 import json
 import os
+import re
 import time
-import subprocess
 import threading
 import uuid
 from fastapi import FastAPI, HTTPException, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
-from pptx import Presentation
-from pptx.util import Emu
 from generator import generate_work, generate_payment_preview
 from oneoff_vkr_didactic_time import generate_oneoff_vkr, TOPIC as ONEOFF_VKR_TOPIC
 from github_proxy import start_callback_server
@@ -164,6 +165,7 @@ class ReferatRequest(BaseModel):
     pages: int = 20
     work_type: str = "Реферат"
     profile: dict | None = None
+    structure: list[str] | None = None
 
 
 class ReferatResponse(BaseModel):
@@ -224,6 +226,7 @@ def create_referat(request: ReferatRequest):
                 work_type=request.work_type,
                 profile=request.profile,
                 progress_cb=lambda s, t, label: _job_progress(job_id, s, t, label),
+                custom_structure=request.structure,
             )
             _job_done(job_id, result)
         except Exception as exc:
@@ -371,12 +374,12 @@ class ExtrasRequest(BaseModel):
     items: list[str]          # ["presentation", "speech"]
     result: dict
     profile: dict | None = None
-    presentation_theme: str | None = None    # Presenton: professional-blue, …
-    presentation_template: str | None = None   # Presenton: general, modern, …
 
 
 def _cleanup_old_extras_files() -> None:
     """Удаляет старые файлы extras из /tmp, чтобы не накапливать мусор."""
+    import shutil
+
     now = time.time()
     for prefix, ext in (
         ("pptx_", ".pptx"),
@@ -398,7 +401,6 @@ def _cleanup_old_extras_files() -> None:
         except Exception:
             continue
 
-
 @app.post("/api/generate/extras")
 def create_extras(request: ExtrasRequest):
     """Запускает генерацию доп. материалов в фоновом потоке."""
@@ -413,8 +415,13 @@ def create_extras(request: ExtrasRequest):
         try:
             from presentation_generator import generate_presentation, generate_speech
 
-            def _extras_presentation_internal():
+            def _extras_presentation():
                 nonlocal slide_titles
+                from pptx_template_builder import build_pptx_file, template_available, template_path
+
+                if not template_available():
+                    raise RuntimeError(f"Шаблон PPTX не найден: {template_path()}")
+
                 slides_dict, slide_titles = generate_presentation(
                     extras_job_id,
                     request.topic,
@@ -430,71 +437,20 @@ def create_extras(request: ExtrasRequest):
                         json.dump(slides_dict, sf, ensure_ascii=False)
                 except Exception as exc:
                     print(f"[extras] backup slides JSON: {exc}")
-                s_list = slides_dict.get("slides") or []
-                if s_list:
-                    pptx_io = _render_to_pptx(s_list, slides_dict.get("accent") or "blue", {})
-                    path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
-                    with open(path_cache, "wb") as f:
-                        f.write(pptx_io.getvalue())
-                    print(f"[extras] готовый PPTX: {path_cache}")
 
-            def _extras_presentation_presenton():
-                nonlocal slide_titles
-                from presenton_client import (
-                    download_pptx_to_file,
-                    generate_presentation as presenton_generate,
-                    presenton_enabled,
-                )
-                from slides_from_result import build_slides_from_result, slide_titles_from_slides
-
-                if not presenton_enabled():
-                    raise RuntimeError("PRESENTON_URL не задан")
-                pres = presenton_generate(
-                    request.topic,
-                    request.work_type,
-                    request.result,
-                    theme=request.presentation_theme,
-                    template=request.presentation_template,
-                )
                 path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
-                download_pptx_to_file(pres["path"], path_cache)
-                # Превью в Refai — из текста работы; PPTX — от Presenton
-                preview = build_slides_from_result(
-                    request.topic,
-                    request.work_type,
-                    request.result,
-                    request.profile or {},
-                )
-                slide_titles = slide_titles_from_slides(preview)
-                meta = {
-                    **preview,
-                    "provider": "presenton",
-                    "presenton": pres,
-                }
-                with _extras_lock:
-                    _extras_jobs[extras_job_id]["slides"] = meta
-                try:
-                    with open(f"/tmp/pptx_slides_{extras_job_id}.json", "w", encoding="utf-8") as sf:
-                        json.dump(meta, sf, ensure_ascii=False)
-                except Exception as exc:
-                    print(f"[extras] presenton meta JSON: {exc}")
-                print(f"[extras] Presenton PPTX: {path_cache} edit={pres.get('edit_path')}")
+                build_pptx_file(slides_dict, path_cache, template=template_path())
+                print(f"[extras] PPTX (template {template_path()}): {path_cache}")
 
             if "presentation" in request.items:
-                use_presenton = os.getenv("PRESENTATION_PROVIDER", "").strip().lower() == "presenton"
-                if use_presenton:
-                    try:
-                        _extras_presentation_presenton()
-                    except Exception as pres_exc:
-                        print(f"[extras] Presenton failed, fallback internal: {pres_exc}")
-                        _extras_presentation_internal()
-                else:
-                    try:
-                        _extras_presentation_internal()
-                    except HTTPException as he:
-                        print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
-                    except Exception as exc:
-                        print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
+                try:
+                    _extras_presentation()
+                except HTTPException as he:
+                    print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
+                    raise
+                except Exception as exc:
+                    print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
+                    raise
                 ready.append("presentation")
             if "speech" in request.items:
                 generate_speech(
@@ -545,7 +501,7 @@ def extras_presentation_json(job_id: str):
 
 @app.get("/api/download/presentation/{job_id}")
 def download_presentation(job_id: str):
-    """Возвращает PPTX-файл презентации."""
+    """Возвращает PPTX-файл презентации (шаблон ion)."""
     _cleanup_old_extras_files()
     path = f"/tmp/pptx_{job_id}.pptx"
     if not os.path.exists(path):
@@ -575,84 +531,23 @@ def download_speech(job_id: str):
     )
 
 
-# ── Генерация PPTX: HTML-слайды → Puppeteer PNG → сборка как у предпросмотра ─
+# ── Слайды из result (предпросмотр / служебные вызовы) ─
 
-class PresentationDownloadRequest(BaseModel):
-    slides: list
-    accent: str = "blue"
-    images: dict = {}  # { "0": "data:image/...;base64,...", ... }
-
-
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-_RENDER_SCRIPT = os.path.join(BACKEND_DIR, "render_slides.js")
+class BuildSlidesFromResultRequest(BaseModel):
+    topic: str
+    work_type: str
+    result: dict
+    profile: dict | None = None
 
 
-def _render_to_pptx(slides: list, accent: str, images: dict) -> io.BytesIO:
-    """Визуал как вкладке «Презентация» в браузере: render_slides.js + python-pptx."""
-    import base64
+@app.post("/api/presentation/build-from-result")
+def presentation_build_from_result(request: BuildSlidesFromResultRequest):
+    """Детерминированные слайды из JSON работы (без Claude, без оплаты extras)."""
+    from slides_from_result import build_slides_from_result
 
-    if not slides:
-        raise HTTPException(status_code=400, detail="Пустой список слайдов")
-
-    accent_s = accent or "blue"
-    imgs = images if isinstance(images, dict) else {}
-
-    payload = json.dumps({"accent": accent_s, "slides": slides, "images": imgs}, ensure_ascii=False).encode("utf-8")
-    try:
-        proc = subprocess.run(
-            ["node", _RENDER_SCRIPT],
-            input=payload,
-            capture_output=True,
-            timeout=300,
-            cwd=BACKEND_DIR,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Таймаут рендеринга слайдов")
-
-    if proc.returncode != 0:
-        err = (proc.stderr or b"").decode("utf-8", errors="replace")[:2500]
-        out_h = (proc.stdout or b"").decode("utf-8", errors="replace")[:500]
-        print(f"[pptx] render_slides.js rc={proc.returncode} stderr={err!r} stdout_head={out_h!r}")
-        raise HTTPException(status_code=500, detail="Ошибка рендеринга слайдов (Puppeteer)")
-
-    try:
-        png_list = json.loads(proc.stdout.decode("utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Ошибка парсинга PNG: {exc}")
-
-    prs = Presentation()
-    prs.slide_width = Emu(9144000)
-    prs.slide_height = Emu(5143500)
-    blank_layout = prs.slide_layouts[6]
-
-    for b64 in png_list:
-        slide_p = prs.slides.add_slide(blank_layout)
-        img_stream = io.BytesIO(base64.b64decode(b64))
-        slide_p.shapes.add_picture(img_stream, left=0, top=0, width=prs.slide_width, height=prs.slide_height)
-    out = io.BytesIO()
-    prs.save(out)
-    out.seek(0)
-    return out
-
-
-@app.post("/api/presentation/download")
-def presentation_download(request: PresentationDownloadRequest):
-    """Собирает PPTX через HTML-рендер (как во фронтовом предпросмотре)."""
-    pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
-    return StreamingResponse(
-        pptx_io,
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": "attachment; filename=presentation.pptx"},
-    )
-
-
-@app.post("/api/presentation/rebuild")
-def presentation_rebuild(request: PresentationDownloadRequest):
-    """Пересборка PPTX через HTML → PNG."""
-    pptx_io = _render_to_pptx(request.slides, request.accent, request.images)
-
-    return StreamingResponse(
-        pptx_io,
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": "attachment; filename=presentation.pptx"},
+    return build_slides_from_result(
+        topic=request.topic,
+        work_type=request.work_type,
+        result=request.result,
+        profile=request.profile or {},
     )
