@@ -1,0 +1,47 @@
+/* ── Badge: дизайн-система «Light & Trust» ── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+/* ── Тона ── */
+.primary {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+.success {
+  background: var(--success-soft);
+  color: #0B7A4C;
+}
+
+.warning {
+  background: var(--warning-soft);
+  color: #9A6E0B;
+}
+
+.danger {
+  background: var(--danger-soft);
+  color: #C0353A;
+}
+
+.neutral {
+  background: var(--bg-soft);
+  color: var(--ink-muted);
+}

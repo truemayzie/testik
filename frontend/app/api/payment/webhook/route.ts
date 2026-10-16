@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (event.type === "payment.canceled") {
       await prisma.payment.updateMany({
         where: { yokassaId },
-        data:  { status: "cancelled" },
+        data:  { status: "canceled" },
       });
       console.log("[webhook] Платёж отменён:", yokassaId);
     }

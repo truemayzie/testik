@@ -75,8 +75,8 @@ export default async function HubPage({ params }: { params: { workType: string }
   const meta = META[params.workType]
   if (!meta) notFound()
 
+  // Пустая база — не повод для 404: рендерим хаб с описанием и CTA
   const pages = await getSeoPagesByType(params.workType)
-  if (!pages.length) notFound()
 
   // Топ-5 предметов для H1
   const subjectCounts: Record<string, number> = {}
@@ -128,9 +128,17 @@ export default async function HubPage({ params }: { params: { workType: string }
 
       {/* Заголовок */}
       <h1 className={styles.h1}>
-        {meta.h1Prefix} {topSubjects.join(', ')}
+        {pages.length > 0
+          ? <>{meta.h1Prefix} {topSubjects.join(', ')}</>
+          : <>{meta.ruName}: генерация за 7–10 минут по любой теме</>}
       </h1>
       <p className={styles.about}>{meta.about}</p>
+      {pages.length === 0 && (
+        <p className={styles.about}>
+          Каталог готовых {meta.ruName.toLowerCase()} по предметам наполняется — а ваша тема уже доступна:
+          введите её в генераторе, и работа будет написана с нуля под ваши требования.
+        </p>
+      )}
       {params.workType === 'kursovaya' && (
         <p className={styles.commercialCue}>
           <Link href="/kursovaya-zakaz">Курсовая под заказ — цена и оформление по ГОСТ →</Link>
@@ -143,33 +151,41 @@ export default async function HubPage({ params }: { params: { workType: string }
       )}
 
       {/* Счётчик */}
-      <div className={styles.stats}>
-        <span className={styles.statNum}>{pages.length}</span>
-        <span className={styles.statLabel}>готовых работ</span>
-      </div>
+      {pages.length > 0 && (
+        <div className={styles.stats}>
+          <span className={styles.statNum}>{pages.length}</span>
+          <span className={styles.statLabel}>готовых работ</span>
+        </div>
+      )}
 
       {/* Сетка по предметам */}
-      <div className={styles.subjects}>
-        {subjects.map((subject) => (
-          <section key={subject} className={styles.subjectBlock}>
-            <h2 className={styles.subjectTitle}>{subject}</h2>
-            <div className={styles.grid}>
-              {bySubject[subject].map((p) => (
-                <a key={p.slug} href={`/${params.workType}/${p.slug}`} className={styles.card}>
-                  <span className={styles.cardTitle}>{p.title}</span>
-                  <span className={styles.cardArrow}>→</span>
-                </a>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+      {pages.length > 0 && (
+        <div className={styles.subjects}>
+          {subjects.map((subject) => (
+            <section key={subject} className={styles.subjectBlock}>
+              <h2 className={styles.subjectTitle}>{subject}</h2>
+              <div className={styles.grid}>
+                {bySubject[subject].map((p) => (
+                  <a key={p.slug} href={`/${params.workType}/${p.slug}`} className={styles.card}>
+                    <span className={styles.cardTitle}>{p.title}</span>
+                    <span className={styles.cardArrow}>→</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
       {/* CTA */}
       <div className={styles.cta}>
         <span className={styles.ctaIcon}>
-          <svg width="32" height="32" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="#D97706"/>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="11.25" fill="#1D5CFF"/>
+            <rect x="6.38" y="7.13" width="11.25" height="1.88" rx="0.94" fill="#FFFFFF"/>
+            <rect x="6.38" y="10.88" width="8.25" height="1.88" rx="0.94" fill="#FFFFFF" opacity="0.7"/>
+            <rect x="6.38" y="14.63" width="6" height="1.88" rx="0.94" fill="#FFFFFF"/>
+            <path d="M15.38 13.69Q16.03 14.91 17.25 15.56Q16.03 16.22 15.38 17.44Q14.72 16.22 13.5 15.56Q14.72 14.91 15.38 13.69Z" fill="#FFFFFF"/>
           </svg>
         </span>
         <h2 className={styles.ctaTitle}>Не нашли нужную тему?</h2>

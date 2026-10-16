@@ -1,0 +1,39 @@
+/* ── EmptyState: дизайн-система «Light & Trust» ── */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 56px 24px;
+  gap: 8px;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 28px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.text {
+  max-width: 420px;
+  font-size: 14.5px;
+  color: var(--ink-muted);
+}
+
+.action {
+  margin-top: 16px;
+}

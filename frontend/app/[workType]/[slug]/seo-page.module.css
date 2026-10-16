@@ -48,7 +48,7 @@
 }
 
 .title {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   font-weight: 700;
   color: var(--ink);
@@ -140,7 +140,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   margin: 0 0 14px;
 }
 
@@ -194,7 +194,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   margin: 0 0 12px;
 }
 
@@ -242,7 +242,7 @@
 }
 
 .docSectionHead {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
   color: var(--ink);
@@ -460,7 +460,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   margin: 0 0 14px;
 }
 
@@ -495,7 +495,7 @@
   position: absolute;
   left: 0; top: 9px;
   width: 4px; height: 4px;
-  background: #1B3A6B;
+  background: var(--primary, #1D5CFF);
   border-radius: 50%;
 }
 
@@ -550,26 +550,36 @@
 
 /* ── CTA блок ── */
 .cta {
-  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F3F6FF 100%);
+  border: 1px solid rgba(29, 92, 255, 0.16);
   border-radius: var(--radius-lg);
   padding: 48px 32px;
   text-align: center;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 6px 28px rgba(15, 23, 42, 0.05);
 }
 
 .cta::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='%231D5CFF' fill-opacity='0.07'/%3E%3C/svg%3E");
   pointer-events: none;
 }
 
 .ctaIcon {
-  font-size: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(29, 92, 255, 0.14);
+  box-shadow: 0 3px 12px rgba(29, 92, 255, 0.10);
   margin-bottom: 16px;
-  display: block;
+  line-height: 0;
   position: relative;
   z-index: 1;
 }
@@ -577,7 +587,7 @@
 .ctaTitle {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #fff;
+  color: #0F172A;
   margin-bottom: 10px;
   position: relative;
   z-index: 1;
@@ -585,7 +595,7 @@
 
 .ctaDesc {
   font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: #64748B;
   margin-bottom: 28px;
   line-height: 1.6;
   position: relative;
@@ -594,27 +604,27 @@
 
 .ctaButton {
   display: inline-block;
-  background: linear-gradient(135deg, #1B3A6B, #15305A);
+  background: var(--primary, #1D5CFF);
   color: #fff;
   font-weight: 600;
   font-size: 1rem;
   padding: 14px 36px;
-  border-radius: var(--radius);
+  border-radius: 14px;
   text-decoration: none;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: background 0.15s, transform 0.15s;
   position: relative;
   z-index: 1;
-  box-shadow: 0 4px 20px rgba(27, 58, 107, 0.35);
+  box-shadow: 0 6px 20px rgba(29, 92, 255, 0.32);
 }
 
 .ctaButton:hover {
-  opacity: 0.92;
+  background: #1A4FE0;
   transform: translateY(-1px);
 }
 
 .ctaNote {
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.35);
+  color: #94A3B8;
   margin-top: 14px;
   position: relative;
   z-index: 1;
@@ -634,7 +644,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   margin: 0 0 14px;
 }
 
@@ -674,7 +684,7 @@
 }
 
 .relatedLink:hover {
-  color: #1B3A6B;
+  color: var(--primary, #1D5CFF);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -683,8 +693,8 @@
   font-size: 0.72rem;
   font-weight: 500;
   color: var(--ink-muted);
-  background: rgba(27, 58, 107, 0.06);
-  border: 1px solid rgba(27, 58, 107, 0.12);
+  background: var(--primary-soft, #EAF1FF);
+  border: 1px solid rgba(29, 92, 255, 0.18);
   border-radius: 20px;
   padding: 2px 9px;
   white-space: nowrap;

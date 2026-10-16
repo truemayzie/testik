@@ -102,7 +102,7 @@ export default function ProfilePage() {
   if (status === "loading" || !profile) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className={styles.spinner} style={{ borderColor: "#E2E8F0", borderTopColor: "#1B3A6B" }} />
+        <span className={styles.spinner} style={{ borderColor: "#E2E8F0", borderTopColor: "#1D5CFF" }} />
       </div>
     );
   }

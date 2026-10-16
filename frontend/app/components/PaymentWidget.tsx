@@ -23,6 +23,7 @@ import {
   supportsPreviewStructure,
   tocToStructure,
 } from "@/lib/previewStructure";
+import { savePublicChoiceForTask } from "@/lib/orderPublicChoice";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -133,28 +134,73 @@ function chapterTitleFromTocRow(row: { num?: string; title: string }): string {
   return numLabel ? `${numLabel} ${row.title}` : row.title;
 }
 
-function getLockedChapterTitles(data: PreviewPayload, shownTitles: string[]): string[] {
-  const fromPayload = (data.locked_section_titles ?? []).map((t) => t.trim()).filter(Boolean);
-  const meaningfulPayload = fromPayload.filter((t) => !isGenericLockedTitle(t));
-  const shownNorm = new Set(shownTitles.map((s) => s.toLowerCase().trim()));
+function isIntroductionTocRow(title: string): boolean {
+  return /^(введение|introduction|кіріспе)$/i.test(title.trim());
+}
 
-  const fromToc = data.toc
-    .map(chapterTitleFromTocRow)
-    .filter(Boolean)
-    .filter((t) => !shownNorm.has(t.toLowerCase().trim()))
-    .filter((t) => !/^(введение|introduction|кіріспе|заключение|қорытынды|conclusion)$/i.test(t.trim()));
+function stripLeadingNumber(text: string): string {
+  return (text ?? "").replace(/^\d+(\.\d+)*\.?\s*/, "").trim();
+}
 
-  const merged = [...meaningfulPayload];
-  for (const t of fromToc) {
-    if (!merged.some((m) => m.toLowerCase() === t.toLowerCase())) merged.push(t);
+function fullTocTitle(row: PreviewTocRow): string {
+  const cleanTitle = stripLeadingNumber(row.title);
+  const numLabel = formatTocNum(row.num);
+  return numLabel ? `${numLabel} ${cleanTitle}` : cleanTitle;
+}
+
+function formatSectionTitleWithToc(title: string, toc: PreviewTocRow[]): string {
+  const clean = stripLeadingNumber(title).toLowerCase().trim();
+  if (!clean) return title;
+  if (isIntroductionTocRow(clean)) return title;
+
+  const match = toc.find((r) => stripLeadingNumber(r.title).toLowerCase().trim() === clean);
+  if (match) {
+    return fullTocTitle(match);
   }
-  if (merged.length === 0) merged.push(...fromPayload);
+  if (/^1(\.|\s|$)/.test(title.trim()) || title.toLowerCase().includes("глава 1")) {
+    const ch1 = toc.find((r) => (r.num ?? "").trim() === "1");
+    if (ch1) return fullTocTitle(ch1);
+  }
+  return title;
+}
 
-  return merged.slice(0, 4);
+function getLockedChapterTitles(
+  toc: PreviewTocRow[],
+  shownTitles: string[],
+  fallbackLocked?: string[],
+): string[] {
+  const shownNorm = new Set(
+    shownTitles.map((s) => stripLeadingNumber(s).toLowerCase().trim())
+  );
+
+  const titles: string[] = [];
+
+  for (const row of toc) {
+    const cleanTitle = stripLeadingNumber(row.title);
+    if (!cleanTitle) continue;
+    // Если этот пункт оглавления уже отображен в открытом фрагменте превью (введение, глава 1)
+    if (shownNorm.has(cleanTitle.toLowerCase().trim())) {
+      continue;
+    }
+    // Включаем в закрытые листы строго по порядку оглавления с полным номером и названием
+    titles.push(fullTocTitle(row));
+  }
+
+  if (titles.length > 0) {
+    return titles;
+  }
+
+  const fallback = (fallbackLocked ?? []).map((t) => t.trim()).filter(Boolean);
+  return fallback.slice(0, 5);
+}
+
+function isEssayOrTest(workType: string): boolean {
+  const norm = (workType || "").trim().toLowerCase();
+  return norm === "сочинение" || norm === "эссе" || norm === "тест";
 }
 
 function resolveExtrasSelection(workType: string, extras?: string[] | null): string[] {
-  if (workType === "Сочинение" || workType === "Эссе") return [];
+  if (isEssayOrTest(workType)) return [];
   if (Array.isArray(extras) && extras.length > 0) return extras;
   return ["presentation", "speech"];
 }
@@ -206,7 +252,7 @@ const PREVIEW_RETENTION_TIPS = [
 ];
 
 function getPreviewWaitSteps(workType: string): { label: string; at: number }[] {
-  if (workType === "Сочинение" || workType === "Эссе") {
+  if (isEssayOrTest(workType)) {
     return [
       { label: "Анализируем тему", at: 0 },
       { label: "Составляем план работы", at: 5 },
@@ -424,7 +470,7 @@ function PaymentPreviewPane({
       ? rawSections
       : [{ title: data.excerpt_title, text: data.excerpt }];
 
-  const isEssayLike = workType === "Сочинение" || workType === "Эссе";
+  const isEssayLike = isEssayOrTest(workType);
   const displayToc = tocRows ?? data.toc;
   const showTocBlock = data.has_toc_sheet && displayToc.length > 0 && !isEssayLike;
   const tocHeadline =
@@ -434,7 +480,9 @@ function PaymentPreviewPane({
         ? "CONTENTS"
         : "СОДЕРЖАНИЕ";
   const shownSectionTitles = sections.map((s) => s.title);
-  const lockedChapterTitles = getLockedChapterTitles(data, shownSectionTitles);
+  const lockedChapterTitles = isEssayLike
+    ? []
+    : getLockedChapterTitles(displayToc, shownSectionTitles, data.locked_section_titles);
 
   return (
     <div className={colClass}>
@@ -510,7 +558,9 @@ function PaymentPreviewPane({
         <h2 className={styles.pageSectionTitle}>Фрагмент документа</h2>
       )}
       {sections.map((sec, idx) => {
-        const sectionTitle = isEssayLike ? essayMainPartLabel(data.doc_lang) : sec.title;
+        const sectionTitle = isEssayLike
+          ? essayMainPartLabel(data.doc_lang)
+          : formatSectionTitleWithToc(sec.title, displayToc);
         const { visible, hidden } = splitExcerptTeaser(sec.text);
         const bodyParas = sec.text.split(/\n\n+/).filter(Boolean);
 
@@ -627,7 +677,7 @@ export default function PaymentWidget({
   const supportsTocStructure = supportsPreviewStructure(workType);
   const effectiveToc = editedToc ?? previewData?.toc ?? [];
 
-  const supportsExtras = workType !== "Сочинение" && workType !== "Эссе";
+  const supportsExtras = !isEssayOrTest(workType);
   const [selectedExtras, setSelectedExtras] = useState<string[]>(() =>
     resolveExtrasSelection(workType, extras),
   );
@@ -1417,7 +1467,18 @@ function OrderExtrasPicker({
 
   return (
     <div className={compact ? styles.extrasBlockCompact : styles.extrasBlock}>
-      <p className={styles.extrasBlockLabel}>Дополнительно к работе</p>
+      <div className={styles.extrasBlockHead}>
+        <div className={styles.extrasBlockHeadText}>
+          <p className={styles.extrasBlockLabel}>Материалы для защиты</p>
+          <p className={styles.extrasBlockSub}>Презентация и речь сэкономят время на защите работы</p>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/illustrations/presentation-hero-focus.png"
+          alt="Презентация и речь к защите"
+          className={styles.extrasBlockIllustration}
+        />
+      </div>
       <div className={styles.extrasToggleList}>
         <label className={styles.extrasToggleRow}>
           <input
@@ -1429,7 +1490,25 @@ function OrderExtrasPicker({
           <span className={styles.toggleSlider} />
           <span className={styles.extrasToggleMeta}>
             <span className={styles.extrasToggleTitle}>
-              <img src="/pptx-icon.svg" alt="" className={styles.extrasToggleIcon} />
+              <span className={styles.extrasToggleIconWrap} aria-hidden>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M2 3h20" />
+                  <rect x="3" y="3" width="18" height="12" rx="2" />
+                  <path d="M8 8h3" />
+                  <path d="M8 11h6" />
+                  <path d="M12 15v5" />
+                  <path d="M8 20h8" />
+                </svg>
+              </span>
               Презентация
             </span>
             <span className={styles.extrasToggleAnnot}>
@@ -1448,7 +1527,23 @@ function OrderExtrasPicker({
           <span className={styles.toggleSlider} />
           <span className={styles.extrasToggleMeta}>
             <span className={styles.extrasToggleTitle}>
-              <img src="/txt-icon.svg" alt="" className={styles.extrasToggleIcon} />
+              <span className={styles.extrasToggleIconWrap} aria-hidden>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </span>
               Текст выступления
             </span>
             <span className={styles.extrasToggleAnnot}>

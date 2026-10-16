@@ -13,7 +13,7 @@ from pptx import Presentation
 from pptx.util import Pt
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_TEMPLATE = os.path.join(BACKEND_DIR, "tamplates", "ion.pptx")
+DEFAULT_TEMPLATE = os.path.join(BACKEND_DIR, "templates", "ion.pptx")
 
 LAYOUT_TITLE = 0
 LAYOUT_CONTENT = 1
@@ -24,11 +24,14 @@ def template_path(name: str = "ion") -> str:
     custom = os.getenv("PRESENTATION_TEMPLATE_PATH", "").strip()
     if custom and os.path.isfile(custom):
         return custom
-    path = os.path.join(BACKEND_DIR, "tamplates", f"{name}.pptx")
+    path = os.path.join(BACKEND_DIR, "templates", f"{name}.pptx")
     if os.path.isfile(path):
         return path
-    alt = os.path.join(BACKEND_DIR, "templates", "pptx", f"{name}.pptx")
-    return alt if os.path.isfile(alt) else path
+    alt = os.path.join(BACKEND_DIR, "tamplates", f"{name}.pptx")
+    if os.path.isfile(alt):
+        return alt
+    nested = os.path.join(BACKEND_DIR, "templates", "pptx", f"{name}.pptx")
+    return nested if os.path.isfile(nested) else path
 
 
 def template_available(name: str = "ion") -> bool:

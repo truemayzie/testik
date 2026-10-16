@@ -49,7 +49,11 @@ export async function GET(req: NextRequest) {
 
   if (workType) where.workType = workType;
   if (search) {
-    where.OR = [{ topic: { contains: search } }, { slug: { contains: search } }];
+    // mode: "insensitive" — в PostgreSQL contains регистрозависим (в SQLite был нет)
+    where.OR = [
+      { topic: { contains: search, mode: "insensitive" as const } },
+      { slug: { contains: search, mode: "insensitive" as const } },
+    ];
   }
 
   applyIndexedTriState(where, sp.get("indexedGoogle"), "adminInSearchGoogle");

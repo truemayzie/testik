@@ -292,3 +292,101 @@ export function generationReadyHtml(
 
   return base(body);
 }
+
+// ─── Шаблон: Возврат брошенного заказа ──────────────────────────────────────
+// Отправляется, когда пользователь создал заказ (PreviewTask), открыл превью,
+// но не завершил оплату (45 мин – 24 ч с момента создания).
+
+export function abandonedOrderHtml(
+  topic: string,
+  workType: string,
+  orderUrl: string,
+  appUrl: string
+): string {
+  const body = `
+  <tr>
+    <td style="padding:36px 40px 32px;">
+
+      <!-- Badge тип работы -->
+      <div style="display:inline-block;background:rgba(201,150,42,0.12);
+                  border:1px solid rgba(201,150,42,0.28);border-radius:6px;
+                  padding:4px 12px;margin-bottom:18px;">
+        <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                     font-size:11px;font-weight:700;color:#D4A843;letter-spacing:0.06em;">
+          ${workType.toUpperCase()}
+        </span>
+      </div>
+
+      <h1 style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                 font-size:22px;font-weight:700;color:#ffffff;margin:0 0 10px;line-height:1.25;">
+        Заказ ещё ждёт вас
+      </h1>
+      <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                font-size:15px;color:#94A3B8;margin:0 0 28px;line-height:1.7;">
+        Вы&nbsp;начали оформление <strong style="color:#CBD5E1;">${workType.toLowerCase()}</strong>
+        на&nbsp;тему&nbsp;<strong style="color:#CBD5E1;">&laquo;${topic}&raquo;</strong>, но&nbsp;не&nbsp;завершили
+        оплату. Превью с&nbsp;содержанием уже готово&nbsp;&mdash; остался один шаг.
+      </p>
+
+      <!-- CTA кнопка -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td align="center" style="padding-bottom:32px;">
+            <a href="${orderUrl}"
+               style="display:inline-block;
+                      background:linear-gradient(135deg,#C9962A 0%,#B8851F 100%);
+                      color:#ffffff;text-decoration:none;
+                      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                      font-size:16px;font-weight:700;
+                      padding:16px 48px;border-radius:12px;letter-spacing:0.01em;">
+              Вернуться к заказу&nbsp;&rarr;
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Разделитель -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;">
+        <tr>
+          <td style="height:1px;background:rgba(255,255,255,0.07);font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+      </table>
+
+      <!-- Блок выгоды -->
+      <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                font-size:10px;color:#475569;letter-spacing:0.1em;text-transform:uppercase;
+                font-weight:600;margin:0 0 14px;">
+        Зачем возвращаться
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td style="padding:5px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                     font-size:14px;color:#64748B;line-height:1.55;">
+            &#9203;&nbsp; Готовая работа по&nbsp;ГОСТ за&nbsp;15&ndash;40&nbsp;минут
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                     font-size:14px;color:#64748B;line-height:1.55;">
+            &#10003;&nbsp; Проверка уникальности 70&ndash;90% в&nbsp;стоимости
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                     font-size:14px;color:#64748B;line-height:1.55;">
+            &#128274;&nbsp; Безопасная оплата через ЮKassa и&nbsp;Robokassa
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+                font-size:12px;color:#475569;margin:18px 0 0;line-height:1.6;">
+        Если заказ вам больше не&nbsp;нужен&nbsp;&mdash; просто проигнорируйте это письмо.
+        Ваши данные не&nbsp;списываются без вашего подтверждения.
+      </p>
+
+    </td>
+  </tr>`;
+
+  return base(body, `Черновик заказа хранится <strong style="color:rgba(255,255,255,0.4);">до&nbsp;48&nbsp;часов</strong> в вашем личном кабинете &laquo;Мои работы&raquo;. Ссылка: <a href="${appUrl}/dashboard" style="color:rgba(255,255,255,0.5);text-decoration:none;">${appUrl}/dashboard</a>`);
+}

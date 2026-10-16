@@ -11,7 +11,7 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 /** Как у клиента (sessionStorage) — не держим вечный кэш */
 const PREVIEW_DEDUP_TTL_MS = 2 * 60 * 60 * 1000;
 
-const ALLOWED_TYPES = new Set([
+const ALLOWED_TYPES: readonly string[] = [
   "Сочинение",
   "Эссе",
   "Доклад",
@@ -19,7 +19,7 @@ const ALLOWED_TYPES = new Set([
   "Курсовая",
   "ВКР",
   "Тест",
-]);
+];
 
 function previewDedupeKey(userId: string, workType: string, topic: string): string {
   return `${userId}\n${workType}\n${topic}`;
@@ -128,8 +128,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Некорректный JSON" }, { status: 400 });
   }
 
-  const rawType = String(body.workType ?? "Реферат").trim();
-  const workType = ALLOWED_TYPES.has(rawType) ? rawType : "Реферат";
+  function normalizeWorkType(raw?: string): string {
+    const s = String(raw ?? "").trim().toLowerCase();
+    for (const t of ALLOWED_TYPES) {
+      if (t.toLowerCase() === s) return t;
+    }
+    if (s.includes("курсов")) return "Курсовая";
+    if (s.includes("диплом") || s.includes("вкр")) return "ВКР";
+    return "Реферат";
+  }
+
+  const workType = normalizeWorkType(body.workType);
 
   const prepared = prepareTopic(String(body.topic ?? ""));
   if (!prepared.ok) {

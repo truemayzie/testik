@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>ref-ai — вариант 5: AI печатает</title>
+  <!-- Круглый фон -->
+  <circle cx="32" cy="32" r="30" fill="#1D5CFF"/>
+  <!-- Строки набираемого текста -->
+  <rect x="17" y="19" width="30" height="5" rx="2.5" fill="#FFFFFF"/>
+  <rect x="17" y="29" width="22" height="5" rx="2.5" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="17" y="39" width="16" height="5" rx="2.5" fill="#FFFFFF"/>
+  <!-- Курсор-искра: AI допечатывает прямо сейчас -->
+  <path d="M41 36.5 Q42.75 39.75 46 41.5 Q42.75 43.25 41 46.5 Q39.25 43.25 36 41.5 Q39.25 39.75 41 36.5 Z" fill="#FFFFFF"/>
+</svg>

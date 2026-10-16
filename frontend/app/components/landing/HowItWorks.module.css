@@ -1,0 +1,687 @@
+/* ═════════════════════════════════════════════════════════════════════
+   HowItWorks.module.css — Легкий интерактивный блок 3 шагов (Marsik-style)
+   ═════════════════════════════════════════════════════════════════════ */
+
+.stepsSection {
+  padding: clamp(52px, 8vw, 88px) 16px clamp(44px, 6vw, 68px);
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.stepsInner {
+  max-width: 1040px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* ── Заголовок секции ── */
+.stepsHead {
+  text-align: center;
+  margin-bottom: clamp(32px, 5vw, 48px);
+}
+
+.stepsEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--primary-soft, #EAF1FF);
+  color: var(--primary, #1D5CFF);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stepsTitle {
+  margin: 0 0 12px;
+  font-family: "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: var(--ink, #0F172A);
+  text-wrap: balance;
+}
+
+.stepsLead {
+  margin: 0 auto;
+  max-width: 30rem;
+  font-size: clamp(0.92rem, 2.5vw, 1.05rem);
+  line-height: 1.55;
+  color: #64748B;
+  text-wrap: balance;
+}
+
+/* ── Главный контейнер (карточка) с большим пространством и легкостью ── */
+.showcaseCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-radius: 24px;
+  box-shadow: 0 16px 44px -12px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+  margin-bottom: 36px;
+  overflow: hidden;
+  transition: box-shadow 0.25s ease;
+}
+
+.showcaseCard:hover {
+  box-shadow: 0 20px 50px -10px rgba(29, 92, 255, 0.09), 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+/* ── Левая колонка: Минималистичные табы ── */
+.tabsCol {
+  display: flex;
+  flex-direction: column;
+  background: #FAFCFF;
+  border-right: 1px solid #EBF1F8;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.stepTab {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 28px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #EBF1F8;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease, color 0.2s ease;
+  user-select: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-family: inherit;
+  flex: 1;
+}
+
+.stepTab:last-child {
+  border-bottom: none;
+}
+
+.stepTab:hover {
+  background: rgba(234, 241, 255, 0.4);
+}
+
+.stepTabActive {
+  background: #ffffff;
+}
+
+/* Большие чистые номера шагов (01, 02, 03) */
+.stepNum {
+  font-family: "Golos Text", -apple-system, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #CBD5E1;
+  transition: color 0.25s ease, transform 0.25s ease;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.stepNumActive {
+  color: var(--primary, #1D5CFF);
+  transform: scale(1.04);
+}
+
+.tabText {
+  flex: 1;
+  min-width: 0;
+}
+
+.tabTitle {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1E293B;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  transition: color 0.2s ease;
+}
+
+.tabTitleFull {
+  display: inline;
+}
+
+.tabTitleShort {
+  display: none;
+}
+
+.tabTitleActive {
+  color: var(--primary, #1D5CFF);
+}
+
+.tabDesc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #64748B;
+  font-weight: 400;
+}
+
+/* ── Правая колонка: Просторный холст без дублирующихся шапок ── */
+.stageCol {
+  position: relative;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 380px; /* Fixed height to prevent layout shifts */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Контейнер текущей сцены с легкой анимацией перехода */
+.sceneContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 36px;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+}
+
+.sceneContainerActive {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* ── Сцена 1: Вводишь тему (легкий инпут с живой печатью) ── */
+.screen1Wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.screen1InputBox {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #1D5CFF;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+  box-shadow: 0 8px 24px -6px rgba(29, 92, 255, 0.14);
+}
+
+.screen1Icon {
+  color: #64748B;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.screen1TextWrap {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.screen1Text {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-size: 0.94rem;
+  font-weight: 500;
+  color: #0F172A;
+}
+
+.screen1Cursor {
+  display: inline-block;
+  width: 2px;
+  height: 18px;
+  background: var(--primary, #1D5CFF);
+  margin-left: 2px;
+  flex-shrink: 0;
+  animation: blinkCursor 0.8s infinite steps(2, start);
+}
+
+@keyframes blinkCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.screen1Hint {
+  margin-top: 14px;
+  font-size: 0.82rem;
+  color: #94A3B8;
+  display: block;
+  text-align: center;
+  max-width: 100%;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Сцена 2: Проверяешь содержание (структура оглавления с прокруткой) ── */
+.screen2Wrap {
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  /* Removed border and background to make it look native and centered without double borders */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.screen2ScrollContainer {
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: translateY(0);
+  transition: transform 0s; /* Reset instantly when inactive if needed, wait, we want smooth back */
+}
+
+/* We want it to smoothly scroll down when active, and smoothly return when inactive */
+.screen2ScrollContainer {
+  transition: transform 0.6s ease; /* Fast return */
+}
+
+.sceneContainerActive .screen2ScrollContainer {
+  transform: translateY(calc(-100% + 300px)); /* Adjust offset based on height 380px - 80px padding */
+  transition: transform 3.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.screen2Item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.screen2Item:hover {
+  background: #F8FAFC;
+}
+
+.screen2Handle {
+  color: #CBD5E1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  letter-spacing: -1px;
+}
+
+.screen2ItemText {
+  font-size: 0.88rem;
+  color: #334155;
+  font-weight: 500;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.screen2ItemSub {
+  padding-left: 20px;
+  color: #64748B;
+  font-size: 0.84rem;
+}
+
+.screen2ItemActive {
+  background: #F0F6FF;
+  border-radius: 8px;
+}
+
+.screen2ItemActive .screen2ItemText {
+  color: var(--primary, #1D5CFF);
+  font-weight: 600;
+}
+
+.screen2AddRow {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed #E2E8F0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: #94A3B8;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.screen2AddRow:hover {
+  color: var(--primary, #1D5CFF);
+}
+
+/* ── Сцена 3: Готовая работа (минималистичный стиль как первые экраны) ── */
+.screen3Wrap {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: center;
+}
+
+.screen3DocBox {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #22C55E;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 24px -6px rgba(34, 197, 94, 0.14);
+}
+
+.screen3DocIcon {
+  color: #22C55E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: #F0FDF4;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.screen3DocInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.screen3DocTitle {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen3DocMeta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748B;
+}
+
+.screen3CheckIcon {
+  color: #22C55E;
+  flex-shrink: 0;
+}
+
+/* ── Кнопка действия ── */
+.stepsCtaWrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.stepsCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 28px;
+  border-radius: 999px;
+  font-family: "Golos Text", -apple-system, sans-serif;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-decoration: none;
+  background: var(--primary, #1D5CFF);
+  border: 1px solid var(--primary, #1D5CFF);
+  box-shadow: 0 6px 20px rgba(29, 92, 255, 0.25);
+  transition: all 0.2s ease;
+}
+
+.stepsCta:hover {
+  background: #1548CC;
+  border-color: #1548CC;
+  box-shadow: 0 8px 26px rgba(29, 92, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.stepsCtaIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.stepsCta:hover .stepsCtaIcon {
+  transform: translateX(3px);
+}
+
+/* ══════════════════════════════════════════
+   Адаптивность (Responsive)
+   ══════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .showcaseCard {
+    grid-template-columns: 100%;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .tabsCol {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-right: none;
+    border-bottom: 1px solid #EBF1F8;
+  }
+
+  .stepTab {
+    padding: 14px 6px;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border-bottom: none;
+    border-right: 1px solid #EBF1F8;
+  }
+
+  .stepTab:last-child {
+    border-right: none;
+  }
+
+  .stepNum {
+    font-size: 1.35rem;
+    padding-top: 0;
+  }
+
+  .tabText {
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .tabTitle {
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .tabTitleFull {
+    display: none;
+  }
+
+  .tabTitleShort {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    width: 100%;
+  }
+
+  .tabDesc {
+    display: none; /* скрываем подзаголовок для чистоты мобильной панели */
+  }
+
+  .stageCol {
+    height: 320px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .sceneContainer {
+    padding: 24px 24px;
+  }
+
+  .sceneContainerActive .screen2ScrollContainer {
+    transform: translateY(calc(-100% + 272px));
+  }
+}
+
+@media (max-width: 540px) {
+  .stepsSection {
+    padding: 32px 12px 28px;
+    overflow: hidden;
+  }
+
+  .stepsInner {
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .showcaseCard {
+    border-radius: 18px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .stepTab {
+    padding: 10px 4px;
+    gap: 6px;
+  }
+
+  .stepNum {
+    font-size: 1.1rem;
+  }
+
+  .tabTitleShort {
+    font-size: 0.68rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stageCol {
+    height: 260px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .sceneContainer {
+    padding: 16px 16px;
+  }
+
+  .sceneContainerActive .screen2ScrollContainer {
+    transform: translateY(calc(-100% + 228px));
+  }
+
+  .screen1InputBox {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .screen1Text {
+    font-size: 0.84rem;
+  }
+
+  .screen1Hint {
+    font-size: 0.74rem;
+    margin-top: 10px;
+  }
+
+  .screen3DocBox {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .screen3DocTitle {
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+  }
+
+  .screen3DocMeta {
+    font-size: 0.75rem;
+  }
+
+  .screen3DocIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .screen3DocIcon svg {
+    width: 18px;
+    height: 18px;
+  }
+}

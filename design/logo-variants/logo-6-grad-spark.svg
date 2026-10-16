@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>ref-ai — вариант 6: академическая шапочка</title>
+  <!-- Круглый фон -->
+  <circle cx="32" cy="32" r="30" fill="#1D5CFF"/>
+  <!-- Дощечка шапочки (ромб) -->
+  <path d="M32 10 L56 22 L32 34 L8 22 Z" fill="#FFFFFF"/>
+  <!-- Основание шапочки -->
+  <path d="M20 28 h24 v8 a4 4 0 0 1-4 4 h-16 a4 4 0 0 1-4-4 Z" fill="#FFFFFF"/>
+  <!-- Кисточка-искра: AI на месте кисточки -->
+  <path d="M32 22 L47 33" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M50 30 Q51.6 32.9 54.5 34.5 Q51.6 36.1 50 39 Q48.4 36.1 45.5 34.5 Q48.4 32.9 50 30 Z" fill="#FFFFFF"/>
+</svg>

@@ -3,117 +3,189 @@ generator.py — генерация учебных работ через Claude 
 Модель: claude-sonnet-4-5
 """
 
+import contextvars
 import os
 import json
+import random
 import re
 import time
 from dotenv import load_dotenv
 import anthropic
 from github_proxy import ask_via_github
+from applog import get_logger
+import jobstore
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), base_url="https://anthropic-proxy.kakadun99.workers.dev")
+log = get_logger()
+
+client = anthropic.Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+    base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+)
 MODEL  = "claude-sonnet-4-5"
 
-# Глобальный счётчик стоимости текущей генерации
-_session_cost: float = 0.0
+# GitHub Actions прокси используется в prod для обхода блокировки Claude API из РФ.
+# Локально (или там, где api.anthropic.com доступен напрямую) достаточно ANTHROPIC_API_KEY —
+# в этом случае GITHUB_TOKEN/GITHUB_REPO/PROXY_SECRET можно не задавать.
+USE_GITHUB_PROXY = bool(os.getenv("GITHUB_TOKEN")) and bool(os.getenv("GITHUB_REPO")) and bool(os.getenv("PROXY_SECRET"))
+
+# Потокобезопасный счётчик стоимости генерации (изолирован для каждого потока/задачи)
+_session_cost_var: contextvars.ContextVar[float] = contextvars.ContextVar("session_cost", default=0.0)
+
+def get_session_cost() -> float:
+    return _session_cost_var.get()
+
+def reset_session_cost() -> None:
+    _session_cost_var.set(0.0)
+
+def add_session_cost(amount: float) -> float:
+    new_val = _session_cost_var.get() + amount
+    _session_cost_var.set(new_val)
+    return new_val
 
 
-LANG_LABELS = {
-    "ru": {
-        "name": "русский",
-        "intro": "Введение",
-        "conclusion": "Заключение",
-        "sources": "Список литературы",
-    },
-    "kz": {
-        "name": "казахский",
-        "intro": "Кіріспе",
-        "conclusion": "Қорытынды",
-        "sources": "Пайдаланылған әдебиеттер",
-    },
-    "en": {
-        "name": "English",
-        "intro": "Introduction",
-        "conclusion": "Conclusion",
-        "sources": "References",
-    },
-}
+from utils.language import (
+    LANG_LABELS,
+    detect_language_from_topic,
+    get_lang_labels as _lang_labels,
+    canonical_service_key as _canonical_service_key,
+)
 
 
-def detect_language_from_topic(topic: str) -> str:
-    """Auto-script определение языка темы: kz | en | ru (fallback)."""
-    text = (topic or "").strip()
-    if not text:
-        return "ru"
-    low = text.lower()
-    if any(tag in low for tag in ("[kz]", "kz:", "қаз", "каз")):
-        return "kz"
-    if any(tag in low for tag in ("[en]", "en:", "english", "англ")):
-        return "en"
-    if re.search(r"[әіңғүұқөһ]", low):
-        return "kz"
-    letters = re.findall(r"[A-Za-zА-Яа-яЁёӘәІіҢңҒғҮүҰұҚқӨөҺһ]", text)
-    if not letters:
-        return "ru"
-    latin = sum(ch.isascii() and ch.isalpha() for ch in letters)
-    cyril = len(letters) - latin
-    if latin > cyril:
-        return "en"
-    return "ru"
+# ── Ретраи: транзиентные сбои не должны убивать генерацию ────────────────────
+
+# Максимальное число попыток одного вызова Claude (1 основная + 4 ретрая).
+ASK_MAX_ATTEMPTS = 5
+# Базовая задержка backoff (сек). Растёт экспоненциально: 2, 4, 8, 16 + jitter.
+ASK_BACKOFF_BASE_SEC = 2.0
+ASK_BACKOFF_MAX_SEC = 60.0
 
 
-def _lang_labels(doc_lang: str) -> dict[str, str]:
-    return LANG_LABELS.get(doc_lang, LANG_LABELS["ru"])
+def _is_retryable_error(exc: Exception) -> bool:
+    """Транзиентные ошибки → ретрай. Фатальные (ключи/модель) → сразу наверх."""
+    # Сетевые/таймауты SDK
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
+        return True
+    # 429 rate limit, 5xx, 529 overloaded — ретраим
+    if isinstance(exc, anthropic.RateLimitError):
+        return True
+    if isinstance(exc, anthropic.InternalServerError):
+        return True
+    # GitHub-прокси: любые его RuntimeError — по сути сетевые (dispatch, timeout, callback)
+    if isinstance(exc, RuntimeError):
+        return True
+    # Прочее (AuthenticationError, BadRequest, PermissionDenied, NotFound) — не ретраим
+    return False
 
 
-def _canonical_service_key(name: str) -> str:
-    s = (name or "").strip().lower()
-    variants = {
-        "intro": {"введение", "кіріспе", "introduction"},
-        "conclusion": {"заключение", "қорытынды", "conclusion"},
-        "sources": {"список литературы", "пайдаланылған әдебиеттер", "references"},
-        "appendix": {"приложения", "қосымшалар", "appendix", "appendices"},
-    }
-    for key, names in variants.items():
-        if s in names:
-            return key
-    return ""
+def _backoff_delay(attempt: int) -> float:
+    """Экспоненциальный backoff с jitter: 2s, 4s, 8s, 16s (±25%)."""
+    delay = min(ASK_BACKOFF_BASE_SEC * (2 ** (attempt - 1)), ASK_BACKOFF_MAX_SEC)
+    return delay * random.uniform(0.75, 1.25)
 
 
 def ask(prompt: str, max_tokens: int = 8000) -> str:
-    """Запрос к Claude API через GitHub Actions прокси."""
-    global _session_cost
-    text, usage = ask_via_github(MODEL, max_tokens, [{"role": "user", "content": prompt}])
-    # claude-sonnet-4-5: $3/M input tokens, $15/M output tokens
-    input_tokens  = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    _session_cost += input_tokens * 3e-6 + output_tokens * 15e-6
-    print(f"[Proxy] Ответ получен, длина: {len(text)}, токены: {input_tokens}+{output_tokens}, стоимость сессии: ${_session_cost:.4f}")
-    return text
+    """
+    Запрос к Claude API с ретраями и exponential backoff.
+    Через GitHub Actions прокси (prod/RU) или напрямую (локальная разработка).
+    Один транзиентный сбой (429/5xx/таймаут/сеть) больше не убивает генерацию.
+    """
+    label = "Proxy" if USE_GITHUB_PROXY else "Direct"
+    last_exc: Exception | None = None
+
+    for attempt in range(1, ASK_MAX_ATTEMPTS + 1):
+        try:
+            if USE_GITHUB_PROXY:
+                text, usage = ask_via_github(MODEL, max_tokens, [{"role": "user", "content": prompt}])
+            else:
+                response = client.messages.create(
+                    model=MODEL,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                text = response.content[0].text.strip()
+                usage = {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= ASK_MAX_ATTEMPTS or not _is_retryable_error(exc):
+                log.error(
+                    "ask() попытка %d/%d не удалась (%s: %s) — ретраев больше нет",
+                    attempt, ASK_MAX_ATTEMPTS, type(exc).__name__, str(exc)[:300],
+                )
+                raise
+            delay = _backoff_delay(attempt)
+            log.warning(
+                "ask() попытка %d/%d не удалась (%s: %s) → пауза %.1fs и повтор",
+                attempt, ASK_MAX_ATTEMPTS, type(exc).__name__, str(exc)[:300], delay,
+            )
+            time.sleep(delay)
+            continue
+
+        # Успех: учёт стоимости
+        input_tokens  = usage.get("input_tokens", 0)
+        output_tokens = usage.get("output_tokens", 0)
+        curr_cost = add_session_cost(input_tokens * 3e-6 + output_tokens * 15e-6)
+        if attempt > 1:
+            log.info("[%s] Ответ получен с попытки %d, длина: %d, токены: %d+%d, стоимость сессии: $%.4f",
+                     label, attempt, len(text), input_tokens, output_tokens, curr_cost)
+        else:
+            log.info("[%s] Ответ получен, длина: %d, токены: %d+%d, стоимость сессии: $%.4f",
+                     label, len(text), input_tokens, output_tokens, curr_cost)
+        return text
+
+    # Недостижимо (цикл либо вернёт текст, либо raise), но для надёжности:
+    raise last_exc or RuntimeError("ask(): исчерпаны попытки")
+
+
+def _extract_json_block(raw: str) -> str:
+    """Вытаскивает JSON-объект из ответа (в т.ч. из ```json ... ```)."""
+    if "```" in raw:
+        for part in raw.split("```"):
+            if "{" in part:
+                raw = part.lstrip("json").strip()
+                break
+    return raw
 
 
 def ask_json(prompt: str) -> dict:
-    """Запрос к Claude, возвращает JSON."""
-    raw = ask(prompt + "\n\nВерни ТОЛЬКО валидный JSON без markdown и пояснений.")
-    if "```" in raw:
-        for part in raw.split("```"):
-            if "{" in part:
-                raw = part.lstrip("json").strip()
-                break
-    return json.loads(raw)
+    """
+    Запрос к Claude, возвращает JSON.
+    При невалидном JSON — до 2 дополнительных попыток с усиленным требованием.
+    """
+    json_prompt = prompt + "\n\nВерни ТОЛЬКО валидный JSON без markdown и пояснений."
+    last_exc: Exception | None = None
+    for json_attempt in range(1, 3):
+        raw = ask(json_prompt)
+        try:
+            return json.loads(_extract_json_block(raw))
+        except json.JSONDecodeError as exc:
+            last_exc = exc
+            log.warning("ask_json(): невалидный JSON (попытка %d/2): %s", json_attempt, str(exc)[:200])
+            json_prompt = (
+                prompt
+                + "\n\nПРЕДЫДУЩИЙ ОТВЕТ БЫЛ НЕВАЛИДНЫМ JSON. Верни ИСПРАВЛЕННЫЙ, СТРОГО валидный JSON-объект: без markdown, без ```json, без пояснений до или после. Начни ответ с символа { и закончи }."
+            )
+    raise last_exc or RuntimeError("ask_json(): невалидный JSON")
 
 
 def ask_json_limited(prompt: str, max_tokens: int = 1200) -> dict:
-    """Claude → JSON с ограничением max_tokens (предпросмотр перед оплатой)."""
-    raw = ask(prompt + "\n\nВерни ТОЛЬКО валидный JSON без markdown и пояснений.", max_tokens=max_tokens)
-    if "```" in raw:
-        for part in raw.split("```"):
-            if "{" in part:
-                raw = part.lstrip("json").strip()
-                break
-    return json.loads(raw)
+    """
+    Claude → JSON с ограничением max_tokens (предпросмотр перед оплатой).
+    При невалидном JSON — одна дополнительная попытка.
+    """
+    json_prompt = prompt + "\n\nВерни ТОЛЬКО валидный JSON без markdown и пояснений."
+    for json_attempt in range(1, 3):
+        raw = ask(json_prompt, max_tokens=max_tokens)
+        try:
+            return json.loads(_extract_json_block(raw))
+        except json.JSONDecodeError as exc:
+            log.warning("ask_json_limited(): невалидный JSON (попытка %d/2): %s", json_attempt, str(exc)[:200])
+            json_prompt = (
+                prompt
+                + "\n\nПРЕДЫДУЩИЙ ОТВЕТ БЫЛ НЕВАЛИДНЫМ JSON. Верни ИСПРАВЛЕННЫЙ, СТРОГО валидный JSON-объект: без markdown, без ```json, без пояснений. Начни ответ с { и закончи }."
+            )
+    raise RuntimeError("ask_json_limited(): невалидный JSON после повторной попытки")
 
 
 def ask_text(prompt: str) -> str:
@@ -132,131 +204,11 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
-# ── Служебные страницы (не содержат основного текста) ──────────────────────
-
-SERVICE_PAGES = {
-    "Реферат":   3,   # титульник + содержание + список литературы
-    "Доклад":    3,   # титульник + содержание + список литературы
-    "Курсовая":  4,   # титульник + содержание (1-2) + список литературы (2)
-    "ВКР":       8,   # титульник + содержание (2) + список литературы (3) + приложения (2)
-    "Эссе":      0,
-    "Сочинение": 0,
-}
-
-
-# ── Правила для каждого типа работы ────────────────────────────────────────
-
-WORK_RULES = {
-    "Сочинение": {
-        "has_title_page": False,
-        "has_toc":        False,
-        "has_sources":    False,
-        "has_tables":     False,
-        "has_chapters":   False,
-        "pages_min":      3,
-        "pages_max":      5,
-        "words_per_page": 300,
-        "intro_words":    100,
-        "conclusion_words": 100,
-        "style":    "школьное сочинение от первого лица, живой личный стиль, эмоциональность, примеры из жизни",
-        "forbidden": "никаких заголовков глав, никаких нумерованных разделов, никаких таблиц, никакого академического языка",
-    },
-    "Эссе": {
-        "has_title_page": False,
-        "has_toc":        False,
-        "has_sources":    False,
-        "has_tables":     False,
-        "has_chapters":   False,
-        "pages_min":      4,
-        "pages_max":      8,
-        "words_per_page": 300,
-        "intro_words":    150,
-        "conclusion_words": 150,
-        "style":    "разговорный стиль, авторская позиция, рассуждение, аргументы и контраргументы",
-        "forbidden": "никаких заголовков глав, никаких таблиц, никакого сухого академического языка",
-    },
-    "Доклад": {
-        "has_title_page":   True,
-        "has_toc":          True,
-        "has_sources":      True,
-        "has_tables":       True,
-        "has_chapters":     True,
-        "chapters_count":   2,
-        "subchapters_count": 2,
-        "pages_min":        15,
-        "pages_max":        20,
-        "words_per_page":   280,
-        "intro_words":      200,
-        "conclusion_words": 200,
-        "style":    "информационный стиль, чёткие тезисы, подходит для зачитывания вслух, понятный язык",
-        "forbidden": "никаких сложных терминов без объяснений",
-    },
-    "Реферат": {
-        "has_title_page":   True,
-        "has_toc":          True,
-        "has_sources":      True,
-        "has_tables":       True,
-        "has_chapters":     True,
-        "chapters_count":   3,
-        "subchapters_count": 2,
-        "pages_min":        20,
-        "pages_max":        25,
-        "words_per_page":   280,
-        "intro_words":      300,
-        "conclusion_words": 300,
-        "style":    "академический стиль, анализ источников, авторская позиция",
-        "forbidden": "никаких иностранных слов кроме терминов, никаких артефактов",
-    },
-    "Курсовая": {
-        "has_title_page":   True,
-        "has_toc":          True,
-        "has_sources":      True,
-        "has_tables":       True,
-        "has_chapters":     True,
-        "chapters_count":   3,
-        "subchapters_count": 2,
-        "pages_min":        30,
-        "pages_max":        40,
-        "words_per_page":   280,
-        "intro_words":      400,
-        "conclusion_words": 400,
-        "style":    "научный стиль, теоретическая и практическая части, промежуточные выводы после каждой главы",
-        "sources_min": 15,
-        "forbidden": "никаких иностранных слов кроме терминов",
-    },
-    "ВКР": {
-        "has_title_page":   True,
-        "has_toc":          True,
-        "has_sources":      True,
-        "has_tables":       True,
-        "has_chapters":     True,
-        "chapters_count":   3,
-        "subchapters_count": 3,
-        "pages_min":        60,
-        "pages_max":        70,
-        "words_per_page":   280,
-        "intro_words":      600,
-        "conclusion_words": 600,
-        "style":    "строгий научный стиль, методология, собственное исследование, развёрнутый анализ",
-        "sources_min": 20,
-        "has_appendix": True,
-        "forbidden": "никаких иностранных слов кроме терминов",
-    },
-    "Тест": {
-        "has_title_page": False,
-        "has_toc":        False,
-        "has_sources":    False,
-        "has_tables":     False,
-        "has_chapters":   False,
-        "pages_min":      1,
-        "pages_max":      1,
-        "words_per_page": 100,
-        "intro_words":    0,
-        "conclusion_words": 0,
-        "style":    "краткий тестовый ответ",
-        "forbidden": "",
-    },
-}
+from prompts.rules import (
+    SERVICE_PAGES,
+    PREVIEW_WORK_TYPES,
+    WORK_RULES,
+)
 
 
 # ── Генерация источников через Claude ───────────────────────────────────────
@@ -295,7 +247,7 @@ def _normalize_kz_source_line(src: str) -> str:
 
 def generate_sources(topic: str, count: int = 10, doc_lang: str = "ru") -> list[str]:
     """Генерирует реальные источники для списка литературы."""
-    print(f"Генерирую {count} источников для темы: {topic} | язык: {doc_lang}")
+    log.info("Генерирую %d источников для темы: %s | язык: %s", count, topic, doc_lang)
     if doc_lang == "kz":
         prompt = f"""Составь {count} реальных источников по теме «{topic}» для списка литературы.
 
@@ -371,349 +323,16 @@ Return ONLY a numbered list without markdown."""
             if normalized:
                 normalized_lines.append(normalized)
         lines = [f"{i + 1}. {line}" for i, line in enumerate(normalized_lines)]
-    print(f"Получено {len(lines)} источников")
+    log.info("Получено %d источников", len(lines))
     return lines
 
 
-# ── Промпты структуры ───────────────────────────────────────────────────────
-
-def get_structure_prompt(topic: str, work_type: str, rules: dict, doc_lang: str) -> str:
-    labels = _lang_labels(doc_lang)
-    intro = labels["intro"]
-    conclusion = labels["conclusion"]
-    sources = labels["sources"]
-
-    if work_type in ("Сочинение", "Эссе"):
-        return f"""Создай структуру {work_type.lower()} на тему «{topic}».
-
-Верни JSON:
-{{
-  "structure": ["Основная часть"]
-}}
-
-Никаких введений, заключений и списков литературы как отдельных разделов.
-Верни ТОЛЬКО JSON."""
-
-    if work_type == "Доклад":
-        return f"""Создай структуру доклада на тему «{topic}».
-
-Верни JSON с 2 главами и подглавами:
-{{
-  "structure": [
-    "{intro}",
-    "1. [конкретное название главы]",
-    "1.1. [конкретное название подглавы]",
-    "1.2. [конкретное название подглавы]",
-    "2. [конкретное название главы]",
-    "2.1. [конкретное название подглавы]",
-    "2.2. [конкретное название подглавы]",
-    "{conclusion}",
-    "{sources}"
-  ]
-}}
-
-Замени [конкретное название] на реальные названия по теме. Верни ТОЛЬКО JSON."""
-
-    if work_type == "Реферат":
-        return f"""Создай структуру реферата на тему «{topic}».
-
-Верни JSON с 3 главами и 2 подглавами в каждой:
-{{
-  "structure": [
-    "{intro}",
-    "1. [конкретное название главы]",
-    "1.1. [конкретное название подглавы]",
-    "1.2. [конкретное название подглавы]",
-    "2. [конкретное название главы]",
-    "2.1. [конкретное название подглавы]",
-    "2.2. [конкретное название подглавы]",
-    "3. [конкретное название главы]",
-    "3.1. [конкретное название подглавы]",
-    "3.2. [конкретное название подглавы]",
-    "{conclusion}",
-    "{sources}"
-  ]
-}}
-
-Замени [конкретное название] на реальные названия по теме «{topic}». Верни ТОЛЬКО JSON."""
-
-    if work_type == "Курсовая":
-        if doc_lang == "kz":
-            return f"""«{topic}» тақырыбы бойынша курстық жұмыстың құрылымын құр.
-
-JSON-ды қатаң түрде 3 тараумен қайтар:
-{{
-  "structure": [
-    "{intro}",
-    "1-тарау. [нақты атау] теориялық негіздері",
-    "1.1. [нақты бөлімше атауы]",
-    "1.2. [нақты бөлімше атауы]",
-    "2-тарау. [нақты атау] талдауы",
-    "2.1. [нақты бөлімше атауы]",
-    "2.2. [нақты бөлімше атауы]",
-    "3-тарау. [нақты атау] бойынша практикалық ұсыныстар",
-    "3.1. [нақты бөлімше атауы]",
-    "3.2. [нақты бөлімше атауы]",
-    "{conclusion}",
-    "{sources}"
-  ]
-}}
-
-[нақты атау] және [нақты бөлімше атауы] орнына тақырыпқа сәйкес нақты атауларды қой.
-Барлық тарау/бөлімше атаулары тек қазақ тілінде болсын.
-ТЕК JSON қайтар."""
-        return f"""Создай структуру курсовой работы на тему «{topic}».
-
-Верни JSON строго с 3 главами:
-{{
-  "structure": [
-    "{intro}",
-    "Глава 1. Теоретические основы [конкретное название]",
-    "1.1. [конкретное название подглавы]",
-    "1.2. [конкретное название подглавы]",
-    "Глава 2. Анализ [конкретное название]",
-    "2.1. [конкретное название подглавы]",
-    "2.2. [конкретное название подглавы]",
-    "Глава 3. Практические рекомендации [конкретное название]",
-    "3.1. [конкретное название подглавы]",
-    "3.2. [конкретное название подглавы]",
-    "{conclusion}",
-    "{sources}"
-  ]
-}}
-
-Замени [конкретное название] на реальные названия по теме «{topic}». Верни ТОЛЬКО JSON."""
-
-    if work_type == "ВКР":
-        return f"""Создай структуру ВКР на тему «{topic}».
-
-Верни JSON строго с 3 главами по 3 подглавы:
-{{
-  "structure": [
-    "{intro}",
-    "Глава 1. Теоретические и методологические основы [название]",
-    "1.1. [подглава]",
-    "1.2. [подглава]",
-    "1.3. [подглава]",
-    "Глава 2. Исследование и анализ [название]",
-    "2.1. [подглава]",
-    "2.2. [подглава]",
-    "2.3. [подглава]",
-    "Глава 3. Разработка решений и практические результаты [название]",
-    "3.1. [подглава]",
-    "3.2. [подглава]",
-    "3.3. [подглава]",
-    "{conclusion}",
-    "{sources}",
-    "Приложения"
-  ]
-}}
-
-Замени [название] и [подглава] на конкретные названия по теме «{topic}». Верни ТОЛЬКО JSON."""
-
-    # Реферат по умолчанию
-    return get_structure_prompt(topic, "Реферат", rules, doc_lang)
-
-
-# ── Промпты введения ────────────────────────────────────────────────────────
-
-def get_intro_prompt(topic: str, work_type: str, words: int, sources_instruction: str, doc_lang: str) -> str:
-
-    INTRO_ELEMENTS = {
-        "Доклад":   "актуальность темы, цель доклада, краткое содержание разделов",
-        "Реферат":  "актуальность темы, степень изученности, цель, 4 конкретные задачи нумерованным списком, объект, предмет, методы, структура работы",
-        "Курсовая": "актуальность с обоснованием, степень изученности проблемы, противоречие, цель, 5-6 задач нумерованным списком, объект, предмет, методы исследования, теоретическая база, практическая значимость, структура",
-        "ВКР":      "актуальность с научным обоснованием, степень разработанности в литературе, научная проблема, цель, 6-8 задач нумерованным списком, объект, предмет, гипотеза, методология (теоретические и эмпирические методы), теоретическая значимость, практическая значимость, апробация результатов, структура работы",
-    }
-
-    elements = INTRO_ELEMENTS.get(work_type, INTRO_ELEMENTS["Реферат"])
-
-    lang_name = _lang_labels(doc_lang)["name"]
-    return f"""Напиши введение {work_type.lower()} на тему «{topic}».
-Объём: строго {words} слов — считай слова точно.
-
-Обязательные элементы:
-{elements}
-
-{sources_instruction}
-
-Требования:
-- Язык текста: {lang_name}
-- Используй корректные имена/термины в норме выбранного языка
-- Академический стиль
-- Конкретные формулировки, не общие фразы
-- В введении ссылки НЕ используются совсем — введение это авторский текст без цитирования источников. Не ставь [1], [2] и никакие другие ссылки во введении
-
-- НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков с точкой
-- Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
-- Пиши единообразно на выбранном языке, без смешивания языков в одном абзаце
-
-КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
-- Целевой объём: {words} слов — это обязательное минимальное требование
-- Считай слова по ходу написания
-- Если текст получается короче — расширяй рассуждения, добавляй примеры и детали
-- Лучше написать на 10-15% больше чем меньше целевого объёма
-- НЕ обрезай текст искусственно
-
-Верни ТОЛЬКО текст введения без заголовка."""
-
-
-# ── Промпты для разделов ────────────────────────────────────────────────────
-
-def get_section_prompt(topic: str, section: str, parent: str,
-                       words: int, work_type: str,
-                       sources_instruction: str, doc_lang: str) -> str:
-
-    parts  = section.split(".")
-    is_sub = len(parts) >= 3 and parts[1].strip()[:1].isdigit()
-
-    # Контекст главы для Курсовой/ВКР
-    chapter_context = ""
-    ch_num = parts[0].replace("Глава", "").strip()
-    if work_type == "Курсовая":
-        if ch_num.startswith("1"):
-            chapter_context = "ТЕОРЕТИЧЕСКАЯ ЧАСТЬ: определения, история вопроса, существующие подходы из литературы, обзор источников"
-        elif ch_num.startswith("2"):
-            chapter_context = "АНАЛИТИЧЕСКАЯ ЧАСТЬ: анализ текущего состояния, сравнение подходов, выявление проблем, данные и факты"
-        elif ch_num.startswith("3"):
-            chapter_context = "ПРАКТИЧЕСКАЯ ЧАСТЬ: конкретные решения, рекомендации, собственные предложения автора, обоснование эффективности"
-    if work_type == "ВКР":
-        if ch_num.startswith("1"):
-            chapter_context = "ТЕОРЕТИКО-МЕТОДОЛОГИЧЕСКАЯ ЧАСТЬ: обзор научной литературы, теоретические концепции, методологические подходы, понятийный аппарат"
-        elif ch_num.startswith("2"):
-            chapter_context = "ИССЛЕДОВАТЕЛЬСКАЯ ЧАСТЬ: методика исследования, сбор и анализ данных, результаты, интерпретация"
-        elif ch_num.startswith("3"):
-            chapter_context = "ПРАКТИЧЕСКАЯ ЧАСТЬ: разработка решений, апробация, оценка эффективности, практические рекомендации"
-
-    # Вступление к главе (не подглава)
-    is_chapter_intro = (
-        work_type in ("Курсовая", "ВКР") and
-        "Глава" in section and
-        not is_sub
-    )
-    if is_chapter_intro:
-        lang_name = _lang_labels(doc_lang)["name"]
-        return f"""Напиши краткое вступление к главе «{section}» {work_type.lower()} на тему «{topic}».
-{f"Контекст: {chapter_context}" if chapter_context else ""}
-Объём: 80-100 слов.
-Обозначь что будет рассмотрено в этой главе.
-Язык текста: {lang_name}. Академический стиль. Никакого markdown.
-Верни ТОЛЬКО текст без заголовка."""
-
-    # Основная часть для Эссе/Сочинения
-    if section == "Основная часть":
-        TYPE_STYLE = {
-            "Эссе":      "разговорный, авторская позиция, аргументы и контраргументы",
-            "Сочинение": "живой личный стиль, примеры из жизни и литературы, эмоциональность",
-        }
-        style = TYPE_STYLE.get(work_type, "академический стиль")
-        lang_name = _lang_labels(doc_lang)["name"]
-        return f"""Напиши основную часть {work_type.lower()} на тему «{topic}».
-Объём: СТРОГО {words} слов.
-Стиль: {style}
-Без заголовков и глав — только связный текст абзацами.
-Язык текста: {lang_name}
-
-КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
-- Целевой объём: {words} слов — это обязательное минимальное требование
-- Считай слова по ходу написания
-- Если текст получается короче — расширяй рассуждения, добавляй примеры и детали
-- Лучше написать на 10-15% больше чем меньше целевого объёма
-- НЕ обрезай текст искусственно
-
-Верни ТОЛЬКО текст."""
-
-    # Основной промпт для подглав
-    STYLE_BY_TYPE = {
-        "Доклад":   "информационный стиль, чёткие тезисы, понятный язык для устного выступления",
-        "Реферат":  "академический стиль, анализ, авторская оценка, разнообразные синтаксические конструкции",
-        "Курсовая": f"научный стиль, {chapter_context}" if chapter_context else "научный стиль",
-        "ВКР":      f"строгий научный стиль, {chapter_context}, собственный исследовательский вклад" if chapter_context else "строгий научный стиль",
-    }
-    style       = STYLE_BY_TYPE.get(work_type, "академический стиль")
-    parent_text = f"Этот раздел входит в главу «{parent}»." if parent else ""
-
-    tables_instruction = ""
-    if work_type not in ("Сочинение", "Эссе"):
-        tables_instruction = """
-ТАБЛИЦА: если данные удобно систематизировать — добавь ОДНУ таблицу в формате:
-[TABLE]
-{
-  "caption": "краткое описание без номера",
-  "headers": ["Столбец 1", "Столбец 2"],
-  "rows": [["значение", "значение"]]
-}
-[/TABLE]
-Если таблица не нужна — не добавляй."""
-
-    lang_name = _lang_labels(doc_lang)["name"]
-    return f"""Напиши раздел «{section}» для {work_type.lower()} на тему «{topic}».
-{parent_text}
-Объём: строго {words} слов — считай слова точно.
-Стиль: {style}
-
-{sources_instruction}
-{tables_instruction}
-
-ТРЕБОВАНИЯ:
-- Язык текста: {lang_name}
-- Не смешивай языки в одном абзаце
-- Никаких артефактов, пустых квадратов □, непечатных символов
-- Конкретные факты, цифры, примеры
-- Авторская позиция и собственные выводы
-- Ссылки на источники — максимум 1 ссылка на весь подраздел, только если приводишь конкретную статистику или цитируешь конкретное исследование. Если таких фактов нет — не ставь ссылки вообще
-- В конце главы (не подглавы) — краткий вывод 2-3 предложения
-- НИКАКОГО markdown: никаких #, ##, **, *, ---, нумерованных списков
-- Никаких мини-заголовков внутри текста подглавы — только связный текст без внутренних заголовков
-
-КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
-- Целевой объём: {words} слов — это обязательное минимальное требование
-- Считай слова по ходу написания
-- Если текст получается короче — расширяй рассуждения, добавляй примеры и детали
-- Лучше написать на 10-15% больше чем меньше целевого объёма
-- НЕ обрезай текст искусственно
-
-Верни ТОЛЬКО текст без заголовка."""
-
-
-# ── Промпты заключения ──────────────────────────────────────────────────────
-
-def get_conclusion_prompt(topic: str, work_type: str, words: int, doc_lang: str) -> str:
-
-    CONCLUSION_ELEMENTS = {
-        "Доклад":   "основные выводы по каждому разделу, значимость темы, практические рекомендации",
-        "Реферат":  "выводы по каждой из 4 задач из введения, достижение цели, теоретическая и практическая значимость, перспективы изучения",
-        "Курсовая": "выводы по каждой задаче, теоретический вклад, практические рекомендации, перспективы дальнейшего исследования",
-        "ВКР":      "подтверждение или опровержение гипотезы, выводы по каждой задаче, достижение цели, теоретическая значимость, практическая ценность, ограничения исследования, направления дальнейших исследований",
-    }
-
-    elements = CONCLUSION_ELEMENTS.get(work_type, CONCLUSION_ELEMENTS["Реферат"])
-
-    lang_name = _lang_labels(doc_lang)["name"]
-    return f"""Напиши заключение {work_type.lower()} на тему «{topic}».
-Объём: строго {words} слов — считай слова точно.
-
-Обязательные элементы:
-{elements}
-
-Требования:
-- Язык текста: {lang_name}
-- Не добавляй новую информацию — только обобщай результаты
-- Конкретные выводы, не общие фразы
-- Академический стиль
-- В заключении ссылки НЕ используются совсем — это только выводы автора. Не ставь [1], [2] и никакие другие ссылки в заключении
-- НИКАКОГО markdown: никаких #, ##, **, *, ---
-- Никаких мини-заголовков внутри текста — только связный текст без внутренних заголовков
-- Пиши единообразно на выбранном языке без смешения языков
-
-КРИТИЧЕСКИ ВАЖНО ПО ОБЪЁМУ:
-- Целевой объём: {words} слов — это обязательное минимальное требование
-- Считай слова по ходу написания
-- Если текст получается короче — расширяй рассуждения, добавляй примеры и детали
-- Лучше написать на 10-15% больше чем меньше целевого объёма
-- НЕ обрезай текст искусственно
-
-Верни ТОЛЬКО текст без заголовка."""
+from prompts.structure import get_structure_prompt
+from prompts.sections import (
+    get_intro_prompt,
+    get_section_prompt,
+    get_conclusion_prompt,
+)
 
 
 # ── Специальная генерация для Сочинения и Эссе ─────────────────────────────
@@ -724,7 +343,7 @@ def generate_essay_or_composition(topic: str, pages: int, work_type: str, progre
     rules = WORK_RULES[work_type]
     pages = max(rules["pages_min"], min(pages, rules["pages_max"]))
     total_words = pages * rules["words_per_page"]
-    print(f"Пишу {work_type.lower()} (~{total_words} слов)...")
+    log.info("Пишу %s (~%d слов)...", work_type.lower(), total_words)
 
     if progress_cb:
         progress_cb(1, 3, "Подготавливаем структуру текста")
@@ -835,10 +454,10 @@ def _check_volume(label: str, text: str, expected_words: int) -> None:
     actual_words = len(text.split())
     min_chars    = expected_words * 5  # 5 символов на слово — минимум
     if actual_chars < min_chars:
-        print(f"  ВНИМАНИЕ: «{label}» — {actual_chars} симв. (~{actual_words} слов), "
-              f"ожидалось минимум {expected_words} слов ({min_chars} симв.)")
+        log.warning("  «%s» — %d симв. (~%d слов), ожидалось минимум %d слов (%d симв.)",
+                    label, actual_chars, actual_words, expected_words, min_chars)
     else:
-        print(f"  ✓ «{label}» — {actual_chars} симв. (~{actual_words} слов)")
+        log.info("  [OK] «%s» — %d симв. (~%d слов)", label, actual_chars, actual_words)
 
 
 def _normalize_custom_structure(raw: list | None, work_type: str) -> list[str] | None:
@@ -868,18 +487,27 @@ def _normalize_custom_structure(raw: list | None, work_type: str) -> list[str] |
 def generate_work(topic: str, pages: int, work_type: str = "Реферат",
                   profile: dict | None = None, progress_cb=None,
                   custom_structure: list[str] | None = None) -> dict:
-    """Генерирует работу нужного типа через Claude API."""
-    global _session_cost
-    _session_cost = 0.0
+    """
+    Генерирует работу нужного типа через Claude API.
+    Checkpoint/resume: промежуточные результаты пишутся на диск; при повторном
+    запуске той же работы (та же тема/тип/объём) генерация продолжается с места сбоя.
+    """
+    reset_session_cost()
 
-    print(f"\n{'='*60}")
-    print(f"Начало генерации: {work_type}")
-    print(f"Тема: {topic}")
-    print(f"Страниц: {pages}")
+    log.info("=" * 60)
+    log.info("Начало генерации: %s | Тема: %s | Страниц: %s", work_type, topic, pages)
     doc_lang = detect_language_from_topic(topic)
     labels = _lang_labels(doc_lang)
-    print(f"Язык документа: {doc_lang}")
-    print(f"{'='*60}\n")
+    log.info("Язык документа: %s", doc_lang)
+    log.info("=" * 60)
+
+    # Checkpoint: если эта же работа уже генерировалась и упала — продолжаем.
+    ck_key = jobstore.checkpoint_key(topic, work_type, pages)
+    ck = jobstore.load_checkpoint(ck_key)
+    if ck:
+        log.info("Найден checkpoint от %s — возобновляем генерацию (готово разделов: %d)",
+                 time.strftime("%H:%M:%S", time.localtime(ck.get("saved_at") or 0)),
+                 len(ck.get("content") or {}))
 
     rules = WORK_RULES.get(work_type, WORK_RULES["Реферат"])
 
@@ -890,7 +518,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     if work_type == "Тест":
         if progress_cb:
             progress_cb(1, 1, "Тестовая генерация")
-        print("Тестовая генерация: минимальный промпт...")
+        log.info("Тестовая генерация: минимальный промпт...")
         text = clean_text(ask(f"Напиши ровно 2-3 предложения на тему: {topic}. Только сам текст, без заголовков.", max_tokens=200))
         result = {
             "title":     f"[ТЕСТ] {topic}",
@@ -899,7 +527,7 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
             "sources":   [],
             "meta":      {"Тип работы": "Тест", "Объём": "1 стр."},
             "profile":   profile or {},
-            "_cost_usd": round(_session_cost, 4),
+            "_cost_usd": round(get_session_cost(), 4),
         }
         print(f"[TOTAL] Тип: Тест | Тема: {topic[:40]}")
         return result
@@ -908,21 +536,16 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     if work_type in ("Сочинение", "Эссе"):
         result = generate_essay_or_composition(topic, pages, work_type, progress_cb=progress_cb)
         result["profile"] = profile or {}
-        result["_cost_usd"] = round(_session_cost, 4)
-        print(f"{'='*50}")
-        print(f"[TOTAL] Тип: {work_type} | Тема: {topic[:40]}")
-        print(f"[TOTAL] Стоимость генерации: ${_session_cost:.4f}")
-        print(f"{'='*50}")
+        result["_cost_usd"] = round(get_session_cost(), 4)
+        log.info("[TOTAL] Тип: %s | Тема: %s | Стоимость: $%.4f", work_type, topic[:40], get_session_cost())
         return result
 
     # Расчёт объёма с учётом служебных страниц
     service_pages = SERVICE_PAGES.get(work_type, 0)
     text_pages    = max(pages - service_pages, 1)
     total_words   = text_pages * rules["words_per_page"]
-    print(f"Запрошено страниц: {pages}")
-    print(f"Служебных страниц: {service_pages}")
-    print(f"Страниц основного текста: {text_pages}")
-    print(f"Целевой объём слов: {total_words}")
+    log.info("Страниц: %s (служебных %d, текстовых %d) | Целевой объём: %d слов",
+             pages, service_pages, text_pages, total_words)
     intro_words      = rules["intro_words"]
     conclusion_words = rules["conclusion_words"]
     body_words       = total_words - intro_words - conclusion_words
@@ -937,11 +560,15 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     CONCLUSION_UNITS = 8
 
     # Шаг 0: Источники через Claude
-    print("Шаг 0: Генерирую источники...")
     progress_done = 0
-    if progress_cb:
-        progress_cb(progress_done + SOURCES_UNITS, 100, "Подбираем источники")
-    sources = generate_sources(topic, count=sources_min, doc_lang=doc_lang)
+    sources = (ck or {}).get("sources")
+    if sources:
+        log.info("Шаг 0: источники восстановлены из checkpoint (%d шт.)", len(sources))
+    else:
+        log.info("Шаг 0: Генерирую источники...")
+        if progress_cb:
+            progress_cb(progress_done + SOURCES_UNITS, 100, "Подбираем источники")
+        sources = generate_sources(topic, count=sources_min, doc_lang=doc_lang)
     progress_done += SOURCES_UNITS
 
     if sources:
@@ -958,14 +585,19 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
 
     # Шаг 1: Структура
     preset_structure = _normalize_custom_structure(custom_structure, work_type)
-    if preset_structure:
-        print("Шаг 1: Используем структуру из предпросмотра...")
+    ck_structure = (ck or {}).get("structure") if not preset_structure else None
+    if ck_structure:
+        log.info("Шаг 1: структура восстановлена из checkpoint (%d разделов)", len(ck_structure))
+        structure = ck_structure
+        progress_done += STRUCTURE_UNITS
+    elif preset_structure:
+        log.info("Шаг 1: Используем структуру из предпросмотра...")
         if progress_cb:
             progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
         structure = preset_structure
         progress_done += STRUCTURE_UNITS
     else:
-        print("Шаг 1: Генерирую структуру...")
+        log.info("Шаг 1: Генерирую структуру...")
         if progress_cb:
             progress_cb(progress_done + STRUCTURE_UNITS, 100, "Собираем структуру работы")
         data1     = ask_json(get_structure_prompt(topic, work_type, rules, doc_lang))
@@ -985,72 +617,91 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
     sub_words = max(200, body_words // max(len(sub_sections), 1))
 
     content = {}
+    ck_content = (ck or {}).get("content") or {}
+    # Накопительный checkpoint: content мутируется по ходу генерации,
+    # save_checkpoint сериализует его текущее состояние.
+    ck_state = {"sources": sources, "structure": structure, "content": content}
 
     sections_count = max(len(section_names), 1)
     per_section_units = max(1, BODY_TOTAL_UNITS // sections_count)
     body_units = per_section_units * sections_count
     # Шаг 2: Введение
-    print("Шаг 2: Пишу введение...")
-    if progress_cb:
-        intro_start = progress_done + max(1, INTRO_UNITS // 3)
-        progress_cb(intro_start, 100, "Пишем введение")
-    content[labels["intro"]] = ask_text(
-        get_intro_prompt(topic, work_type, intro_words, sources_instruction, doc_lang)
-    )
-    _check_volume(labels["intro"], content[labels["intro"]], intro_words)
+    if labels["intro"] in ck_content:
+        content[labels["intro"]] = ck_content[labels["intro"]]
+        log.info("Шаг 2: введение восстановлено из checkpoint")
+    else:
+        log.info("Шаг 2: Пишу введение...")
+        if progress_cb:
+            intro_start = progress_done + max(1, INTRO_UNITS // 3)
+            progress_cb(intro_start, 100, "Пишем введение")
+        content[labels["intro"]] = ask_text(
+            get_intro_prompt(topic, work_type, intro_words, sources_instruction, doc_lang)
+        )
+        _check_volume(labels["intro"], content[labels["intro"]], intro_words)
+        jobstore.save_checkpoint(ck_key, ck_state)
     progress_done += INTRO_UNITS
     if progress_cb:
         progress_cb(progress_done, 100, "Введение готово")
 
     # Шаг 3: Разделы
     for i, section in enumerate(section_names):
-        print(f"Шаг {i+3}: Пишу «{section}»...")
-        if progress_cb:
-            section_start = min(99, progress_done + 1)
-            progress_cb(section_start, 100, f"Пишем раздел {i + 1} из {len(section_names)}")
+        if section in ck_content:
+            content[section] = ck_content[section]
+            log.info("Шаг %d: раздел «%s» восстановлен из checkpoint", i + 3, section[:60])
+        else:
+            log.info("Шаг %d: Пишу «%s»...", i + 3, section[:60])
+            if progress_cb:
+                section_start = min(99, progress_done + 1)
+                progress_cb(section_start, 100, f"Пишем раздел {i + 1} из {len(section_names)}")
 
-        parts  = section.split(".")
-        is_sub = len(parts) >= 3 and parts[1].strip()[:1].isdigit()
+            parts  = section.split(".")
+            is_sub = len(parts) >= 3 and parts[1].strip()[:1].isdigit()
 
-        # Ищем родительскую главу для подглав
-        parent = ""
-        if is_sub:
-            ch_num = parts[0].strip()
-            parent = next(
-                (s for s in section_names
-                 if s.split(".")[0].strip() == ch_num
-                 and not (len(s.split(".")) >= 3 and s.split(".")[1].strip()[:1].isdigit())),
-                ""
+            # Ищем родительскую главу для подглав
+            parent = ""
+            if is_sub:
+                ch_num = parts[0].strip()
+                parent = next(
+                    (s for s in section_names
+                     if s.split(".")[0].strip() == ch_num
+                     and not (len(s.split(".")) >= 3 and s.split(".")[1].strip()[:1].isdigit())),
+                    ""
+                )
+
+            words = sub_words if is_sub else 80
+            content[section] = ask_text(
+                get_section_prompt(topic, section, parent,
+                                   words, work_type, sources_instruction, doc_lang)
             )
-
-        words            = sub_words if is_sub else 80
-        content[section] = ask_text(
-            get_section_prompt(topic, section, parent,
-                               words, work_type, sources_instruction, doc_lang)
-        )
-        _check_volume(section, content[section], words)
+            _check_volume(section, content[section], words)
+            jobstore.save_checkpoint(ck_key, ck_state)
         progress_done += per_section_units
         if progress_cb:
             progress_cb(progress_done, 100, f"Раздел {i + 1} из {len(section_names)} готов")
         time.sleep(0.5)
 
     # Шаг 4: Заключение
-    print("Пишу заключение...")
-    if progress_cb:
-        progress_cb(progress_done + CONCLUSION_UNITS, 100, "Пишем заключение")
-    content[labels["conclusion"]] = ask_text(
-        get_conclusion_prompt(topic, work_type, conclusion_words, doc_lang)
-    )
-    _check_volume(labels["conclusion"], content[labels["conclusion"]], conclusion_words)
+    if labels["conclusion"] in ck_content:
+        content[labels["conclusion"]] = ck_content[labels["conclusion"]]
+        log.info("Заключение восстановлено из checkpoint")
+    else:
+        log.info("Пишу заключение...")
+        if progress_cb:
+            progress_cb(progress_done + CONCLUSION_UNITS, 100, "Пишем заключение")
+        content[labels["conclusion"]] = ask_text(
+            get_conclusion_prompt(topic, work_type, conclusion_words, doc_lang)
+        )
+        _check_volume(labels["conclusion"], content[labels["conclusion"]], conclusion_words)
+        jobstore.save_checkpoint(ck_key, ck_state)
 
     total_chars     = sum(len(v) for v in content.values())
     estimated_pages = round(total_chars / 1800)
-    print(f"Готово! Примерный объём: {estimated_pages} страниц")
+    log.info("Готово! Примерный объём: %d страниц", estimated_pages)
+    log.info("[TOTAL] Тип: %s | Тема: %s | Стоимость генерации: $%.4f",
+             work_type, topic[:40], get_session_cost())
 
-    print(f"{'='*50}")
-    print(f"[TOTAL] Тип: {work_type} | Тема: {topic[:40]}")
-    print(f"[TOTAL] Стоимость генерации: ${_session_cost:.4f}")
-    print(f"{'='*50}")
+    # Работа завершена успешно — checkpoint больше не нужен.
+    jobstore.clear_checkpoint(ck_key)
 
     meta = {
         "Тип работы":  work_type,
@@ -1071,13 +722,26 @@ def generate_work(topic: str, pages: int, work_type: str = "Реферат",
         "sources":   sources,
         "meta":      meta,
         "profile":   profile or {},
-        "_cost_usd": round(_session_cost, 4),
+        "_cost_usd": round(get_session_cost(), 4),
     }
 
 
 PREVIEW_WORK_TYPES = frozenset(
     {"Сочинение", "Эссе", "Доклад", "Реферат", "Курсовая", "ВКР", "Тест"}
 )
+
+
+def _normalize_work_type(wt_in: str) -> str:
+    s = (wt_in or "").strip()
+    sl = s.lower()
+    for allowed in PREVIEW_WORK_TYPES:
+        if allowed.lower() == sl:
+            return allowed
+    if "курсов" in sl:
+        return "Курсовая"
+    if "диплом" in sl or "вкр" in sl:
+        return "ВКР"
+    return "Реферат"
 
 
 def _first_chapter_heading_from_toc(toc_rows: list[dict]) -> str:
@@ -1116,25 +780,29 @@ def _rebuild_preview_toc_chapters(
     Заголовки подтягиваем из ответа модели по num, иначе — нейтральные заглушки.
     """
     by_num: dict[str, str] = {}
+    intro_title = intro_w
+    concl_title = concl_w
+    src_title = src_w
     for r in ai_rows:
         k = str(r.get("num", "")).strip()
         t = str(r.get("title", "")).strip()
         if not t:
             continue
+        ttl = t.lower()
+        is_intro = any(x in ttl for x in ("введени", "кіріспе", "kirispe", "introduction"))
+        is_concl = any(x in ttl for x in ("заключ", "қорыт", "conclusion", "tynystau"))
+        is_src = any(x in ttl for x in ("источн", "литератур", "references", "дереккөз", "bibliography"))
+        if is_intro and not is_concl and not is_src:
+            intro_title = t[:200]
+            continue
+        if is_concl:
+            concl_title = t[:200]
+            continue
+        if is_src:
+            src_title = t[:200]
+            continue
         if k not in by_num or len(t) > len(by_num[k]):
             by_num[k] = t[:200]
-
-    concl_title = concl_w
-    src_title = src_w
-    for r in ai_rows:
-        tt = str(r.get("title", "")).strip()
-        if not tt:
-            continue
-        ttl = tt.lower()
-        if any(x in ttl for x in ("заключ", "қорыт", "conclusion", "tynystau")):
-            concl_title = tt[:200]
-        if any(x in ttl for x in ("источн", "литератур", "references", "дереккөз", "bibliography")):
-            src_title = tt[:200]
 
     ch_def = {
         "ru": ("Теоретические аспекты темы", "Анализ ключевых положений", "Практическая значимость"),
@@ -1150,7 +818,7 @@ def _rebuild_preview_toc_chapters(
 
     rows: list[dict] = []
     p = 3
-    rows.append({"num": "", "title": (by_num.get("", intro_w))[:200], "page": str(p)})
+    rows.append({"num": "", "title": intro_title[:200], "page": str(p)})
     p += 2
     for ch in range(1, chapters_count + 1):
         nk = str(ch)
@@ -1170,13 +838,17 @@ def _rebuild_preview_toc_chapters(
 
 
 def _rebuild_preview_toc_essay(ai_rows: list[dict], _intro_w: str, _concl_w: str, doc_lang: str) -> list[dict]:
-    """Сочинение/эссе: в содержании только основная часть (глава 1 и подпункты)."""
+    """Сочинение/эссе: в содержании только смысловые части без номеров глав."""
     by_num: dict[str, str] = {}
+    titles: list[str] = []
     for r in ai_rows:
         k = str(r.get("num", "")).strip()
         t = str(r.get("title", "")).strip()
+        # Убираем любые лидирующие цифры: «1. », «1 », «1: »
+        t = re.sub(r"^\d+(?:\.\d+)*[.:]?\s*", "", t).strip()
         if not t:
             continue
+        titles.append(t[:200])
         if k not in by_num or len(t) > len(by_num[k]):
             by_num[k] = t[:200]
 
@@ -1186,10 +858,14 @@ def _rebuild_preview_toc_essay(ai_rows: list[dict], _intro_w: str, _concl_w: str
         "en": ("Main body", "Arguments and examples", "Developing the idea"),
     }.get(doc_lang, ("Main body", "Arguments", "Development"))
 
+    t1 = titles[0] if len(titles) > 0 else (by_num.get("1") or by_num.get("") or b[0])
+    t2 = titles[1] if len(titles) > 1 else (by_num.get("1.1") or b[1])
+    t3 = titles[2] if len(titles) > 2 else (by_num.get("1.2") or b[2])
+
     return [
-        {"num": "1", "title": (by_num.get("1") or b[0])[:200], "page": "1"},
-        {"num": "1.1", "title": (by_num.get("1.1") or b[1])[:200], "page": "2"},
-        {"num": "1.2", "title": (by_num.get("1.2") or b[2])[:200], "page": "3"},
+        {"num": "", "title": t1[:200], "page": "1"},
+        {"num": "", "title": t2[:200], "page": "2"},
+        {"num": "", "title": t3[:200], "page": "3"},
     ]
 
 
@@ -1198,16 +874,13 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
     Дешёвый предпросмотр: оглавление + начало первого раздела + названия остальных.
     Без источников и без полного текста.
     """
-    global _session_cost
-    _session_cost = 0.0
+    reset_session_cost()
 
     topic = (topic or "").strip()
     if not topic:
         raise ValueError("Пустая тема")
 
-    wt = (work_type or "").strip()
-    if wt not in PREVIEW_WORK_TYPES:
-        wt = "Реферат"
+    wt = _normalize_work_type(work_type)
 
     doc_lang = detect_language_from_topic(topic)
     lab = _lang_labels(doc_lang)
@@ -1221,8 +894,8 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
 
     if wt in ("Сочинение", "Эссе"):
         structure_hint = (
-            f"Тип: {wt} — в toc для ответа можно дать строки «1», «1.1», «1.2» (основная часть с подпунктами); "
-            f"на сервере в предпросмотре останется только эта тройка. Заголовки на языке темы."
+            f"Тип: {wt} — в сочинении и эссе НЕТ глав и номеров (num строго пустой: ''). "
+            f"В toc дай 2–3 смысловые части (например, основная мысль, аргументы, развитие темы) без цифр в title и с пустым num. Заголовки на языке темы."
         )
     elif wt == "Тест":
         structure_hint = f"Тип: {wt} — минимальное оглавление из 1–2 строк или одна строка с пустым num."
@@ -1256,14 +929,14 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         max_preview_tokens = 3800
     else:
         json_spec = """{
-  "toc": [{"num": "1", "title": "название основной части без номера в title", "page": "строка"}, {"num": "1.1", "title": "...", "page": "строка"}, {"num": "1.2", "title": "...", "page": "строка"}],
+  "toc": [{"num": "", "title": "название смысловой части без номера", "page": "строка"}, {"num": "", "title": "...", "page": "строка"}],
   "continuous_excerpt": "строка — цельный связный отрывок начала работы без внутренних подзаголовков (~600 токенов выхода, до ~2600 знаков). Без markdown и без «ёлочек»; абзацы через \\n\\n",
-  "locked_section_titles": ["строка", "строка", ...]
+  "locked_section_titles": []
 }"""
         req_tail = """Требования:
-- toc: три строки с num «1», «1.1», «1.2» — только основная часть с подпунктами (без введения и заключения в списке).
-- continuous_excerpt: законченные абзацы, не обрыв на полуслове.
-- locked_section_titles: минимум 2 названия после показанного фрагмента.
+- toc: 2–3 строки с пустым num («») — только смысловые части без номеров глав.
+- continuous_excerpt: законченные абзацы, цельный связный текст без глав.
+- locked_section_titles: пустой массив [] (в сочинении нет отдельных глав).
 
 Не включай ключи кроме перечисленных. Не пиши пояснений вне JSON."""
         max_preview_tokens = 2200
@@ -1320,21 +993,29 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         ]
 
     locked = data.get("locked_section_titles") or []
-    if not isinstance(locked, list):
+    if not isinstance(locked, list) or wt in ("Сочинение", "Эссе"):
         locked = []
-    locked = [str(x).strip()[:200] for x in locked if str(x).strip()][:12]
+    else:
+        locked = [str(x).strip()[:200] for x in locked if str(x).strip()][:12]
 
     if len(clean_toc) < 3:
         mid_labels = {"ru": "Основная часть", "kz": "Негізгі бөлім", "en": "Main body"}
         sub_labels = {"ru": "Развитие темы", "kz": "Тақырыпты дамыту", "en": "Developing the topic"}
         mid = mid_labels.get(doc_lang, mid_labels["ru"])
         sub = sub_labels.get(doc_lang, sub_labels["ru"])
-        clean_toc = [
-            {"num": "", "title": intro_w, "page": "3"},
-            {"num": "1", "title": mid, "page": "5"},
-            {"num": "1.1", "title": sub, "page": "6"},
-            {"num": "", "title": concl_w, "page": "…"},
-        ]
+        if wt in ("Сочинение", "Эссе"):
+            clean_toc = [
+                {"num": "", "title": mid, "page": "1"},
+                {"num": "", "title": sub, "page": "2"},
+                {"num": "", "title": "Примеры и рассуждения", "page": "3"},
+            ]
+        else:
+            clean_toc = [
+                {"num": "", "title": intro_w, "page": "3"},
+                {"num": "1", "title": mid, "page": "5"},
+                {"num": "1.1", "title": sub, "page": "6"},
+                {"num": "", "title": concl_w, "page": "…"},
+            ]
 
     ph = {
         "ru": "Здесь появится начало работы после генерации.",
@@ -1348,6 +1029,20 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         ch1_title = str(data.get("first_chapter_title", "") or "").strip()[:300]
         if not ch1_title:
             ch1_title = _first_chapter_heading_from_toc(clean_toc)
+        if clean_toc and ch1_title:
+            import re
+            ch1_clean = re.sub(r"^\d+(\.\d+)*\.?\s*", "", ch1_title).strip()
+            ch1_row = next(
+                (r for r in clean_toc if re.sub(r"^\d+(\.\d+)*\.?\s*", "", str(r.get("title", ""))).strip().lower() == ch1_clean.lower()),
+                None
+            )
+            if not ch1_row:
+                ch1_row = next((r for r in clean_toc if str(r.get("num", "")).strip() == "1"), None)
+            if ch1_row and ch1_row.get("num"):
+                c_num = str(ch1_row.get("num", "")).strip()
+                c_clean = re.sub(r"^\d+(\.\d+)*\.?\s*", "", str(ch1_row.get("title", ""))).strip()
+                ch1_title = f"{c_num}. {c_clean}"
+
         ch1_txt = clean_text(str(data.get("first_chapter_excerpt", "") or ""))[:2800]
         if intro_t:
             excerpt_sections.append({"title": intro_w, "text": intro_t})
@@ -1380,9 +1075,26 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
     if not excerpt:
         excerpt = ph
 
-    while len(locked) < 4:
-        n = len(locked) + 1
-        locked.append({ "ru": f"Раздел {n}", "kz": f"Бөлім {n}", "en": f"Section {n}" }.get(doc_lang, f"Раздел {n}"))
+    if split_preview and clean_toc:
+        import re
+        shown_clean = {re.sub(r"^\d+(\.\d+)*\.?\s*", "", s["title"]).strip().lower() for s in excerpt_sections}
+        locked_from_toc = []
+        for r in clean_toc:
+            t = str(r.get("title", "")).strip()
+            if not t:
+                continue
+            tc = re.sub(r"^\d+(\.\d+)*\.?\s*", "", t).strip().lower()
+            if tc in shown_clean:
+                continue
+            num = str(r.get("num", "")).strip()
+            clean_t = re.sub(r"^\d+(\.\d+)*\.?\s*", "", t).strip()
+            locked_from_toc.append(f"{num}. {clean_t}" if num else clean_t)
+        if locked_from_toc:
+            locked = locked_from_toc
+    else:
+        while len(locked) < 4:
+            n = len(locked) + 1
+            locked.append({ "ru": f"Раздел {n}", "kz": f"Бөлім {n}", "en": f"Section {n}" }.get(doc_lang, f"Раздел {n}"))
 
     return {
         "work_type": wt,
@@ -1394,7 +1106,7 @@ def generate_payment_preview(topic: str, work_type: str) -> dict:
         "excerpt": excerpt,
         "excerpt_sections": excerpt_sections,
         "locked_section_titles": locked,
-        "_cost_usd": round(_session_cost, 4),
+        "_cost_usd": round(get_session_cost(), 4),
     }
 
 

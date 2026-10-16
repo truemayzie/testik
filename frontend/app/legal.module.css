@@ -2,7 +2,7 @@
    LEGAL PAGES — shared styles
 ══════════════════════════════════════════ */
 .hero {
-  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
+  background: linear-gradient(160deg, #EAF1FF 0%, #F4F8FF 55%, #FFFFFF 100%);
   padding: 52px 24px 56px;
   text-align: center;
 }
@@ -13,26 +13,26 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #93B5D9;
-  background: rgba(27,58,107,0.2);
-  border: 1px solid rgba(147,181,217,0.3);
+  color: var(--primary-ink, #0F3D99);
+  background: rgba(29, 92, 255, 0.1);
+  border: 1px solid rgba(29, 92, 255, 0.25);
   border-radius: 100px;
   padding: 4px 14px;
   margin-bottom: 18px;
 }
 
 .heroTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: clamp(1.6rem, 4vw, 2.4rem);
   font-weight: 700;
-  color: #fff;
+  color: var(--ink, #0F172A);
   margin: 0 0 10px;
   letter-spacing: -0.01em;
 }
 
 .heroMeta {
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.4);
+  color: var(--ink-muted, #5B6472);
   margin: 0;
 }
 
@@ -54,15 +54,15 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #1B3A6B;
-  background: #EFF6FF;
+  color: var(--primary-ink, #0F3D99);
+  background: var(--primary-soft, #EAF1FF);
   border-radius: 5px;
   padding: 2px 8px;
   margin-bottom: 10px;
 }
 
 .sectionTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -99,14 +99,14 @@
   content: "—";
   position: absolute;
   left: 0;
-  color: #1B3A6B;
+  color: var(--primary, #1D5CFF);
   font-weight: 700;
 }
 
 /* ── Info block ── */
 .infoBlock {
-  background: #EFF6FF;
-  border: 1px solid #BFCFE3;
+  background: var(--primary-soft, #EAF1FF);
+  border: 1px solid rgba(29, 92, 255, 0.22);
   border-radius: 12px;
   padding: 20px 24px;
   margin: 20px 0;
@@ -115,14 +115,14 @@
 .infoBlock p {
   font-size: 0.88rem;
   line-height: 1.7;
-  color: #15305A;
+  color: var(--primary-ink, #0F3D99);
   margin: 0 0 6px;
 }
 
 .infoBlock p:last-child { margin-bottom: 0; }
 
 .infoBlock strong {
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
 }
 
 /* ── Warning block ── */
@@ -183,7 +183,7 @@
   gap: 6px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #1B3A6B;
+  color: var(--primary, #1D5CFF);
   text-decoration: none;
   margin-bottom: 36px;
 }

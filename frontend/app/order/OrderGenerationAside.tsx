@@ -11,6 +11,7 @@ import {
   type OrderGenSession,
 } from "@/lib/orderGenerationSession";
 import { loadPreviewStructureForTask } from "@/lib/previewStructure";
+import { loadPublicChoiceForTask } from "@/lib/orderPublicChoice";
 import styles from "./order.module.css";
 
 type Props = {
@@ -112,6 +113,7 @@ export default function OrderGenerationAside({
       extrasItems: extras,
       taskId,
       structure: loadPreviewStructureForTask(taskId) ?? undefined,
+      isPublic: loadPublicChoiceForTask(taskId),
       onGenerationId: (genId, at) => {
         patchOrderGenSession(taskId, { generationId: genId, startedAt: at, phase: "generating" });
         markOrderGenerationStartedForTask(taskId, at);

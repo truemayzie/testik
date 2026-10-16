@@ -5,7 +5,15 @@ export type PreviewTocRow = PreviewPayload["toc"][number];
 export const STRUCTURE_WORK_TYPES = new Set(["Доклад", "Реферат", "Курсовая", "ВКР"]);
 
 export function supportsPreviewStructure(workType: string): boolean {
-  return STRUCTURE_WORK_TYPES.has(workType);
+  const norm = (workType || "").trim().toLowerCase();
+  return (
+    norm === "доклад" ||
+    norm === "реферат" ||
+    norm === "курсовая" ||
+    norm.startsWith("курсов") ||
+    norm === "вкр" ||
+    norm.startsWith("диплом")
+  );
 }
 
 /** Преобразует строку TOC превью в элемент structure для backend generator. */
@@ -35,7 +43,9 @@ function structureStorageKey(taskId: string): string {
 export function savePreviewStructureForTask(taskId: string, structure: string[]): void {
   if (!taskId || structure.length < 2) return;
   try {
-    sessionStorage.setItem(structureStorageKey(taskId), JSON.stringify(structure));
+    const val = JSON.stringify(structure);
+    sessionStorage.setItem(structureStorageKey(taskId), val);
+    localStorage.setItem(structureStorageKey(taskId), val);
   } catch {
     /* ignore */
   }
@@ -44,7 +54,9 @@ export function savePreviewStructureForTask(taskId: string, structure: string[])
 export function loadPreviewStructureForTask(taskId: string): string[] | null {
   if (!taskId) return null;
   try {
-    const raw = sessionStorage.getItem(structureStorageKey(taskId));
+    const raw =
+      sessionStorage.getItem(structureStorageKey(taskId)) ||
+      localStorage.getItem(structureStorageKey(taskId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
@@ -63,6 +75,7 @@ export function clearPreviewStructureForTask(taskId: string): void {
   if (!taskId) return;
   try {
     sessionStorage.removeItem(structureStorageKey(taskId));
+    localStorage.removeItem(structureStorageKey(taskId));
   } catch {
     /* ignore */
   }

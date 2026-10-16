@@ -347,7 +347,8 @@ def generate_speech(job_id: str, topic: str, work_type: str, result: dict,
         run.font.name = "Times New Roman"
         run.font.size = DocPt(14)
 
-    output = f"/tmp/speech_{job_id}.docx"
+    import jobstore
+    output = jobstore.extras_file_path(f"speech_{job_id}.docx")
     doc.save(output)
     print(f"[extras] Текст выступления сохранён: {output}")
     return output

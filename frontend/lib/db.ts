@@ -42,7 +42,9 @@ export async function saveGeneration(
       workType,
       result: JSON.stringify(result),
       status: "completed",
-      isPublic: true,
+      // Приватность по умолчанию: работы пользователей не публикуются.
+      // Публичная витрина /preview + sitemap наполняются только по явному opt-in.
+      isPublic: false,
       slug,
     },
   });
@@ -56,9 +58,13 @@ export async function createRunningGeneration(params: {
   workType: string;
   jobId: string;
   previewTaskId?: string;
+  /** Явное согласие опубликовать работу (opt-in с checkout). По умолчанию — приватно. */
+  isPublic?: boolean;
 }) {
-  const extras: Record<string, string> = { _jobId: params.jobId };
+  const extras: Record<string, string | boolean> = { _jobId: params.jobId };
   if (params.previewTaskId) extras._taskId = params.previewTaskId;
+  // Флаг публикации кладём в extras — finalizeRunningGeneration прочитает его при завершении.
+  if (params.isPublic === true) extras._public = true;
   return await prisma.generation.create({
     data: {
       userId: params.userId,
@@ -94,8 +100,11 @@ export async function finalizeRunningGeneration(params: {
   }
 
   const extras = safeParseExtras(gen.extras);
-  // удаляем служебный _jobId, оставляем возможные presentation/speech и т.п.
+  // Публикуем только при явном согласии пользователя (opt-in с checkout).
+  const wantPublic = extras._public === true;
+  // удаляем служебные поля, оставляем возможные presentation/speech/_taskId и т.п.
   delete extras._jobId;
+  delete extras._public;
   const extrasStr = Object.keys(extras).length ? JSON.stringify(extras) : null;
 
   return await prisma.generation.update({
@@ -103,7 +112,7 @@ export async function finalizeRunningGeneration(params: {
     data: {
       result: JSON.stringify(params.result),
       status: "completed",
-      isPublic: true,
+      isPublic: wantPublic,
       slug: gen.slug || slug,
       extras: extrasStr,
     },
@@ -149,6 +158,7 @@ export async function getUserGenerations(userId: string) {
       status:    true,
       createdAt: true,
       slug:      true,
+      isPublic:  true,
       extras:    true,
       // result не включаем — он большой, загружаем отдельно
     },

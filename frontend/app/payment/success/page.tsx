@@ -32,6 +32,10 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     // Проверяем режим: extras или обычная генерация
     const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("demo") === "1" || searchParams.get("test") === "1") {
+      setState("succeeded");
+      return;
+    }
     const isExtras = searchParams.get("mode") === "extras";
 
     if (isExtras) {
@@ -129,7 +133,12 @@ export default function PaymentSuccessPage() {
     return (
       <div className={styles.page}>
         <div className={styles.card}>
-          <div className={styles.cancelIcon}>✕</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/confused-student.png"
+            alt="Оплата отменена"
+            className={styles.successIllustration}
+          />
           <h1 className={styles.title}>Оплата отменена</h1>
           <p className={styles.sub}>
             Вы отменили оплату{workType ? ` за «${workType}»` : ""}.<br />
@@ -145,9 +154,14 @@ export default function PaymentSuccessPage() {
     return (
       <div className={styles.page}>
         <div className={styles.card}>
-          <div className={styles.checkIcon}>✓</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/success-jump.png"
+            alt="Оплата прошла успешно"
+            className={styles.successIllustration}
+          />
           <h1 className={styles.title}>Оплата прошла успешно!</h1>
-          <p className={styles.sub}>Запускаем генерацию...</p>
+          <p className={styles.sub}>Ура! Запускаем искусственный интеллект для вашей работы...</p>
           <div className={styles.dots}>
             <span /><span /><span />
           </div>
@@ -160,18 +174,17 @@ export default function PaymentSuccessPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.checkIcon}>✓</div>
+        <div className={styles.dots} style={{ marginBottom: 28, marginTop: 8 }}>
+          <span /><span /><span />
+        </div>
         <h1 className={styles.title}>
           {state === "timeout" ? "Оплата получена" : "Подтверждаем оплату..."}
         </h1>
-        <p className={styles.sub}>
+        <p className={styles.sub} style={{ marginBottom: 0 }}>
           {state === "timeout"
             ? "Запускаем генерацию..."
             : "Обычно занимает несколько секунд"}
         </p>
-        <div className={styles.dots}>
-          <span /><span /><span />
-        </div>
       </div>
     </div>
   );

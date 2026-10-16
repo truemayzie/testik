@@ -127,22 +127,22 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
         <section className={styles.benefitsGrid}>
           {[
             {
-              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3A6B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #1D5CFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
               title: "Word по ГОСТ",
               sub: "Times New Roman 14pt, поля 30/10/20/20",
             },
             {
-              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3A6B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #1D5CFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>,
               title: `${data.pages} стр.`,
               sub: "Введение, главы, заключение",
             },
             {
-              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3A6B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #1D5CFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
               title: "Антиплагиат 80%+",
               sub: "Уникальный авторский текст",
             },
             {
-              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3A6B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #1D5CFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>,
               title: "Реальные источники",
               sub: "Актуальные источники 2020–2025",
             },
@@ -267,8 +267,8 @@ export default function PreviewClient({ data, slug, fullContent, fullSources }: 
             <div className={styles.ctaInner}>
               <div className={styles.ctaLockIcon}>
                 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="3" y="11" width="18" height="12" rx="3" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5"/>
-                  <path d="M7 11V7a5 5 0 0110 0v4" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <rect x="3" y="11" width="18" height="12" rx="3" fill="rgba(29, 92, 255, 0.08)" stroke="rgba(29, 92, 255, 0.45)" strokeWidth="1.5"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4" stroke="rgba(29, 92, 255, 0.45)" strokeWidth="1.5" strokeLinecap="round"/>
                   <circle cx="12" cy="17" r="1.5" fill="#D97706"/>
                 </svg>
               </div>

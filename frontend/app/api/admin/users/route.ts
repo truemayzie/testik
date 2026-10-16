@@ -12,9 +12,10 @@ export async function GET(req: NextRequest) {
   const users = await prisma.user.findMany({
     where: search
       ? {
+          // mode: "insensitive" — в PostgreSQL contains регистрозависим (в SQLite был нет)
           OR: [
-            { name:  { contains: search } },
-            { email: { contains: search } },
+            { name:  { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
           ],
         }
       : undefined,

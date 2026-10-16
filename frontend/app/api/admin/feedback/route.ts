@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const limit = 20;
   const issue = req.nextUrl.searchParams.get("issue") ?? "";
 
-  // Если фильтр по issue — используем LIKE по JSON-строке (SQLite)
-  const where = issue ? { issues: { contains: issue } } : {};
+  // Если фильтр по issue — LIKE по JSON-строке (insensitive: в PostgreSQL LIKE регистрозависим)
+  const where = issue ? { issues: { contains: issue, mode: "insensitive" as const } } : {};
 
   const [total, items] = await Promise.all([
     prisma.feedbackComment.count({ where }),

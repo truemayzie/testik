@@ -1,0 +1,64 @@
+/* ── SectionHeading: дизайн-система «Light & Trust» ── */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.withAside {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.center {
+  align-items: center;
+  text-align: center;
+}
+
+.center .texts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.title {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.lead {
+  max-width: 560px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.aside {
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .withAside {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .wrap {
+    margin-bottom: 28px;
+  }
+}

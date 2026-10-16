@@ -38,16 +38,16 @@
 }
 
 .footerLogoSpark {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 6px rgba(251,191,36,0.4));
+  filter: drop-shadow(0 1px 6px rgba(29,92,255,0.35));
 }
 
 .footerLogoWord { color: rgba(255,255,255,0.9); }
 
 .footerLogoAi {
-  color: #FBBF24;
+  color: #4D82FF;
 }
 
 .footerTagline {
@@ -64,7 +64,7 @@
 }
 
 .footerContact a {
-  color: #93B5D9;
+  color: #A8C3F5;
   text-decoration: none;
 }
 
@@ -132,14 +132,14 @@
   transition: color 0.2s;
 }
 
-.footerLinks a:hover { color: #93B5D9; }
+.footerLinks a:hover { color: #A8C3F5; }
 
 .footerMailLink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 0.88rem;
-  color: #93B5D9 !important;
+  color: #A8C3F5 !important;
   text-decoration: none;
   transition: color 0.2s;
 }

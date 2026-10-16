@@ -1,0 +1,469 @@
+/* ── База работ (/works) ── */
+
+.page {
+  min-height: 100vh;
+  background: var(--bg-soft, #F6F7F9);
+  padding: 44px 20px 80px;
+}
+
+.container {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+/* ── Hero + поиск ── */
+.hero {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.heroIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  margin-bottom: 14px;
+}
+
+.title {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  color: #0F172A;
+  margin: 0 0 10px;
+  letter-spacing: -0.02em;
+}
+
+.subline {
+  font-size: 0.95rem;
+  color: #64748B;
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.searchWrap {
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchWrap:focus-within {
+  border-color: rgba(29, 92, 255, 0.45);
+  box-shadow: 0 4px 24px rgba(29, 92, 255, 0.12);
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #0F172A;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.searchInput::placeholder {
+  color: #94A3B8;
+}
+
+.searchBtn {
+  border: none;
+  background: var(--primary, #1D5CFF);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.searchBtn:hover { background: #1A4FE0; }
+.searchBtn:active { transform: scale(0.98); }
+.searchBtn:disabled { opacity: 0.6; cursor: default; }
+
+.resetBtn {
+  margin-top: 14px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary, #1D5CFF);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.resetBtn:hover {
+  background: rgba(29, 92, 255, 0.08);
+}
+
+/* ── Заголовки секций ── */
+.sectionTitle {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid rgba(29, 92, 255, 0.18);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sectionTitle::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: var(--primary, #1D5CFF);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Типы работ ── */
+.typesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.typeCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 20px;
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.typeCard:hover {
+  border-color: rgba(29, 92, 255, 0.35);
+  box-shadow: 0 6px 24px rgba(29, 92, 255, 0.10);
+  transform: translateY(-2px);
+}
+
+.typeBadge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+.typeCount {
+  font-size: 0.88rem;
+  color: #64748B;
+}
+
+.typeCount strong {
+  color: #0F172A;
+  font-weight: 700;
+}
+
+.typeHint {
+  font-size: 0.8rem;
+  color: #94A3B8;
+}
+
+.typeLink {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--primary, #1D5CFF);
+  margin-top: 2px;
+}
+
+/* ── Свежие работы / результаты ── */
+.recentSection {
+  margin-top: 40px;
+}
+
+/* ── Счётчик в заголовке секции ── */
+.sectionCount {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748B;
+  background: rgba(29, 92, 255, 0.08);
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ── Чипы предметов ── */
+.subjectChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.subjectChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #334155;
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.subjectChip:hover {
+  border-color: rgba(29, 92, 255, 0.35);
+  box-shadow: 0 4px 16px rgba(29, 92, 255, 0.10);
+  transform: translateY(-1px);
+}
+
+.subjectChipCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(29, 92, 255, 0.10);
+  color: var(--primary, #1D5CFF);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+/* ── Блок предмета внутри типа ── */
+.subjectBlock {
+  margin-top: 20px;
+  scroll-margin-top: 20px;
+}
+
+.subjectTitle {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subjectCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.10);
+  color: #64748B;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+/* ── CTA ── */
+.cta {
+  margin-top: 48px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(29, 92, 255, 0.06), rgba(29, 92, 255, 0.02));
+  border: 1px solid rgba(29, 92, 255, 0.18);
+  border-radius: 20px;
+  padding: 36px 24px;
+}
+
+.ctaTitle {
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0F172A;
+  margin: 0 0 10px;
+}
+
+.ctaDesc {
+  font-size: 0.92rem;
+  color: #64748B;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.ctaBtn {
+  display: inline-block;
+  background: var(--primary, #1D5CFF);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 12px 32px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(29, 92, 255, 0.25);
+}
+
+.ctaBtn:hover {
+  background: #1A4FE0;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(29, 92, 255, 0.35);
+}
+
+.ctaBtn:active {
+  transform: scale(0.98);
+}
+
+.fallbackNote {
+  font-size: 0.88rem;
+  color: #64748B;
+  margin: -6px 0 16px;
+  line-height: 1.5;
+}
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.resultCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 18px 20px;
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.resultCard:hover {
+  border-color: rgba(29, 92, 255, 0.35);
+  box-shadow: 0 4px 20px rgba(29, 92, 255, 0.10);
+  transform: translateY(-1px);
+}
+
+.resultTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0F172A;
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.2s;
+}
+
+.resultCard:hover .resultTitle {
+  color: var(--primary, #1D5CFF);
+}
+
+.resultMeta {
+  font-size: 0.8rem;
+  color: #94A3B8;
+}
+
+/* ── Загрузка / пусто ── */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  color: #64748B;
+  font-size: 0.92rem;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(29, 92, 255, 0.15);
+  border-top-color: var(--primary, #1D5CFF);
+  border-radius: 50%;
+  animation: worksSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes worksSpin {
+  to { transform: rotate(360deg); }
+}
+
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  background: #fff;
+  border: 1px dashed #E2E8F0;
+  border-radius: 16px;
+  color: #64748B;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.emptyLink {
+  color: var(--primary, #1D5CFF);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.emptyLink:hover {
+  text-decoration: underline;
+}
+
+/* ── Мобильная версия ── */
+@media (max-width: 860px) {
+  .typesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 28px 14px 60px;
+  }
+
+  .typesGrid,
+  .resultsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .searchWrap {
+    flex-direction: column;
+  }
+
+  .searchBtn {
+    width: 100%;
+    padding: 12px;
+  }
+}

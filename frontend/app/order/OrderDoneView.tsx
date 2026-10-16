@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { WORK_PRICES } from "@/lib/prices";
+import ExtrasUpsell from "@/app/components/landing/ExtrasUpsell";
+import { reachFunnelGoal } from "@/lib/metrika";
 import {
   previewBodySections,
   sourceDisplayLine,
@@ -157,7 +160,9 @@ function OrderResultPreview({
 
 export default function OrderDoneView({ order }: { order: OrderState }) {
   const gen = useClientGeneration();
+  const router = useRouter();
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [upsellBusy, setUpsellBusy] = useState(false);
   const orderedExtras = order.extras.length
     ? order.extras
     : (loadOrderGenSession(order.taskId)?.extras ?? []);
@@ -303,6 +308,45 @@ export default function OrderDoneView({ order }: { order: OrderState }) {
   const speechReady = gen.extrasReady.includes("speech");
   const extrasPending = orderedExtras.length > 0 && missingExtras.length > 0;
 
+  const currentWorkType = gen.workType || order.workType;
+  const supportsExtras =
+    currentWorkType !== "Сочинение" &&
+    currentWorkType !== "Эссе" &&
+    currentWorkType !== "Тест";
+
+  // Апселл: показываем, только если extras поддерживаются, ещё не заказаны и не готовы
+  const showUpsell =
+    supportsExtras &&
+    loadState === "ready" &&
+    gen.result !== null &&
+    orderedExtras.length === 0 &&
+    gen.extrasReady.length === 0;
+
+  useEffect(() => {
+    if (showUpsell) reachFunnelGoal("extras_upsell_shown");
+  }, [showUpsell]);
+
+  const handleUpsellBuy = (items: string[]) => {
+    reachFunnelGoal("extras_upsell_buy");
+    setUpsellBusy(true);
+    try {
+      sessionStorage.setItem(
+        "pendingExtras",
+        JSON.stringify({
+          items,
+          generationId: gen.generationId,
+          result: gen.result,
+          workType: gen.workType || order.workType,
+          topic: gen.topic || order.topic,
+          returnTo: "dashboard",
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+    router.push(`/order/${order.taskId}?buyExtras=1`);
+  };
+
   return (
     <div className={payStyles.pageRoot}>
       <div className={payStyles.pageMain}>
@@ -390,6 +434,17 @@ export default function OrderDoneView({ order }: { order: OrderState }) {
                     </button>
                   ) : null}
                 </div>
+                {showUpsell ? (
+                  <ExtrasUpsell
+                    workType={gen.workType || order.workType}
+                    topic={gen.topic || order.topic}
+                    generationId={gen.generationId ?? ""}
+                    result={gen.result}
+                    onBuy={handleUpsellBuy}
+                    busy={upsellBusy}
+                  />
+                ) : null}
+
                 <div className={styles.genDoneFooter}>
                   <Link href="/dashboard" className={styles.genDashLink}>
                     Открыть в «Мои работы» →

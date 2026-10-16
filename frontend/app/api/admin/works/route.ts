@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
 
   const works = await prisma.generation.findMany({
     where: {
-      ...(search ? { topic: { contains: search } } : {}),
+      // mode: "insensitive" — в PostgreSQL contains регистрозависим (в SQLite был нет)
+      ...(search ? { topic: { contains: search, mode: "insensitive" as const } } : {}),
       ...(dateFrom || dateTo
         ? {
             createdAt: {

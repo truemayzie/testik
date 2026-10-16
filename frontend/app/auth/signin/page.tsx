@@ -49,14 +49,11 @@ function SignInInner() {
         <Link href="/" className={styles.logo}>
           <span className={styles.logoMark} aria-hidden>
             <svg className={styles.logoSpark} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="11" fill="url(#signinLogoBg)" />
-              <path d="M12 4.5L13.6 10.2L19.5 12L13.6 13.8L12 19.5L10.4 13.8L4.5 12L10.4 10.2Z" fill="#D97706" />
-              <defs>
-                <linearGradient id="signinLogoBg" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#1B3A6B" />
-                  <stop offset="1" stopColor="#0f2645" />
-                </linearGradient>
-              </defs>
+              <circle cx="12" cy="12" r="11.25" fill="var(--primary, #1D5CFF)" />
+              <rect x="6.38" y="7.13" width="11.25" height="1.88" rx="0.94" fill="#FFFFFF" />
+              <rect x="6.38" y="10.88" width="8.25" height="1.88" rx="0.94" fill="#FFFFFF" opacity="0.7" />
+              <rect x="6.38" y="14.63" width="6" height="1.88" rx="0.94" fill="#FFFFFF" />
+              <path d="M15.38 13.69Q16.03 14.91 17.25 15.56Q16.03 16.22 15.38 17.44Q14.72 16.22 13.5 15.56Q14.72 14.91 15.38 13.69Z" fill="#FFFFFF" />
             </svg>
           </span>
           <span className={styles.logoWord}>Ref<span className={styles.logoAi}>ai</span></span>

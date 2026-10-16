@@ -145,18 +145,22 @@ export default function VkrZakazPage() {
         <div className={styles.heroInner}>
           <span className={styles.heroLabel}>Выпускная квалификационная работа</span>
           <div className={styles.heroTitleRow}>
-            <h1 className={styles.heroH1}>ВКР и дипломная работа на заказ — онлайн по теме</h1>
+            <h1 className={styles.heroH1}>
+              ВКР и дипломная на заказ — <span className={styles.heroAccent}>ИИ пишет за вас</span>
+            </h1>
           </div>
 
           <div className={styles.heroTrustBadges}>
             <span className={styles.heroTrustBadge}>ГОСТ 7.32-2017</span>
             <span className={styles.heroTrustBadge}>Объём {PAGES}</span>
+            <span className={styles.heroTrustBadge}>Уникальность 70–90%</span>
             <span className={`${styles.heroTrustBadge} ${styles.heroTrustBadgeAccent}`}>от {PRICE.toLocaleString("ru-RU")} ₽</span>
           </div>
 
           <p className={styles.heroLead}>
-            Если искали <strong>«написание дипломной работы»</strong>, <strong>«вкр на заказ»</strong> или <strong>«купить дипломную работу»</strong> как готовый текст — здесь прозрачная цена без скрытых доплат.
-            Сервис использует <strong>ИИ</strong> по вашей теме: получаете DOCX по ГОСТ и источники в личном кабинете после оплаты (это текст работы, а не «бумажный диплом»).
+            Полный каркас выпускной работы: введение с актуальностью и целями, теоретическая и практическая
+            главы, заключение, библиография. <strong>Цена видна до оплаты</strong> — DOCX по ГОСТ скачивается
+            в личном кабинете (это текст работы, а не «бумажный диплом»).
           </p>
 
           <div className={styles.heroCtaBlock}>
@@ -372,8 +376,12 @@ export default function VkrZakazPage() {
 
       <div className={`${hub.cta} ${styles.spacingBeforeCtaHub} ${styles.kzHubWrap}`}>
         <span className={hub.ctaIcon} aria-hidden="true">
-          <svg width="32" height="32" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 1L11.8 8.2L19 10L11.8 11.8L10 19L8.2 11.8L1 10L8.2 8.2Z" fill="#D97706" />
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="11.25" fill="#1D5CFF"/>
+            <rect x="6.38" y="7.13" width="11.25" height="1.88" rx="0.94" fill="#FFFFFF"/>
+            <rect x="6.38" y="10.88" width="8.25" height="1.88" rx="0.94" fill="#FFFFFF" opacity="0.7"/>
+            <rect x="6.38" y="14.63" width="6" height="1.88" rx="0.94" fill="#FFFFFF"/>
+            <path d="M15.38 13.69Q16.03 14.91 17.25 15.56Q16.03 16.22 15.38 17.44Q14.72 16.22 13.5 15.56Q14.72 14.91 15.38 13.69Z" fill="#FFFFFF"/>
           </svg>
         </span>
         <h2 className={`${hub.ctaTitle} ${styles.kzHubTitle}`}>Готовы заказать ВКР?</h2>

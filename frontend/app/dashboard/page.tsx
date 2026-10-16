@@ -182,6 +182,12 @@ export default function DashboardPage() {
   }, [status]);
 
   useEffect(() => {
+    if (modalTab === "presentation" && !viewingGen?.extras?.presentation) {
+      setModalTab("work");
+    }
+  }, [modalTab, viewingGen?.extras?.presentation]);
+
+  useEffect(() => {
     if (status !== "authenticated") return;
     const hasRunning = generations.some(
       (g) => g.status !== "completed" && g.status !== "failed",
@@ -865,11 +871,7 @@ export default function DashboardPage() {
   const dashHasPresentationTab = !!vxDash?.extras?.presentation;
   const hasPresSlides = !!(presSlides && presSlides.length > 0);
 
-  useEffect(() => {
-    if (modalTab === "presentation" && !viewingGen?.extras?.presentation) {
-      setModalTab("work");
-    }
-  }, [modalTab, viewingGen?.extras?.presentation]);
+
 
   return (
     <div className={styles.page}>
@@ -879,16 +881,11 @@ export default function DashboardPage() {
         <div className={styles.heroShape1} />
         <div className={styles.heroShape2} />
         <div className={styles.heroShape3} />
-        <div className={styles.heroDocCards}>
-          <div className={styles.heroDocCard}><div className={styles.hdLine}/><div className={styles.hdLine}/><div className={styles.hdLineShort}/><span>РЕФЕРАТ</span></div>
-          <div className={`${styles.heroDocCard} ${styles.heroDocCardAlt}`}><div className={styles.hdLine}/><div className={styles.hdLine}/><div className={styles.hdLineShort}/><span>ЭССЕ</span></div>
-          <div className={styles.heroDocCard}><div className={styles.hdLine}/><div className={styles.hdLine}/><div className={styles.hdLineShort}/><span>КУРСОВАЯ</span></div>
-        </div>
         <div className={styles.heroBannerInner}>
           <div className={styles.heroBannerLeft}>
             <p className={styles.heroBannerGreeting}>Добро пожаловать</p>
             <h1 className={styles.heroBannerTitle}>
-              Привет, {user?.name?.split(" ")[0] || "студент"}! 👋
+              Привет, {user?.name?.split(" ")[0] || "студент"}!
             </h1>
             <div className={styles.heroBannerStats}>
               <div className={styles.heroBannerStat}>
@@ -898,7 +895,7 @@ export default function DashboardPage() {
               <div className={styles.heroBannerDivider}/>
               <div className={styles.heroBannerStat}>
                 <span className={styles.heroBannerStatNum}>DOCX</span>
-                <span className={styles.heroBannerStatLabel}>формат скачивания</span>
+                <span className={styles.heroBannerStatLabel}>формат</span>
               </div>
               <div className={styles.heroBannerDivider}/>
               <div className={styles.heroBannerStat}>
@@ -906,8 +903,15 @@ export default function DashboardPage() {
                 <span className={styles.heroBannerStatLabel}>оформление</span>
               </div>
             </div>
+            <a href="/" className={styles.newBtn}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M13.4408 2.5L12.6589 4.83853L10.3134 5.61804V6.54713L12.6589 7.32664L13.4408 9.66517H14.3727L15.1545 7.32664L17.5 6.54713V5.61804L15.1545 4.83853L14.3727 2.5H13.4408Z" fill="white"/>
+                <path d="M5.95057 10.8371L7.10076 7.39677H8.03263L9.18282 10.8371L12.6334 11.9838V12.9129L9.18282 14.0597L8.03263 17.5H7.10076L5.95057 17.5H7.10076L5.95057 14.0597L2.5 12.9129V11.9838L5.95057 10.83717" fill="white"/>
+              </svg>
+              Новая работа
+            </a>
           </div>
-          <a href="/" className={styles.newBtn}>⚡ Новая работа</a>
+          <img src="/illustrations/dashboard-docs.png" alt="Учебные работы" className={styles.heroDocsImg} />
         </div>
       </div>
 
@@ -935,8 +939,18 @@ export default function DashboardPage() {
             </div>
           ) : generations.length === 0 && visiblePendingOrders.length === 0 ? (
             <div className={styles.empty}>
-              <span className={styles.emptyIcon}>📋</span>
-              <p>У вас пока нет сохранённых работ</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/confused-student.png"
+                alt="Пока нет сохранённых работ"
+                className={styles.emptyIllustration}
+              />
+              <h3 className={styles.emptyTitle}>
+                У вас пока нет сохранённых работ
+              </h3>
+              <p className={styles.emptyDesc}>
+                Создайте свой первый реферат, курсовую или эссе всего за пару минут
+              </p>
               <a href="/" className={styles.emptyBtn}>Создать первую работу →</a>
             </div>
           ) : (

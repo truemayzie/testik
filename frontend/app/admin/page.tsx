@@ -39,7 +39,7 @@ function BarChart({ data }: { data: { date: string; count: number }[] }) {
           <g key={d.date}>
             <rect
               x={x} y={y} width={bw} height={bh}
-              fill={d.count > 0 ? "#1B3A6B" : "#DBEAFE"}
+              fill={d.count > 0 ? "var(--primary, #1D5CFF)" : "#EAF1FF"}
               rx="2"
               opacity={d.count > 0 ? 0.9 : 0.5}
             >

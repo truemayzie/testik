@@ -19,7 +19,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 CALLBACK_PORT = 9876
 CALLBACK_SECRET = os.getenv("PROXY_SECRET")
-SERVER_URL = "https://ref-ai.ru/proxy-callback"
+SERVER_URL = os.getenv("PROXY_CALLBACK_URL", "https://ref-ai.ru/proxy-callback")
 
 _responses: dict = {}
 _events: dict = {}
@@ -38,6 +38,12 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
         request_id = self.path.strip("/").split("/")[-1]
 
+        # Если запрос уже был отменён или сработал таймаут — не сохраняем ответ (защита от утечки памяти)
+        if request_id not in _events:
+            self.send_response(200)
+            self.end_headers()
+            return
+
         try:
             data = json.loads(body)
             if "content" in data:
@@ -54,8 +60,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
         except Exception as e:
             _responses[request_id] = {"text": f"ERROR: parse failed: {e} | body: {body[:200]}", "usage": {}}
 
-        if request_id in _events:
-            _events[request_id].set()
+        _events[request_id].set()
 
         self.send_response(200)
         self.end_headers()
@@ -69,6 +74,11 @@ class ReusableTCPServer(HTTPServer):
 
 
 def start_callback_server():
+    # Локальная разработка без GitHub Actions прокси: если прокси не настроен
+    # (нет GITHUB_TOKEN/GITHUB_REPO), callback-сервер не нужен вовсе — не стартуем его.
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        print("[Proxy] GITHUB_TOKEN/GITHUB_REPO не заданы — GitHub Actions прокси отключён, Claude вызывается напрямую.")
+        return
     if not CALLBACK_SECRET:
         raise RuntimeError("PROXY_SECRET is required for github proxy callback server")
     try:
@@ -146,23 +156,23 @@ def ask_via_github(model: str, max_tokens: int, messages: list) -> tuple[str, di
 
     print(f"[Proxy] Workflow запущен, ждём ответ...")
 
-    # GitHub Actions может быть в очереди, особенно в пиковые часы.
-    # 5 минут часто недостаточно и приводит к ложным падениям генерации.
-    if not event.wait(timeout=900):
-        raise Exception("Timeout: GitHub Actions не ответил за 15 минут")
+    try:
+        if not event.wait(timeout=900):
+            raise Exception("Timeout: GitHub Actions не ответил за 15 минут")
 
-    entry = _responses.pop(request_id, None)
-    _events.pop(request_id, None)
+        entry = _responses.pop(request_id, None)
+        if entry is None:
+            raise Exception("ERROR: no response stored")
 
-    if entry is None:
-        raise Exception("ERROR: no response stored")
+        text  = entry["text"]
+        usage = entry["usage"]
 
-    text  = entry["text"]
-    usage = entry["usage"]
+        if text.startswith("ERROR:"):
+            raise Exception(text)
 
-    if text.startswith("ERROR:"):
-        raise Exception(text)
-
-    return text, usage
+        return text, usage
+    finally:
+        _events.pop(request_id, None)
+        _responses.pop(request_id, None)
 
 

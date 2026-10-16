@@ -48,14 +48,14 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #1b3a6b;
+  color: var(--primary, #1D5CFF);
 }
 
 .heading {
-  font-family: "PT Serif", Georgia, serif;
+  font-family: "Golos Text", -apple-system, sans-serif;
   font-size: clamp(1.45rem, 4.5vw, 2rem);
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 800;
+  color: var(--ink, #0F172A);
   line-height: 1.2;
   margin-bottom: 10px;
   letter-spacing: -0.02em;
@@ -105,12 +105,12 @@
 
 .langBtnActive {
   color: #fff;
-  background: linear-gradient(135deg, #1B3A6B, #15305A);
+  background: var(--primary, #1D5CFF);
 }
 
 .langBtnActive:hover {
   color: #fff;
-  background: linear-gradient(135deg, #234a7d, #1b3a6b);
+  background: var(--primary-hover, #1A4FE0);
 }
 
 .langFlag {
@@ -236,7 +236,7 @@
 }
 
 .cardTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
   color: var(--ink);
@@ -437,7 +437,7 @@
 }
 
 .modalTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -491,12 +491,12 @@
   font-size: 0.9rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #1B3A6B, #15305A);
+  background: var(--primary, #1D5CFF);
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.2s;
-  box-shadow: 0 4px 16px rgba(27, 58, 107, 0.3);
+  box-shadow: 0 4px 16px rgba(29, 92, 255, 0.3);
 }
 
 .ctaBtn:hover {

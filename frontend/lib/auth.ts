@@ -169,6 +169,14 @@ export const authOptions = {
     EmailProvider({
       from: process.env.EMAIL_FROM || "Refai <support@ref-ai.ru>",
       async sendVerificationRequest({ identifier: email, url }) {
+        // Локальная разработка: без RESEND_API_KEY письмо не отправляется,
+        // а ссылка для входа печатается в консоль сервера.
+        if (!process.env.RESEND_API_KEY) {
+          console.info(
+            `\n[auth][dev] Magic link для ${email}:\n${url}\n`,
+          );
+          return;
+        }
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {

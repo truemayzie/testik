@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
+  background: linear-gradient(160deg, #EAF1FF 0%, #F4F8FF 55%, #FFFFFF 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,12 +11,21 @@
 .card {
   background: #fff;
   border-radius: 24px;
-  padding: 56px 48px;
-  max-width: 400px;
+  padding: 44px 36px;
+  max-width: 440px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
   animation: cardIn 0.4s ease;
+}
+
+.successIllustration {
+  width: 220px;
+  max-width: 80%;
+  height: auto;
+  margin: 0 auto 18px;
+  display: block;
+  filter: drop-shadow(0 10px 24px rgba(29, 92, 255, 0.12));
 }
 
 @keyframes cardIn {
@@ -44,7 +53,7 @@
 }
 
 .title {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.6rem;
   font-weight: 700;
   color: #0F172A;
@@ -65,7 +74,7 @@
 
 .dots span {
   width: 8px; height: 8px;
-  background: #1B3A6B;
+  background: var(--primary, #1D5CFF);
   border-radius: 50%;
   animation: dotPulse 1.2s ease infinite;
 }
@@ -96,7 +105,7 @@
   display: inline-block;
   margin-top: 8px;
   padding: 12px 28px;
-  background: linear-gradient(135deg, #1B3A6B, #15305A);
+  background: var(--primary, #1D5CFF);
   color: #fff;
   border-radius: 12px;
   text-decoration: none;

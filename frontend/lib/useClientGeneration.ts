@@ -22,7 +22,7 @@ type BackendProgress = {
 };
 
 const GENERATE_MAX_WAIT_MS = 25 * 60 * 1000;
-const GENERATE_POLL_MS = 5_000;
+const GENERATE_POLL_MS = 2_500;
 
 export function formatEta(sec: number | null): string {
   if (sec == null) return "";
@@ -64,23 +64,48 @@ export function useClientGeneration() {
   const generationIdRef = useRef<string | null>(null);
   const extrasProgressRef = useRef(0);
   const extrasGenIdRef = useRef<string | null>(null);
+  const currentProgressRef = useRef(0);
+  const targetProgressRef = useRef(0);
 
   const stopProgress = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
+    currentProgressRef.current = 100;
+    targetProgressRef.current = 100;
     setTotalProgress(100);
-    setStepIndex(stepsRef.current.length - 1);
+    setStepIndex(stepsRef.current.length > 0 ? stepsRef.current.length - 1 : 0);
     setEtaSeconds(0);
   }, []);
 
-  const tickTimeProgress = useCallback(() => {
+  const tickSmoothProgress = useCallback(() => {
     if (!startedAtRef.current) return;
-    const elapsed = Date.now() - startedAtRef.current;
-    const { percent, stepIndex, stepLabel } = computeProgressFromSteps(stepsRef.current, elapsed);
-    setTotalProgress(percent);
-    setStepIndex(stepIndex);
-    if (!backendLabelRef.current) {
-      setBackendStageLabel(stepLabel);
+    const cur = currentProgressRef.current;
+    const target = targetProgressRef.current;
+
+    let next = cur;
+    if (cur < target) {
+      // Плавное ускоренное приближение к проценту с бэкенда
+      const step = Math.max(0.4, (target - cur) * 0.15);
+      next = Math.min(target, cur + step);
+    } else if (cur < 97) {
+      // Если бэкенд долго выполняет шаг — медленно ползём вперёд (~0.3% в секунду)
+      next = Math.min(97, cur + 0.05);
+    }
+
+    currentProgressRef.current = next;
+    const rounded = Math.round(next);
+    setTotalProgress(rounded);
+
+    // Обновляем шаг по проценту, если нет явного шага от бэкенда
+    if (stepsRef.current.length > 0) {
+      const computedIdx = Math.max(
+        0,
+        Math.min(
+          stepsRef.current.length - 1,
+          Math.floor((rounded / 100) * stepsRef.current.length),
+        ),
+      );
+      setStepIndex((prev) => Math.max(prev, computedIdx));
     }
   }, []);
 
@@ -93,13 +118,33 @@ export function useClientGeneration() {
     if (typeof progress.eta_seconds === "number") {
       setEtaSeconds(Math.max(0, progress.eta_seconds));
     }
+    if (typeof progress.percent === "number" && !isNaN(progress.percent)) {
+      const p = Math.max(4, Math.min(98, Math.round(progress.percent)));
+      if (p > targetProgressRef.current) {
+        targetProgressRef.current = p;
+      }
+    }
+    if (
+      typeof progress.step === "number" &&
+      typeof progress.total_steps === "number" &&
+      progress.total_steps > 0
+    ) {
+      const count = stepsRef.current.length || progress.total_steps;
+      const idx = Math.max(
+        0,
+        Math.min(count - 1, Math.floor((progress.step / progress.total_steps) * count)),
+      );
+      setStepIndex(idx);
+    }
   }, []);
 
   const startProgress = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    tickTimeProgress();
-    timerRef.current = setInterval(tickTimeProgress, 400);
-  }, [tickTimeProgress]);
+    currentProgressRef.current = Math.max(currentProgressRef.current, 4);
+    targetProgressRef.current = Math.max(targetProgressRef.current, 8);
+    setTotalProgress(Math.round(currentProgressRef.current));
+    timerRef.current = setInterval(tickSmoothProgress, 150);
+  }, [tickSmoothProgress]);
 
   const triggerExtras = useCallback(async (items: string[], src: ReferatResult, wt: string, title: string) => {
     if (!items.length) return;
@@ -248,6 +293,8 @@ export function useClientGeneration() {
       extrasItems?: string[];
       taskId?: string;
       structure?: string[];
+      /** Явное согласие опубликовать работу (opt-in с checkout). По умолчанию приватно. */
+      isPublic?: boolean;
       onGenerateStarted?: () => void;
       onGenerationId?: (generationId: string, startedAt: number) => void;
     }) => {
@@ -259,6 +306,7 @@ export function useClientGeneration() {
         onGenerateStarted,
         onGenerationId,
         structure,
+        isPublic,
       } = params;
       stepsRef.current = getProgressSteps(wt);
       startedAtRef.current = Date.now();
@@ -278,8 +326,9 @@ export function useClientGeneration() {
       setExtrasError(null);
       setExtrasJobId(null);
       setPresentationJobId(null);
-      setSpeechJobId(null);
-      setTotalProgress(0);
+      currentProgressRef.current = 4;
+      targetProgressRef.current = 8;
+      setTotalProgress(4);
       setStepIndex(0);
       setEtaSeconds(null);
       setBackendStageLabel("");
@@ -300,6 +349,7 @@ export function useClientGeneration() {
             pages: p,
             workType: wt,
             taskId: params.taskId,
+            ...(isPublic === true ? { isPublic: true } : {}),
             ...(structure && structure.length >= 3 ? { structure } : {}),
           }),
         });
@@ -417,6 +467,11 @@ export function useClientGeneration() {
       setExtrasJobId(null);
       setPresentationJobId(null);
       setSpeechJobId(null);
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const est = Math.min(85, Math.max(6, Math.round((elapsed / 60000) * 35)));
+      currentProgressRef.current = est;
+      targetProgressRef.current = est + 2;
+      setTotalProgress(est);
       setEtaSeconds(null);
       setBackendStageLabel("");
 

@@ -1,21 +1,38 @@
 /* Дополнения к seo-page.module.css и hub.module.css — без отхода от токенов сайта */
 
-/* ── Hero (navy градиент как на лендинге / оферте) ── */
+/* ── Hero — в стиле главной страницы (radial + orb + dot-grid) ── */
 .heroBand {
   position: relative;
   margin: 0 0 40px;
-  padding: 32px 28px 36px;
-  background: linear-gradient(160deg, #061525 0%, #0f2645 52%, #1b3a6b 100%);
-  border-radius: 20px;
+  padding: clamp(36px, 6vw, 64px) clamp(20px, 5vw, 56px);
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(29, 92, 255, 0.09) 0%, transparent 60%),
+    linear-gradient(180deg, #F6F7F9 0%, #FFFFFF 100%);
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(27, 58, 107, 0.22);
+  overflow-y: hidden;
+  border: 1px solid rgba(29, 92, 255, 0.10);
+  box-shadow: 0 16px 48px rgba(29, 92, 255, 0.08);
 }
 
 .heroBand::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='white' fill-opacity='0.06'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1.2' fill='%230F172A' fill-opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* Орб, как в hero главной */
+.heroBand::after {
+  content: "";
+  position: absolute;
+  top: -160px;
+  right: -100px;
+  width: min(460px, 70vw);
+  height: min(460px, 70vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(29, 92, 255, 0.08) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -31,9 +48,9 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #93b5d9;
-  background: rgba(27, 58, 107, 0.35);
-  border: 1px solid rgba(147, 181, 217, 0.35);
+  color: var(--primary-ink, #0F3D99);
+  background: rgba(29, 92, 255, 0.1);
+  border: 1px solid rgba(29, 92, 255, 0.25);
   border-radius: 100px;
   padding: 5px 14px;
   margin-bottom: 14px;
@@ -47,18 +64,22 @@
 }
 
 .heroH1 {
-  font-family: "PT Serif", Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: clamp(1.65rem, 4.2vw, 2.35rem);
   font-weight: 700;
-  color: #fff;
+  color: var(--ink, #0F172A);
   line-height: 1.15;
   margin: 0;
   letter-spacing: -0.02em;
 }
 
+.heroAccent {
+  color: var(--primary, #1D5CFF);
+}
+
 .heroLead {
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ink-muted, #5B6472);
   line-height: 1.65;
   margin: 0 0 22px;
 }
@@ -73,18 +94,18 @@
 .heroTrustBadge {
   font-size: 0.72rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(15, 23, 42, 0.75);
+  background: rgba(29, 92, 255, 0.06);
+  border: 1px solid rgba(29, 92, 255, 0.16);
   border-radius: 20px;
   padding: 6px 12px;
   letter-spacing: 0.02em;
 }
 
 .heroTrustBadgeAccent {
-  color: #fde68a;
-  background: rgba(217, 119, 6, 0.2);
-  border-color: rgba(251, 191, 36, 0.35);
+  color: var(--primary-ink, #0F3D99);
+  background: rgba(29, 92, 255, 0.12);
+  border-color: rgba(29, 92, 255, 0.3);
 }
 
 .heroCtaBlock {
@@ -96,7 +117,7 @@
 
 .heroCtaMicro {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--ink-muted, #5B6472);
   line-height: 1.5;
   max-width: 440px;
   margin: 0;
@@ -155,8 +176,8 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #b45309;
-  background: rgba(251, 191, 36, 0.15);
+  color: var(--primary-ink, #0F3D99);
+  background: var(--primary-soft, #EAF1FF);
   border-radius: 6px;
   padding: 3px 8px;
 }
@@ -173,9 +194,9 @@
   align-items: center;
   font-size: 0.76rem;
   font-weight: 600;
-  color: #1B3A6B;
-  background: rgba(27, 58, 107, 0.07);
-  border: 1px solid rgba(27, 58, 107, 0.15);
+  color: var(--primary-ink, #0F3D99);
+  background: var(--primary-soft, #EAF1FF);
+  border: 1px solid rgba(29, 92, 255, 0.2);
   border-radius: 20px;
   padding: 5px 12px;
   letter-spacing: 0.02em;
@@ -210,7 +231,7 @@
 }
 
 .sectionTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   color: var(--ink);
@@ -251,8 +272,8 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: rgba(27, 58, 107, 0.1);
-  color: #1B3A6B;
+  background: rgba(29, 92, 255, 0.1);
+  color: var(--primary, #1D5CFF);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -261,12 +282,12 @@
 }
 
 .priceBox {
-  background: linear-gradient(145deg, #ffffff 0%, #fffbeb 48%, #ffffff 100%);
-  border: 1px solid rgba(217, 119, 6, 0.28);
+  background: linear-gradient(145deg, #ffffff 0%, #F4F8FF 48%, #ffffff 100%);
+  border: 1px solid rgba(29, 92, 255, 0.25);
   border-radius: var(--radius);
   padding: 22px 24px 22px 28px;
   margin-bottom: 8px;
-  box-shadow: 0 4px 24px rgba(27, 58, 107, 0.08);
+  box-shadow: 0 4px 24px rgba(29, 92, 255, 0.08);
   position: relative;
 }
 
@@ -278,7 +299,7 @@
   bottom: 12px;
   width: 4px;
   border-radius: 4px;
-  background: linear-gradient(180deg, #f59e0b, #d97706);
+  background: var(--primary, #1D5CFF);
 }
 
 .priceRow {
@@ -290,10 +311,10 @@
 }
 
 .priceValue {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: clamp(1.75rem, 4vw, 2.25rem);
   font-weight: 700;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
 }
 
 .priceMeta {
@@ -341,7 +362,7 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
+  background: var(--primary, #1D5CFF);
   color: #fff;
   font-size: 0.8rem;
   font-weight: 700;
@@ -383,9 +404,9 @@
 }
 
 .compareCardRefai {
-  background: linear-gradient(160deg, rgba(27, 58, 107, 0.06) 0%, var(--card) 100%);
-  border-color: rgba(27, 58, 107, 0.2);
-  box-shadow: 0 4px 20px rgba(27, 58, 107, 0.07);
+  background: linear-gradient(160deg, rgba(29, 92, 255, 0.06) 0%, var(--card) 100%);
+  border-color: rgba(29, 92, 255, 0.22);
+  box-shadow: 0 4px 20px rgba(29, 92, 255, 0.08);
 }
 
 .compareCardHead {
@@ -403,13 +424,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(27, 58, 107, 0.09);
-  color: #1b3a6b;
+  background: rgba(29, 92, 255, 0.09);
+  color: var(--primary, #1D5CFF);
 }
 
 .compareCardRefai .compareIconWrap {
-  background: rgba(217, 119, 6, 0.15);
-  color: #b45309;
+  background: rgba(29, 92, 255, 0.14);
+  color: var(--primary-ink, #0F3D99);
 }
 
 .compareCard strong {
@@ -417,7 +438,7 @@
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   margin-bottom: 0;
 }
 
@@ -452,8 +473,8 @@
 }
 
 .extraCard:hover {
-  border-color: rgba(27, 58, 107, 0.25);
-  box-shadow: 0 4px 16px rgba(27, 58, 107, 0.07);
+  border-color: rgba(29, 92, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(29, 92, 255, 0.08);
 }
 
 .extraCardTop {
@@ -467,18 +488,18 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(27, 58, 107, 0.08);
+  background: rgba(29, 92, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1b3a6b;
+  color: var(--primary, #1D5CFF);
 }
 
 .extraPrice {
   display: inline-block;
   margin-top: 4px;
   font-weight: 700;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   font-variant-numeric: tabular-nums;
   font-size: 0.92rem;
 }
@@ -501,7 +522,7 @@
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
-  border-bottom: 1px solid rgba(27, 58, 107, 0.25);
+  border-bottom: 1px solid rgba(29, 92, 255, 0.35);
   transition: border-color 0.15s;
 }
 
@@ -534,7 +555,7 @@
 }
 
 .faqItem summary:hover {
-  background: rgba(27, 58, 107, 0.04);
+  background: rgba(29, 92, 255, 0.05);
 }
 
 .faqItem summary::-webkit-details-marker {
@@ -549,7 +570,7 @@
   transform: translateY(-50%);
   font-size: 1.15rem;
   font-weight: 400;
-  color: #1b3a6b;
+  color: var(--primary, #1D5CFF);
   opacity: 0.55;
   transition: transform 0.2s;
 }

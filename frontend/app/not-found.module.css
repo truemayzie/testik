@@ -1,0 +1,115 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 90% at 50% -20%, rgba(29, 92, 255, 0.08) 0%, transparent 60%),
+              linear-gradient(180deg, #F8F9FE 0%, #FFFFFF 100%);
+  padding: 32px 20px;
+  font-family: 'Golos Text', -apple-system, sans-serif;
+  text-align: center;
+}
+
+.content {
+  max-width: 580px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.illustrationWrap {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.illustration {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 28px rgba(29, 92, 255, 0.09));
+  animation: floatIllustration 4s ease-in-out infinite;
+}
+
+@keyframes floatIllustration {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.badge {
+  display: inline-block;
+  background: rgba(29, 92, 255, 0.08);
+  color: #1D5CFF;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 100px;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: clamp(24px, 4vw, 36px);
+  font-weight: 800;
+  color: #0F172A;
+  margin: 0 0 12px;
+  line-height: 1.25;
+}
+
+.desc {
+  font-size: clamp(14px, 2vw, 16px);
+  color: #64748B;
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+
+.actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.primaryBtn {
+  background: #1D5CFF;
+  color: #ffffff;
+  padding: 13px 26px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(29, 92, 255, 0.28);
+}
+
+.primaryBtn:hover {
+  background: #1646C7;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(29, 92, 255, 0.38);
+}
+
+.secondaryBtn {
+  background: #FFFFFF;
+  color: #334155;
+  border: 1px solid #E2E8F0;
+  padding: 13px 22px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.secondaryBtn:hover {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}

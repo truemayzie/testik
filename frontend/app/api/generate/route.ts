@@ -213,6 +213,8 @@ export async function POST(request: NextRequest) {
       jobId,
       previewTaskId:
         typeof body.taskId === "string" && body.taskId.trim() ? body.taskId.trim() : undefined,
+      // Приватность по умолчанию: публикуем только при явном согласии с checkout.
+      isPublic: body.isPublic === true,
     });
     generationId = running.id;
 

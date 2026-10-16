@@ -15,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticPages = [
     { url: 'https://ref-ai.ru', lastModified: new Date(), changeFrequency: 'weekly' as const, priority: 1 },
+    { url: 'https://ref-ai.ru/works', lastModified: new Date(), changeFrequency: 'weekly' as const, priority: 0.85 },
     { url: 'https://ref-ai.ru/oferta', lastModified: new Date(), changeFrequency: 'monthly' as const, priority: 0.3 },
     { url: 'https://ref-ai.ru/privacy', lastModified: new Date(), changeFrequency: 'monthly' as const, priority: 0.3 },
     { url: 'https://ref-ai.ru/terms', lastModified: new Date(), changeFrequency: 'monthly' as const, priority: 0.3 },

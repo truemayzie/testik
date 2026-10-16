@@ -293,7 +293,7 @@ export default function ExamplesSection({ onCreateFromExample }: Props) {
           <div className={styles.rightCol}>
             <span
               className={styles.modalBadge}
-              style={{ background: BADGE_COLORS[selected.type] ?? "#1B3A6B" }}
+              style={{ background: BADGE_COLORS[selected.type] ?? "var(--primary, #1D5CFF)" }}
             >
               {selected.type}
             </span>
@@ -406,7 +406,7 @@ export default function ExamplesSection({ onCreateFromExample }: Props) {
                   <div className={styles.cardBadges}>
                     <span
                       className={styles.cardBadge}
-                      style={{ color: BADGE_COLORS[ex.type] ?? "#1B3A6B", borderColor: BADGE_COLORS[ex.type] ?? "#1B3A6B" }}
+                      style={{ color: BADGE_COLORS[ex.type] ?? "var(--primary, #1D5CFF)", borderColor: BADGE_COLORS[ex.type] ?? "var(--primary, #1D5CFF)" }}
                     >
                       {ex.type}
                     </span>

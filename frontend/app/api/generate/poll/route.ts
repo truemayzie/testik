@@ -110,10 +110,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ status: "error", error: outcome.error });
     }
     if (outcome.status === "not_found") {
+      // Resubmit внутри finalize уже пересоздал задачу (или лимит исчерпан).
+      // Не показываем ошибку — поллинг продолжится, reconciler додожмёт.
       return NextResponse.json({
-        status: "error",
-        error:
-          "Результат ещё не сохранён. Подождите до минуты — сохранение продолжится автоматически.",
+        status: "running",
+        progress: { label: "Возобновляем генерацию после сбоя" },
       });
     }
     return NextResponse.json({ status: "running", progress: outcome.progress });
@@ -172,9 +173,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "error", error: outcome.error });
   }
   if (outcome.status === "not_found") {
-    await revertPayment(job.paymentId);
-    activeJobs.clear(userId);
-    return NextResponse.json({ status: "not_found" });
+    // Resubmit внутри finalize пересоздал задачу с новым jobId
+    // (activeJobs уже обновлён) — продолжаем поллинг, платёж не трогаем.
+    return NextResponse.json({
+      status: "running",
+      progress: { label: "Возобновляем генерацию после сбоя" },
+    });
   }
 
   return NextResponse.json({ status: "running", progress: outcome.progress });

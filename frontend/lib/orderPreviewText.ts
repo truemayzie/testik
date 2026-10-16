@@ -1,11 +1,11 @@
 const SKIP_SECTION = /^(введение|заключение|список\s+литературы|литература|кіріспе|қорытынды|introduction|conclusion|sources?|references?|bibliography)$/i;
 
-/** Убирает нумерацию документа: «1.1. Текст» → «Текст». */
+/** Убирает нумерацию документа: «1.1. Текст», «1 Текст», «1: Текст» → «Текст». */
 export function stripLeadingNumber(raw: string): string {
   const s = String(raw ?? "").trim();
   const stripped = s
-    .replace(/^\d+(?:\.\d+)*\.?\s*/, "")
-    .replace(/^(?:глава|chapter|б(?:ө|о)лім)\s*\d+\.?\s*/i, "")
+    .replace(/^\d+(?:\.\d+)*[.:]?\s*/, "")
+    .replace(/^(?:глава|chapter|б(?:ө|о)лім|раздел)\s*\d+[.:]?\s*/i, "")
     .trim();
   return stripped || s;
 }

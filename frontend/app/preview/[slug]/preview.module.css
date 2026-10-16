@@ -21,7 +21,7 @@
 .notFoundIcon { font-size: 4rem; display: block; margin-bottom: 20px; }
 
 .notFoundInner h1 {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.8rem;
   color: #0F172A;
   margin: 0 0 12px;
@@ -31,7 +31,7 @@
 
 .notFoundBtn {
   display: inline-block;
-  background: #1B3A6B;
+  background: var(--primary, #1D5CFF);
   color: #fff;
   padding: 12px 28px;
   border-radius: 10px;
@@ -42,7 +42,7 @@
 
 /* ── Hero ── */
 .heroSection {
-  background: linear-gradient(160deg, #061525 0%, #0F2645 55%, #1B3A6B 100%);
+  background: linear-gradient(160deg, #EAF1FF 0%, #F4F8FF 55%, #FFFFFF 100%);
   padding: 60px 24px 64px;
   text-align: center;
 }
@@ -53,9 +53,9 @@
   display: inline-block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #93B5D9;
-  background: rgba(27,58,107,0.25);
-  border: 1px solid rgba(147,181,217,0.3);
+  color: var(--primary-ink, #0F3D99);
+  background: rgba(29, 92, 255, 0.1);
+  border: 1px solid rgba(29, 92, 255, 0.25);
   border-radius: 20px;
   padding: 5px 16px;
   letter-spacing: 0.06em;
@@ -64,10 +64,10 @@
 }
 
 .heroTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: clamp(1.7rem, 4vw, 2.6rem);
   font-weight: 700;
-  color: #fff;
+  color: var(--ink, #0F172A);
   line-height: 1.25;
   margin: 0 0 16px;
   letter-spacing: -0.01em;
@@ -75,7 +75,7 @@
 
 .heroSub {
   font-size: 0.95rem;
-  color: rgba(255,255,255,0.5);
+  color: var(--ink-muted, #5B6472);
   margin: 0;
 }
 
@@ -108,7 +108,7 @@
   transition: box-shadow 0.2s;
 }
 
-.benefitCard:hover { box-shadow: 0 4px 16px rgba(27,58,107,0.1); }
+.benefitCard:hover { box-shadow: 0 4px 16px rgba(29,92,255,0.12); }
 
 .benefitIcon { line-height: 0; display: flex; justify-content: center; margin-bottom: 10px; }
 
@@ -167,7 +167,7 @@
 .previewSections { margin-bottom: 32px; }
 
 .sectionHeading {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #0F172A;
@@ -184,7 +184,7 @@
 }
 
 .previewSectionTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
   color: #0F172A;
@@ -272,7 +272,7 @@
   position: absolute;
   left: 0; top: 8px;
   width: 4px; height: 4px;
-  background: #1B3A6B;
+  background: var(--primary, #1D5CFF);
   border-radius: 50%;
 }
 
@@ -288,10 +288,12 @@
 
 /* ── CTA ── */
 .ctaBlock {
-  background: linear-gradient(135deg, #061525 0%, #1B3A6B 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F3F6FF 100%);
+  border: 1px solid rgba(29, 92, 255, 0.16);
   border-radius: 20px;
   padding: 48px 32px;
   text-align: center;
+  box-shadow: 0 6px 28px rgba(15, 23, 42, 0.05);
 }
 
 .ctaInner { max-width: 480px; margin: 0 auto; }
@@ -299,16 +301,16 @@
 .ctaLockIcon { line-height: 0; margin-bottom: 20px; display: block; }
 
 .ctaTitle {
-  font-family: 'PT Serif', Georgia, serif;
+  font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1.7rem;
   font-weight: 700;
-  color: #fff;
+  color: #0F172A;
   margin: 0 0 12px;
 }
 
 .ctaText {
   font-size: 0.95rem;
-  color: rgba(255,255,255,0.55);
+  color: #64748B;
   margin: 0 0 24px;
   line-height: 1.6;
 }
@@ -323,7 +325,7 @@
 
 .ctaFeatures span {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: #475569;
   font-weight: 500;
 }
 
@@ -335,33 +337,33 @@
   font-size: 1.05rem;
   font-weight: 700;
   color: #fff;
-  background: #D97706;
+  background: var(--primary, #1D5CFF);
   border-radius: 14px;
   padding: 16px 36px;
   text-decoration: none;
   transition: all 0.2s;
-  box-shadow: 0 4px 20px rgba(217, 119, 6, 0.35);
+  box-shadow: 0 6px 20px rgba(29, 92, 255, 0.32);
   margin-bottom: 16px;
 }
 
 .ctaButton:hover {
-  background: #B45309;
+  background: #1A4FE0;
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(217, 119, 6, 0.45);
+  box-shadow: 0 8px 32px rgba(29, 92, 255, 0.35);
 }
 
 .ctaNote {
   font-size: 0.83rem;
-  color: rgba(255,255,255,0.4);
+  color: #94A3B8;
   margin: 0;
 }
 
 .ctaNote a {
-  color: rgba(255,255,255,0.65);
+  color: var(--primary, #1D5CFF);
   text-decoration: underline;
 }
 
-.ctaNote a:hover { color: #fff; }
+.ctaNote a:hover { color: #1A4FE0; }
 
 /* ── Hero download (для владельца) ── */
 .heroDownloadBtn {
@@ -372,18 +374,18 @@
   font-family: 'Golos Text', -apple-system, sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  color: #1B3A6B;
+  color: var(--primary-ink, #0F3D99);
   background: #fff;
   border: none;
   border-radius: 12px;
   padding: 14px 32px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.15);
 }
 
 .heroDownloadBtn:hover:not(:disabled) {
-  background: #EFF6FF;
+  background: var(--primary-soft, #EAF1FF);
   transform: translateY(-2px);
 }
 
@@ -404,7 +406,7 @@
   transition: border-color 0.2s;
 }
 
-.accordionOpen { border-color: #1B3A6B; }
+.accordionOpen { border-color: var(--primary, #1D5CFF); }
 
 .accordionToggle {
   width: 100%;
@@ -424,7 +426,7 @@
 }
 
 .accordionToggle:hover { background: #F8FAFC; }
-.accordionOpen .accordionToggle { background: #1B3A6B; color: #fff; }
+.accordionOpen .accordionToggle { background: var(--primary, #1D5CFF); color: #fff; }
 
 .chevron { font-size: 0.65rem; opacity: 0.6; flex-shrink: 0; }
 
@@ -460,12 +462,12 @@
 }
 
 .th {
-  background: #0F172A;
-  color: #fff;
+  background: var(--primary-soft, #EAF1FF);
+  color: var(--primary-ink, #0F3D99);
   font-weight: 600;
   padding: 9px 12px;
   text-align: center;
-  border: 1px solid #0F172A;
+  border: 1px solid rgba(29, 92, 255, 0.22);
   font-size: 0.82rem;
 }
 
@@ -491,18 +493,18 @@
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #1B3A6B, #15305A);
+  background: var(--primary, #1D5CFF);
   border: none;
   border-radius: 12px;
   padding: 14px 32px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(27,58,107,0.35);
+  box-shadow: 0 4px 14px rgba(29,92,255,0.3);
 }
 
 .ownerDownloadBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(27,58,107,0.45);
+  box-shadow: 0 6px 20px rgba(29,92,255,0.4);
 }
 
 .ownerDownloadBtn:disabled { opacity: 0.6; cursor: not-allowed; }

@@ -1,6 +1,10 @@
 /**
  * Серверная финализация генерации: опрос backend → запись в БД → уведомления.
  * Используется /api/generate/poll и фоновым reconciler.
+ *
+ * «Железная» защита: при not_found (backend потерял job) или resumable-ошибке
+ * (рестарт/зависание) задание автоматически пересоздаётся на backend —
+ * генерация продолжается с checkpoint, оплата не списывается повторно.
  */
 
 import { activeJobs } from "@/app/lib/activeJobs";
@@ -8,6 +12,13 @@ import { finalizeRunningGeneration, saveGeneration, type ReferatResult } from "@
 import { sendEmail, generationReadyHtml } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { tgNotify } from "@/lib/tgNotify";
+import {
+  applyResubmit,
+  isResumableError,
+  readResubmitCount,
+  resubmitBackendJob,
+  RESUBMIT_MAX,
+} from "@/lib/generationResubmit";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -62,6 +73,41 @@ export async function finalizeGenerationFromJob(params: {
   const notify = params.notify !== false;
   const source = params.source ?? "poll";
 
+  /**
+   * Автопересоздание задания на backend (не чаще RESUBMIT_MAX раз).
+   * Возвращает "running" при успехе — поллинг продолжится с новым jobId.
+   */
+  const tryResubmit = async (reason: string): Promise<FinalizeOutcome> => {
+    const resubmits = await readResubmitCount(params.generationId);
+    if (resubmits >= RESUBMIT_MAX) {
+      console.warn("[generation/finalize] resubmit limit reached", {
+        source, jobId: params.jobId, resubmits,
+      });
+      return { status: "not_found" };
+    }
+    const newJobId = await resubmitBackendJob({
+      userId: params.userId,
+      topic: params.topic,
+      pages: params.pages,
+      workType: params.workType,
+    });
+    if (!newJobId) {
+      return { status: "not_found" };
+    }
+    await applyResubmit({
+      userId: params.userId,
+      generationId: params.generationId,
+      newJobId,
+      resubmits: resubmits + 1,
+      topic: params.topic,
+      pages: params.pages,
+      workType: params.workType,
+      paymentId: params.paymentId,
+      source,
+    });
+    return { status: "running", progress: { label: "Возобновляем генерацию после сбоя" } };
+  };
+
   try {
     const statusRes = await fetch(`${BACKEND_URL}/api/generate/status/${params.jobId}`, {
       signal: AbortSignal.timeout(8_000),
@@ -77,12 +123,18 @@ export async function finalizeGenerationFromJob(params: {
     };
 
     if (body.status === "not_found") {
-      return { status: "not_found" };
+      // Backend потерял job (рестарт без jobstore) — молча пересоздаём.
+      return tryResubmit("not_found");
     }
     if (body.status === "error") {
+      const errText = body.error || "Ошибка генерации";
+      // Рестарт/зависание — генерацию можно продолжить с checkpoint.
+      if (isResumableError(errText)) {
+        return tryResubmit(errText);
+      }
       await revertPayment(params.paymentId);
       activeJobs.clear(params.userId);
-      return { status: "error", error: body.error || "Ошибка генерации" };
+      return { status: "error", error: errText };
     }
     if (body.status === "running") {
       return { status: "running", progress: body.progress };

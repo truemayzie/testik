@@ -11,14 +11,11 @@ const LogoInner = () => (
   <>
     <span className={styles.logoMark} aria-hidden>
       <svg className={styles.logoSpark} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="11" fill="url(#refaiLogoBg)" />
-        <path d="M12 4.5L13.6 10.2L19.5 12L13.6 13.8L12 19.5L10.4 13.8L4.5 12L10.4 10.2Z" fill="#D97706" />
-        <defs>
-          <linearGradient id="refaiLogoBg" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1B3A6B" />
-            <stop offset="1" stopColor="#0f2645" />
-          </linearGradient>
-        </defs>
+        <circle cx="12" cy="12" r="11.25" fill="var(--primary)" />
+        <rect x="6.38" y="7.13" width="11.25" height="1.88" rx="0.94" fill="#FFFFFF" />
+        <rect x="6.38" y="10.88" width="8.25" height="1.88" rx="0.94" fill="#FFFFFF" opacity="0.7" />
+        <rect x="6.38" y="14.63" width="6" height="1.88" rx="0.94" fill="#FFFFFF" />
+        <path d="M15.38 13.69Q16.03 14.91 17.25 15.56Q16.03 16.22 15.38 17.44Q14.72 16.22 13.5 15.56Q14.72 14.91 15.38 13.69Z" fill="#FFFFFF" />
       </svg>
     </span>
     <div className={styles.logoTexts}>
@@ -91,6 +88,7 @@ export default function Header() {
   const isAuthPage = pathname?.startsWith("/auth");
   const isHomePage = pathname === "/";
   const isDashboard = pathname?.startsWith("/dashboard");
+  const isWorksPage = pathname?.startsWith("/works");
   const isOrderPage = pathname?.startsWith("/order");
   const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === "1";
 
@@ -178,14 +176,23 @@ export default function Header() {
             <div className={styles.headerBar}>
               <Link href="/" className={styles.logo}><LogoInner /></Link>
 
-              <div className={styles.headerRight}>
+              <div
+                className={`${styles.headerRight} ${session ? styles.headerRightAuth : styles.headerRightGuest}`}
+              >
+                <Link
+                  href="/works"
+                  className={`${styles.dashLink} ${styles.dashLinkCatalog} ${isWorksPage ? styles.dashLinkActive : ""}`}
+                >
+                  <span className={styles.dashLinkFullText}>Каталог работ</span>
+                  <span className={styles.dashLinkShortText}>Каталог</span>
+                </Link>
                 {!mounted || status === "loading" ? (
                   <div className={styles.skeleton} />
                 ) : session ? (
                   <>
                     <Link
                       href="/dashboard"
-                      className={`${styles.dashLink} ${isDashboard ? styles.dashLinkActive : ""}`}
+                      className={`${styles.dashLink} ${styles.dashLinkWorks} ${isDashboard ? styles.dashLinkActive : ""}`}
                     >
                       Мои работы
                     </Link>
@@ -219,6 +226,34 @@ export default function Header() {
                           <p className={styles.userDisplayName}>
                             {displayUserName(session.user!)}
                           </p>
+                          <div className={styles.userDropdownDivider} />
+                          <div className={styles.userDropdownNav}>
+                            <Link
+                              href="/dashboard"
+                              className={`${styles.userDropdownLink} ${isDashboard ? styles.userDropdownLinkActive : ""}`}
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              <span className={styles.userDropdownIcon} aria-hidden>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                </svg>
+                              </span>
+                              Мои работы
+                            </Link>
+                            <Link
+                              href="/works"
+                              className={`${styles.userDropdownLink} ${isWorksPage ? styles.userDropdownLinkActive : ""}`}
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              <span className={styles.userDropdownIcon} aria-hidden>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                                </svg>
+                              </span>
+                              Каталог работ
+                            </Link>
+                          </div>
                           <div className={styles.userDropdownDivider} />
                           <button
                             type="button"
@@ -258,8 +293,10 @@ export default function Header() {
           <div className={styles.langBanner} role="status" aria-live="polite">
             <div className={styles.langBannerInner}>
               <span className={styles.langBannerIcon} aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L13.9 8.1L20 10L13.9 11.9L12 18L10.1 11.9L4 10L10.1 8.1L12 2Z" fill="currentColor"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20" />
+                  <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
                 </svg>
               </span>
               <span className={styles.langBannerText}>

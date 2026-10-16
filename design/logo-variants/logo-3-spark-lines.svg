@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>ref-ai — вариант 3: искра из текста</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4D82FF"/>
+      <stop offset="1" stop-color="#1646D8"/>
+    </linearGradient>
+  </defs>
+  <!-- Фон с градиентом -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)"/>
+  <!-- Большая искра -->
+  <path d="M32 9Q34.6 19.4 45 22Q34.6 24.6 32 35Q29.4 24.6 19 22Q29.4 19.4 32 9Z" fill="#FFFFFF"/>
+  <!-- Малая искра -->
+  <path d="M49 11Q49.9 14.1 53 15Q49.9 15.9 49 19Q48.1 15.9 45 15Q48.1 14.1 49 11Z" fill="#FFFFFF" opacity="0.85"/>
+  <!-- Строки текста -->
+  <rect x="14" y="44" width="36" height="4" rx="2" fill="#FFFFFF"/>
+  <rect x="14" y="52" width="24" height="4" rx="2" fill="#FFFFFF" opacity="0.55"/>
+</svg>

@@ -20,9 +20,39 @@ out/
 
 # ── Env / секреты ─────────────────────────
 .env
-.env.local
-.env.*.local
-frontend/.env.local
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!.env.sample
+!**/.env.sample
+!.env.template
+!**/.env.template
+.pgpass*
+*.tmp
+*.key
+*.pem
+*.pfx
+*.p12
+*service_account*.json
+*service-account*.json
+*credentials*.json
+secrets/
+**/secrets/
+frontend/secrets/
+
+# ── Большие дампы, архивы и временные данные ──
+*.rar
+*.zip
+*.7z
+*.tar.gz
+*.tar
+data/
+*.jsonl
+.roo-debug/
 
 # ── База данных ───────────────────────────
 *.db
@@ -54,4 +84,14 @@ pnpm-debug.log*
 .vercel/
 .netlify/
 coverage/
+backend/templates/ion-test-*.pptx
 backend/tamplates/ion-test-*.pptx
+
+# ── Runtime-данные backend (jobstore, логи, тестовый вывод) ──
+backend/data/
+backend/logs/
+backend/test_output/
+backend/startup_test.log
+
+# ── Секреты frontend ───────────────────────
+frontend/secrets/

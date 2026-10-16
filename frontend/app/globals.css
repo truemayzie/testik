@@ -99,6 +99,29 @@ body {
   font-kerning: normal;
 }
 
+/* ── Защита изображений от перетаскивания, выделения и скачивания ── */
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+}
+
+a, button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+a img, button img {
+  pointer-events: none;
+}
+
 /* Выровненные числа для цен, дат и таблиц */
 .tabular { font-variant-numeric: tabular-nums; }
 
@@ -129,20 +152,52 @@ main, .page-transition {
 }
 
 :root {
-  /* Colors */
-  --ink:        #0F172A;
-  --ink-muted:  #64748B;
-  --ink-light:  #94A3B8;
+  /* ── Дизайн-система «Light & Trust» (редизайн 2026) ── */
+  /* Основная палитра: один акцент + нейтрали */
+  --bg:           #FFFFFF;
+  --bg-soft:      #F6F7F9;
+  --ink:          #0F172A;
+  --ink-muted:    #5B6472;
+  --ink-light:    #94A3B8;
+  --border:       #E6E8EC;
+
+  --primary:        #1D5CFF;
+  --primary-hover:  #1A4FE0;
+  --primary-soft:   #EAF1FF;
+  --primary-ink:    #0F3D99;   /* текст на primary-soft */
+
+  --success:      #0FA968;
+  --success-soft: #E7F6F0;
+  --warning:      #E8A317;
+  --warning-soft: #FCF3E1;
+  --danger:       #E5484D;
+  --danger-soft:  #FDECEC;
+
+  /* Тени (3 уровня) */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-2: 0 4px 16px rgba(16, 24, 40, 0.08);
+  --shadow-3: 0 12px 40px rgba(16, 24, 40, 0.14);
+
+  /* Каркас */
+  --header-h:  64px;
+  --container: 1152px;
+  --ease:      cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* Типографика */
+  --fs-h1: clamp(30px, 5vw, 46px);
+  --fs-h2: clamp(24px, 3.5vw, 34px);
+  --fs-h3: 20px;
+
+  /* ── Legacy-переменные (НЕ удалять до Фазы 8 — на них живут старые страницы) ── */
   --paper:      #F8F9FE;
   --paper-2:    #F1F5F9;
   --card:       #FFFFFF;
-  --accent:     #1B3A6B;
-  --accent-hover: #15305A;
-  --accent-light: #93B5D9;
+  --accent:     #1D5CFF;          /* переведён на новый акцент */
+  --accent-hover: #1A4FE0;
+  --accent-light: #A8C3F5;
   --accent-warm:  #D97706;
   --accent-2:   #EF4444;
   --accent-3:   #22C55E;
-  --border:     #E2E8F0;
 
   /* Typography */
   --sans:    'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -150,8 +205,8 @@ main, .page-transition {
   --display: 'PT Serif', Georgia, serif;
 
   /* Radius */
-  --radius:    12px;
-  --radius-sm: 8px;
+  --radius:    14px;
+  --radius-sm: 10px;
   --radius-lg: 20px;
 }
 
@@ -285,7 +340,7 @@ main, .page-transition {
 
 /* ── Клавиатурная навигация: focus-visible ── */
 :focus-visible {
-  outline: 2.5px solid #1B3A6B;
+  outline: 2.5px solid var(--primary, #1D5CFF);
   outline-offset: 3px;
   border-radius: 4px;
 }

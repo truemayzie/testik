@@ -29,6 +29,7 @@ function normalizeDraft(raw: unknown): PendingOrderDraft | null {
 }
 
 function readRaw(key: "session" | "local"): string | null {
+  if (typeof window === "undefined") return null;
   try {
     if (key === "session") return sessionStorage.getItem("pendingGeneration");
     return localStorage.getItem(PENDING_DRAFT_STORAGE_KEY);
@@ -39,6 +40,7 @@ function readRaw(key: "session" | "local"): string | null {
 
 /** Читает черновик заказа: sessionStorage → localStorage (для magic link в новой вкладке). */
 export function loadPendingOrderDraft(): PendingOrderDraft | null {
+  if (typeof window === "undefined") return null;
   for (const source of ["session", "local"] as const) {
     const raw = readRaw(source);
     if (!raw) continue;
@@ -53,6 +55,7 @@ export function loadPendingOrderDraft(): PendingOrderDraft | null {
 }
 
 export function savePendingOrderDraft(draft: PendingOrderDraft): void {
+  if (typeof window === "undefined") return;
   const payload = { ...draft, savedAt: Date.now() };
   const raw = JSON.stringify(payload);
   try {
@@ -68,6 +71,7 @@ export function savePendingOrderDraft(draft: PendingOrderDraft): void {
 }
 
 export function clearPendingOrderDraft(): void {
+  if (typeof window === "undefined") return;
   try {
     sessionStorage.removeItem("pendingGeneration");
   } catch {
@@ -81,6 +85,7 @@ export function clearPendingOrderDraft(): void {
 }
 
 export function markPendingPreviewAfterAuth(): void {
+  if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(PENDING_PREVIEW_FLAG_KEY, "1");
     sessionStorage.setItem(PENDING_AUTH_RETURN_KEY, "1");
@@ -92,6 +97,7 @@ export function markPendingPreviewAfterAuth(): void {
 }
 
 export function consumePendingPreviewAfterAuth(): boolean {
+  if (typeof window === "undefined") return false;
   try {
     const flagged =
       sessionStorage.getItem(PENDING_PREVIEW_FLAG_KEY) === "1" ||
@@ -107,6 +113,7 @@ export function consumePendingPreviewAfterAuth(): boolean {
 }
 
 export function hasPendingPreviewAfterAuth(): boolean {
+  if (typeof window === "undefined") return false;
   try {
     return (
       sessionStorage.getItem(PENDING_PREVIEW_FLAG_KEY) === "1" ||

@@ -49,11 +49,12 @@ export async function GET(req: NextRequest) {
 
   if (workType) where.workType = workType;
   if (search) {
+    // mode: "insensitive" — в PostgreSQL contains регистрозависим (в SQLite был нет)
     where.OR = [
-      { slug: { contains: search } },
-      { title: { contains: search } },
-      { subject: { contains: search } },
-      { metaTitle: { contains: search } },
+      { slug: { contains: search, mode: "insensitive" as const } },
+      { title: { contains: search, mode: "insensitive" as const } },
+      { subject: { contains: search, mode: "insensitive" as const } },
+      { metaTitle: { contains: search, mode: "insensitive" as const } },
     ];
   }
 

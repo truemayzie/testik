@@ -159,7 +159,7 @@
   justify-content: space-between;
   padding: 0 48px;
   background: #fff;
-  border-bottom: 2px solid #1B3A6B;
+  border-bottom: 2px solid var(--primary, #1D5CFF);
   flex-shrink: 0;
 }
 
@@ -174,7 +174,7 @@
   justify-content: space-between;
   padding: 0 64px;
   background: #fff;
-  border-bottom: 3px solid #1B3A6B;
+  border-bottom: 3px solid var(--primary, #1D5CFF);
   flex-shrink: 0;
 }
 

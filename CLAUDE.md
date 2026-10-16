@@ -8,25 +8,27 @@ Always respond in Russian. Всегда отвечай на русском яз�
 
 Сервис генерации учебных работ (рефераты, курсовые, ВКР, эссе, доклады, сочинения) с оформлением по ГОСТ, авторизацией, оплатой через ЮКассу и дополнительными материалами (презентация + текст выступления).
 
-**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (SQLite) | FastAPI + python-docx + python-pptx + Claude API (claude-sonnet-4-5)
+**Стек:** Next.js 14 + TypeScript + NextAuth.js + Prisma (PostgreSQL) | FastAPI + python-docx + python-pptx + Claude API (claude-sonnet-4-5)
 
 ## Команды
 
 ```bash
 # Backend (порт 8000) — из папки backend/
-source venv/bin/activate
+source venv/bin/activate # или venv\Scripts\activate на Windows
 uvicorn main:app --reload          # для разработки
 uvicorn main:app                   # для prod/тестирования генерации (БЕЗ --reload!)
+pytest                             # запуск тестов бэкенда
 
 # Frontend (порт 3000) — из папки frontend/
 npm run dev
 npm run build
+npx tsc --noEmit                   # проверка типов TypeScript
 
 # Prod (pm2)
 pm2 restart backend
 pm2 restart frontend
 
-# БД — останови dev-сервер перед db:push (блокирует .dll на Windows)
+# БД (PostgreSQL)
 npm run db:push      # применить схему
 npm run db:studio    # GUI Prisma Studio
 ```
@@ -91,15 +93,26 @@ npm run db:studio    # GUI Prisma Studio
 - Задания: `running → done | error`. `GET /api/generate/result/{id}` **не удаляет** job; после сохранения в БД Next.js вызывает `DELETE /api/generate/job/{id}`
 - **Фоновый reconciler** (`lib/generationReconciler.ts`, старт в `instrumentation.ts`): каждые 30 с дожимает `Generation` со `status=running` и `extras._jobId`, если backend уже `done` (вкладку можно закрыть). Orphan `not_found` >90 мин → `status=failed`
 - Extras-задания не удаляются — нужны для повторного скачивания файлов
-- Добавлена TTL-очистка файлов extras в `/tmp` (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
-- `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам)
+- Временные файлы extras хранятся кроссплатформенно через `jobstore.get_extras_dir()` (`backend/data/tmp/` локально / на Windows, с фолбэком на `/tmp` на Linux)
+- TTL-очистка файлов extras (`pptx_*.pptx`, `speech_*.docx`) старше 24 часов
+- `ReferatResponse` (Pydantic): `model_config = ConfigDict(extra="allow")` — в JSON ответа `/api/generate/result/{job_id}` попадает служебное поле **`_cost_usd`** из `generator.py` (оценка расхода по токенам через изолированный `contextvars.ContextVar`)
 - `ReferatRequest`: опциональное поле `structure: list[str] | None` — кастомное содержание из превью заказа
 
-### generator.py
-- `WORK_RULES` dict: лимиты страниц, флаги `has_title_page / has_toc / has_sources` для каждого типа
-- CrossRef ищет реальные источники (только если `has_sources=True`)
-- Claude API генерирует структуру и каждый раздел отдельно через тип-специфичные prompt-функции: `get_structure_prompt`, `get_intro_prompt`, `get_section_prompt`, `get_conclusion_prompt`
-- `generate_referat = generate_work` — алиас для обратной совместимости
+### Модульная структура бэкенда
+- **`prompts/`**:
+  - `rules.py` — правила оформления, размеры страниц, типы работ (`WORK_RULES`, `SERVICE_PAGES`)
+  - `structure.py` — генерация промптов для структуры (`get_structure_prompt`)
+  - `sections.py` — промпты для введения (`get_intro_prompt`), разделов (`get_section_prompt`), заключения (`get_conclusion_prompt`)
+- **`utils/language.py`**:
+  - `detect_language_from_topic` — автоопределение языка (ru, kz, en)
+  - `LANG_LABELS` — метки служебных разделов по языкам
+  - `canonical_service_key` — нормализация служебных разделов
+- **`jobstore.py`**:
+  - `get_extras_dir()` и `extras_file_path()` — безопасные пути для временных файлов
+- **`generator.py`**:
+  - Тонкий фасад оркестрации генерации через Claude API
+  - `generate_referat = generate_work` — алиас для обратной совместимости
+  - CrossRef поиск источников (только если `has_sources=True`)
 
 ### formatter.py
 - DOCX по ГОСТ. Условно добавляет: титульный лист (`has_title_page`), оглавление (`has_toc`)
@@ -110,7 +123,6 @@ npm run db:studio    # GUI Prisma Studio
 - Титульный лист поддерживает флаги пропуска: `skip_faculty`, `skip_speciality`, `skip_discipline` (из профиля пользователя)
 - TOC: `TOC_TAB_TWIPS = 8640` (стандарт ГОСТ). Все уровни используют `effective_tab=8640` (без вычитания отступа подглав) — иначе при длинных заголовках точечный лидер не рисуется. Подглавы: `left=567`, tab всё равно 8640
 - Список литературы: `w:ind left=709 hanging=709`, `w:spacing after=80` (≈4pt), выравнивание JUSTIFY, без пустых строк между источниками
-- `rebuild_examples.py` — утилита хирургической пересборки TOC и библиографии в примерах DOCX без регенерации контента
 
 ### presentation_generator.py
 - `generate_presentation` — `PRESENTATION_SLIDES_MODE=deterministic` (JSON из `slides_from_result.py`, без второго Claude) или `claude`
@@ -444,3 +456,10 @@ Referrer-Policy: strict-origin-when-cross-origin
 - **`useClientGeneration`**: генерация вынесена с главной; `orderGenerationSession` для восстановления фазы заказа.
 - **Auth**: `callbackUrl` redirect, secure cookies, linking email/Yandex аккаунтов.
 - **Deploy**: `scripts/deploy-frontend.sh` — `rm -rf .next` перед build (фикс 404 static chunks).
+
+### Изменения 2026-08-29
+- **Возврат брошенных заказов**: `lib/abandonedOrderRecovery.ts` — фоновый тик (паттерн reconciler, `setInterval` + `unref`), запускается из `instrumentation.ts` рядом с `startGenerationReconciler()`.
+  - «Брошенный заказ» = `PreviewTask` возрастом **45 мин – 24 ч** (`ABANDONED_MIN_AGE_MS` / `ABANDONED_MAX_AGE_MS`), ещё не истёкший (`expiresAt`), **без** связанной `Generation` (по `_taskId` в JSON `extras`) и **без** `Payment` по тому же `workType`, созданного после черновика.
+  - Отправка один раз на черновик: флаг `{_abandonedNotifiedAt: iso}` кладётся объектом в JSON-массив `PreviewTask.extras` — `parseTaskExtras` фильтрует только строки и безопасно игнорирует объект, миграция БД не нужна.
+  - Письмо: шаблон `abandonedOrderHtml()` в `lib/email.ts` (CTA «Вернуться к заказу →», блок «Зачем возвращаться», дисклеймер, footer-note про 48ч хранение черновика).
+  - Управление env: `ABANDONED_RECOVER_DISABLED=1` (отключить), `ABANDONED_RECOVER_INTERVAL_MS` (по умолчанию 15 мин), `MAX_PER_TICK=20`, лимит выборки `take 64`.

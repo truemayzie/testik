@@ -13,8 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from generator import generate_work, generate_payment_preview
-from oneoff_vkr_didactic_time import generate_oneoff_vkr, TOPIC as ONEOFF_VKR_TOPIC
 from github_proxy import start_callback_server
+from applog import get_logger
+import jobstore
+
+log = get_logger()
 
 start_callback_server()
 from formatter import create_docx
@@ -22,16 +25,48 @@ from slots import MAX_SLOTS, compute_used_slots, list_available_work_types, slot
 
 app = FastAPI(title="Academic Service API")
 
+# CORS: origin из env (prod: https://ref-ai.ru), fallback — локальная разработка.
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if not _allowed_origins:
+    _allowed_origins = ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# ── Простой rate-limit по IP для дорогих эндпоинтов ──────────────────────────
+# Защита от злонамеренного/случайного DDoS на /api/generate/*.
+RATE_LIMIT_REQUESTS = 30      # запросов
+RATE_LIMIT_WINDOW_SEC = 60.0  # за окно
+_rate_limit_lock = threading.Lock()
+_rate_limit_buckets: dict[str, list[float]] = {}
+
+
+def _check_rate_limit(request: Request) -> None:
+    ip = (request.client.host if request.client else "") or "unknown"
+    now = time.time()
+    with _rate_limit_lock:
+        bucket = _rate_limit_buckets.setdefault(ip, [])
+        # чистим просроченные
+        while bucket and now - bucket[0] > RATE_LIMIT_WINDOW_SEC:
+            bucket.pop(0)
+        if len(bucket) >= RATE_LIMIT_REQUESTS:
+            raise HTTPException(status_code=429, detail="Слишком много запросов, попробуйте позже")
+        bucket.append(now)
+        # не даём словарю расти бесконечно
+        if len(_rate_limit_buckets) > 10000:
+            cutoff = now - RATE_LIMIT_WINDOW_SEC
+            for k in [k for k, v in _rate_limit_buckets.items() if not v or v[-1] < cutoff]:
+                _rate_limit_buckets.pop(k, None)
+
+
 # ── In-memory хранилище заданий ──────────────────────────────────────────────
 # Каждая запись: {"status": "running"|"done"|"error", "result": dict|None, "error": str|None, "work_type": str}
+# Дублируется на диск (jobstore) — переживает рестарт backend.
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
@@ -47,6 +82,9 @@ WORK_ETA_SECONDS: dict[str, int] = {
     "Тест": 20,
 }
 
+# Watchdog: running-задача без движения дольше этого времени → error.
+JOB_STALL_SECONDS = 15 * 60  # 15 минут
+
 
 def _job_start_unlocked(job_id: str, work_type: str = "Реферат"):
     """Добавляет running-job; вызывать только под _jobs_lock."""
@@ -58,6 +96,7 @@ def _job_start_unlocked(job_id: str, work_type: str = "Реферат"):
         "error": None,
         "work_type": work_type,
         "started_at": now,
+        "last_activity": now,
         "expected_total_seconds": expected_total,
         "progress": {
             "step": 0,
@@ -67,6 +106,7 @@ def _job_start_unlocked(job_id: str, work_type: str = "Реферат"):
             "eta_seconds": None,
         },
     }
+    jobstore.save_jobs(_jobs)
 
 
 def _job_progress(job_id: str, step: int, total_steps: int, label: str):
@@ -74,6 +114,7 @@ def _job_progress(job_id: str, step: int, total_steps: int, label: str):
         job = _jobs.get(job_id)
         if not job or job.get("status") != "running":
             return
+        job["last_activity"] = time.time()
         started_at = float(job.get("started_at") or time.time())
         expected_total = int(job.get("expected_total_seconds") or 0)
         elapsed = max(1.0, time.time() - started_at)
@@ -132,6 +173,7 @@ def _job_done(job_id: str, result: dict):
                 "status": "done",
                 "result": result,
                 "error": None,
+                "work_type": prev.get("work_type"),
                 "progress": {
                     "step": prev.get("progress", {}).get("total_steps", 0),
                     "total_steps": prev.get("progress", {}).get("total_steps", 0),
@@ -140,22 +182,77 @@ def _job_done(job_id: str, result: dict):
                     "eta_seconds": 0,
                 },
             }
+            jobstore.save_jobs(_jobs)
 
 
 def _job_fail(job_id: str, error: str):
     with _jobs_lock:
         if job_id in _jobs:
-            _jobs[job_id] = {"status": "error", "result": None, "error": error}
+            prev = _jobs[job_id]
+            _jobs[job_id] = {
+                "status": "error",
+                "result": None,
+                "error": error,
+                "work_type": prev.get("work_type"),
+                "progress": prev.get("progress"),
+            }
+            jobstore.save_jobs(_jobs)
 
 
 def _job_pop(job_id: str) -> dict | None:
     with _jobs_lock:
-        return _jobs.pop(job_id, None)
+        job = _jobs.pop(job_id, None)
+        if job is not None:
+            jobstore.save_jobs(_jobs)
+        return job
 
 
 def _job_get(job_id: str) -> dict | None:
     with _jobs_lock:
         return _jobs.get(job_id)
+
+
+# ── Восстановление после рестарта + watchdog ─────────────────────────────────
+
+def _restore_jobs_on_startup() -> None:
+    """Возвращает в память done/error-задания из jobs.json; running помечает прерванными."""
+    with _jobs_lock:
+        interrupted = jobstore.load_and_mark_interrupted(_jobs)
+    if interrupted:
+        log.warning("Восстановлено после рестарта: %d running-задач помечены прерванными", interrupted)
+
+
+def _watchdog_loop() -> None:
+    """
+    Фоновый поток: раз в 60с проверяет running-задачи.
+    Задача без движения (last_activity) дольше JOB_STALL_SECONDS → error.
+    Защита от навсегда зависших потоков (deadlock в SDK, забытый callback).
+    """
+    while True:
+        time.sleep(60)
+        try:
+            now = time.time()
+            stalled: list[tuple[str, str]] = []
+            with _jobs_lock:
+                for job_id, job in _jobs.items():
+                    if job.get("status") != "running":
+                        continue
+                    last = float(job.get("last_activity") or job.get("started_at") or now)
+                    if now - last > JOB_STALL_SECONDS:
+                        job["status"] = "error"
+                        job["error"] = "Генерация зависла (нет прогресса более 15 минут). Повторите запрос — продолжим с места сбоя."
+                        job["result"] = None
+                        stalled.append((job_id, str(job.get("work_type") or "?")))
+                if stalled:
+                    jobstore.save_jobs(_jobs)
+            for job_id, wt in stalled:
+                log.error("Watchdog: job %s (%s) помечен зависшим", job_id, wt)
+        except Exception as exc:  # watchdog не имеет права умирать
+            log.error("Watchdog iteration failed: %s", exc)
+
+
+_restore_jobs_on_startup()
+threading.Thread(target=_watchdog_loop, daemon=True).start()
 
 
 # ── Модели ───────────────────────────────────────────────────────────────────
@@ -201,11 +298,12 @@ def get_slots():
 
 
 @app.post("/api/generate/referat")
-def create_referat(request: ReferatRequest):
+def create_referat(request: ReferatRequest, http_request: Request):
     """
     Запускает генерацию в фоновом потоке и сразу возвращает jobId.
     Next.js опрашивает /api/generate/status/{jobId} каждые 5 секунд.
     """
+    _check_rate_limit(http_request)
     needed = slot_weight(request.work_type)
     job_id = str(uuid.uuid4())
     with _jobs_lock:
@@ -230,7 +328,7 @@ def create_referat(request: ReferatRequest):
             )
             _job_done(job_id, result)
         except Exception as exc:
-            print(f"[job {job_id}] Ошибка генерации: {exc}")
+            log.error("[job %s] Ошибка генерации: %s", job_id, exc, exc_info=True)
             _job_fail(job_id, str(exc))
 
     thread = threading.Thread(target=run, daemon=True)
@@ -259,56 +357,18 @@ def _verify_internal_api(
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-class OneoffVkrRequest(BaseModel):
-    pages: int = 55
-    profile: dict | None = None
-
-
-@app.post("/api/generate/oneoff-vkr-didactic-time", dependencies=[Depends(_verify_internal_api)])
-def create_oneoff_vkr_didactic(req: OneoffVkrRequest):
-    """
-    Разовая генерация ВКР по фиксированному плану (дидактические игры + время).
-    Не использует общий промпт структуры ВКР. Только localhost + internal token.
-    """
-    work_type = "ВКР"
-    needed = slot_weight(work_type)
-    job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        used = compute_used_slots(_jobs.values())
-        if used + needed > MAX_SLOTS:
-            available = list_available_work_types(used)
-            raise HTTPException(
-                status_code=503,
-                detail={"message": "Сервер перегружен", "available": available},
-            )
-        _job_start_unlocked(job_id, work_type)
-
-    def run():
-        try:
-            result = generate_oneoff_vkr(
-                ONEOFF_VKR_TOPIC,
-                req.pages,
-                req.profile,
-                progress_cb=lambda s, t, label: _job_progress(job_id, s, t, label),
-            )
-            _job_done(job_id, result)
-        except Exception as exc:
-            print(f"[oneoff job {job_id}] Ошибка: {exc}")
-            _job_fail(job_id, str(exc))
-
-    threading.Thread(target=run, daemon=True).start()
-    return {"jobId": job_id, "topic": ONEOFF_VKR_TOPIC}
 
 
 @app.post("/api/generate/preview", dependencies=[Depends(_verify_internal_api)])
-def create_preview(req: PreviewRequest):
+def create_preview(req: PreviewRequest, http_request: Request):
     """Дешёвый предпросмотр перед оплатой (без DOCX, один вызов LLM)."""
+    _check_rate_limit(http_request)
     try:
         return generate_payment_preview(req.topic, req.work_type)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as exc:
-        print(f"[preview] {exc}")
+        log.error("[preview] %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -377,33 +437,37 @@ class ExtrasRequest(BaseModel):
 
 
 def _cleanup_old_extras_files() -> None:
-    """Удаляет старые файлы extras из /tmp, чтобы не накапливать мусор."""
-    import shutil
-
+    """Удаляет старые файлы extras из каталога хранения, чтобы не накапливать мусор."""
     now = time.time()
-    for prefix, ext in (
-        ("pptx_", ".pptx"),
-        ("speech_", ".docx"),
-        ("pptx_slides_", ".json"),
-    ):
-        try:
-            for name in os.listdir("/tmp"):
-                if not (name.startswith(prefix) and name.endswith(ext)):
-                    continue
-                path = os.path.join("/tmp", name)
-                try:
-                    if not os.path.isfile(path):
+    dirs_to_clean = [jobstore.get_extras_dir()]
+    if os.path.exists("/tmp") and os.path.isdir("/tmp"):
+        dirs_to_clean.append("/tmp")
+
+    for target_dir in dirs_to_clean:
+        for prefix, ext in (
+            ("pptx_", ".pptx"),
+            ("speech_", ".docx"),
+            ("pptx_slides_", ".json"),
+        ):
+            try:
+                for name in os.listdir(target_dir):
+                    if not (name.startswith(prefix) and name.endswith(ext)):
                         continue
-                    if now - os.path.getmtime(path) > EXTRAS_FILE_TTL_SEC:
-                        os.remove(path)
-                except Exception:
-                    continue
-        except Exception:
-            continue
+                    path = os.path.join(target_dir, name)
+                    try:
+                        if not os.path.isfile(path):
+                            continue
+                        if now - os.path.getmtime(path) > EXTRAS_FILE_TTL_SEC:
+                            os.remove(path)
+                    except Exception:
+                        continue
+            except Exception:
+                continue
 
 @app.post("/api/generate/extras")
-def create_extras(request: ExtrasRequest):
+def create_extras(request: ExtrasRequest, http_request: Request):
     """Запускает генерацию доп. материалов в фоновом потоке."""
+    _check_rate_limit(http_request)
     _cleanup_old_extras_files()
     extras_job_id = str(uuid.uuid4())
     with _extras_lock:
@@ -432,24 +496,24 @@ def create_extras(request: ExtrasRequest):
                 with _extras_lock:
                     _extras_jobs[extras_job_id]["slides"] = slides_dict
                 try:
-                    slides_path = f"/tmp/pptx_slides_{extras_job_id}.json"
+                    slides_path = jobstore.extras_file_path(f"pptx_slides_{extras_job_id}.json")
                     with open(slides_path, "w", encoding="utf-8") as sf:
                         json.dump(slides_dict, sf, ensure_ascii=False)
                 except Exception as exc:
-                    print(f"[extras] backup slides JSON: {exc}")
+                    log.warning("[extras] backup slides JSON: %s", exc)
 
-                path_cache = f"/tmp/pptx_{extras_job_id}.pptx"
+                path_cache = jobstore.extras_file_path(f"pptx_{extras_job_id}.pptx")
                 build_pptx_file(slides_dict, path_cache, template=template_path())
-                print(f"[extras] PPTX (template {template_path()}): {path_cache}")
+                log.info("[extras] PPTX (template %s): %s", template_path(), path_cache)
 
             if "presentation" in request.items:
                 try:
                     _extras_presentation()
                 except HTTPException as he:
-                    print(f"[extras] не удалось сохранить PPTX в /tmp: {he.detail}")
+                    log.error("[extras] не удалось сохранить PPTX: %s", he.detail)
                     raise
                 except Exception as exc:
-                    print(f"[extras] не удалось сохранить PPTX в /tmp: {exc}")
+                    log.error("[extras] не удалось сохранить PPTX: %s", exc)
                     raise
                 ready.append("presentation")
             if "speech" in request.items:
@@ -463,9 +527,9 @@ def create_extras(request: ExtrasRequest):
                 ready.append("speech")
             with _extras_lock:
                 _extras_jobs[extras_job_id].update({"status": "done", "ready": ready, "error": None})
-            print(f"[extras {extras_job_id}] Готово: {ready}")
+            log.info("[extras %s] Готово: %s", extras_job_id, ready)
         except Exception as exc:
-            print(f"[extras {extras_job_id}] Ошибка: {exc}")
+            log.error("[extras %s] Ошибка: %s", extras_job_id, exc, exc_info=True)
             with _extras_lock:
                 _extras_jobs[extras_job_id].update({"status": "error", "ready": ready, "error": str(exc)})
 
@@ -490,9 +554,9 @@ def get_extras_status(extras_job_id: str):
 
 @app.get("/api/extras/presentation-json/{job_id}")
 def extras_presentation_json(job_id: str):
-    """Резервная копия JSON слайдов (предпросмотр/БД), рядом с pptx в /tmp."""
+    """Резервная копия JSON слайдов (предпросмотр/БД), рядом с pptx."""
     _cleanup_old_extras_files()
-    path = f"/tmp/pptx_slides_{job_id}.json"
+    path = jobstore.extras_file_path(f"pptx_slides_{job_id}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="JSON слайдов не найден")
     with open(path, "rb") as f:
@@ -503,7 +567,7 @@ def extras_presentation_json(job_id: str):
 def download_presentation(job_id: str):
     """Возвращает PPTX-файл презентации (шаблон ion)."""
     _cleanup_old_extras_files()
-    path = f"/tmp/pptx_{job_id}.pptx"
+    path = jobstore.extras_file_path(f"pptx_{job_id}.pptx")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Файл не найден")
     with open(path, "rb") as f:
@@ -519,7 +583,7 @@ def download_presentation(job_id: str):
 def download_speech(job_id: str):
     """Возвращает DOCX-файл текста выступления."""
     _cleanup_old_extras_files()
-    path = f"/tmp/speech_{job_id}.docx"
+    path = jobstore.extras_file_path(f"speech_{job_id}.docx")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Файл не найден")
     with open(path, "rb") as f:
